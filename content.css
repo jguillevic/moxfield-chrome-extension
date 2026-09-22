@@ -1,0 +1,162 @@
+.msm-floating-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999999;
+  background: #2d6cdf;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.msm-floating-btn:hover {
+  background: #1f56b8;
+}
+
+.msm-btn-built {
+  background: #2e9e5b;
+}
+
+.msm-btn-built:hover {
+  background: #257e48;
+}
+
+.msm-toast {
+  position: fixed;
+  bottom: 70px;
+  right: 20px;
+  z-index: 999999;
+  background: #222;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 6px;
+  max-width: 320px;
+  font-size: 13px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.msm-toast-error {
+  background: #a12d2d;
+}
+
+.msm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 999998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.msm-modal {
+  background: white;
+  color: #1a1a1a;
+  border-radius: 10px;
+  padding: 20px;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.msm-modal h3 {
+  margin-top: 0;
+}
+
+.msm-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.msm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.msm-modal-actions button {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #f2f2f2;
+  cursor: pointer;
+}
+
+.msm-modal-actions .msm-primary {
+  background: #2d6cdf;
+  color: white;
+  border-color: #2d6cdf;
+}
+
+.msm-secondary {
+  display: block;
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #2d6cdf;
+  background: white;
+  color: #2d6cdf;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.msm-secondary:hover {
+  background: #eef3fd;
+}
+
+.msm-card-count {
+  font-size: 12px;
+  color: #555;
+  margin: 2px 0 4px;
+}
+
+.msm-card-count-mismatch {
+  color: #a12d2d;
+  font-weight: 600;
+}
+
+.msm-shortage-warning {
+  background: #fdecea;
+  border: 1px solid #e6a19a;
+  color: #7a271a;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.msm-shortage-warning ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* Terrains de base : avertissement non bloquant (n'empêche pas de valider),
+   distinct visuellement des alertes rouges bloquantes ci-dessus. */
+.msm-info-warning {
+  background: #fff8e1;
+  border: 1px solid #f0d58c;
+  color: #6b5300;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.msm-info-warning ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}

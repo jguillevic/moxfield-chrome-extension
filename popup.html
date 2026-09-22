@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Moxfield Stock Manager</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <h1>📦 Moxfield Stock Manager</h1>
+
+  <section>
+    <h2>Synchronisation automatique</h2>
+    <label class="switch-row">
+      <input type="checkbox" id="auto-sync-toggle" />
+      Activer (nécessite un onglet Moxfield « collection » ouvert)
+    </label>
+    <label class="switch-row">
+      Toutes les
+      <select id="auto-sync-interval">
+        <option value="15">15 min</option>
+        <option value="30">30 min</option>
+        <option value="60">60 min</option>
+        <option value="120">2 h</option>
+      </select>
+    </label>
+    <p class="hint" id="auto-sync-status"></p>
+  </section>
+
+  <section>
+    <h2>Import de secours (fichier CSV)</h2>
+    <p class="hint">
+      Utile si la synchro automatique (bouton flottant sur la page collection Moxfield) ne trouve pas le lien d'export.
+      Sur Moxfield : ouvre ta collection → bouton Export → CSV → enregistre/télécharge le fichier, puis choisis-le ci-dessous.
+    </p>
+    <input type="file" id="csv-file-input" accept=".csv,text/csv" />
+    <button id="import-btn">Importer ce fichier</button>
+    <span id="import-status"></span>
+    <details>
+      <summary class="hint">Ou coller le texte directement</summary>
+      <textarea id="csv-input" rows="4" placeholder="Count,Tradelist Count,Name,Edition,..."></textarea>
+      <button id="import-paste-btn">Importer ce texte collé</button>
+    </details>
+  </section>
+
+  <section class="danger-zone">
+    <h2>⚠️ Zone de danger</h2>
+    <button id="reset-btn" class="danger">Réinitialiser tout le stock</button>
+    <p class="hint">Vide entièrement le stock et démonte tous les decks marqués comme montés physiquement.</p>
+  </section>
+
+  <section>
+    <h2>Decks montés physiquement (<span id="built-count">0</span>)</h2>
+    <div id="built-list"></div>
+  </section>
+
+  <section>
+    <details id="stock-details">
+      <summary class="section-summary">Stock (<span id="stock-count">0</span> cartes différentes, <span id="stock-total">0</span> exemplaires au total)</summary>
+      <input id="stock-filter" type="text" placeholder="Filtrer par nom..." />
+      <div id="stock-table"></div>
+    </details>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>
