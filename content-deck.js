@@ -472,7 +472,8 @@
     }
     el.style.display = "block";
     el.innerHTML =
-      `<strong>⚠️ Stock insuffisant pour ${shortages.length} carte(s) :</strong><ul>` +
+      `<strong>⚠️ Stock insuffisant pour ${shortages.length} carte(s) :</strong>` +
+      `<button type="button" class="msm-secondary msm-export-btn">🛒 Copier les cartes manquantes pour Cardmarket</button><ul>` +
       shortages
         .map(
           (s) =>
@@ -480,6 +481,46 @@
         )
         .join("") +
       "</ul>";
+    el.querySelector(".msm-export-btn").addEventListener("click", () => exportShortagesToCardmarket(shortages));
+  }
+
+  // Export vers Cardmarket : pas d'API utilisable sans identifiants
+  // d'application, ni de remplissage automatique de leur page (autre site,
+  // autre scraping fragile). On copie donc la liste au format texte
+  // "N Nom" (une carte par ligne, quantité MANQUANTE uniquement) et on ouvre
+  // la page des Wants : il reste à la coller dans l'import texte d'une liste
+  // de wants, puis à lancer le Shopping Wizard. Les terrains de base et les
+  // cartes en "version différente" n'y figurent pas : elles sont déjà
+  // exclues de `shortages` (cf. updateWarnings / computeWrongEditionCards).
+  const CARDMARKET_WANTS_URL = "https://www.cardmarket.com/fr/Magic/Wants";
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      // Repli si l'API presse-papiers est refusée : sélection d'un textarea temporaire.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    }
+  }
+
+  async function exportShortagesToCardmarket(shortages) {
+    const text = shortages.map((s) => `${s.missing} ${s.name}`).join("\n");
+    const ok = await copyText(text);
+    if (!ok) {
+      toast("Impossible de copier la liste dans le presse-papiers.", true);
+      return;
+    }
+    window.open(CARDMARKET_WANTS_URL, "_blank", "noopener");
+    toast(`${shortages.length} carte(s) copiée(s) — sur Cardmarket, ouvre une liste de wants puis « Ajouter une Deck List » et colle.`);
   }
 
   // Avertissement non bloquant regroupant les deux mêmes problèmes que les

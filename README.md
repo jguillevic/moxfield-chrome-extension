@@ -68,6 +68,13 @@ pour l'instant.
   — corrige la liste, ajuste ton stock (import collection à jour, ou
   ajustement manuel dans le popup), ou retire la/les cartes en trop avant de
   pouvoir valider.
+  - **Acheter les cartes manquantes sur Cardmarket** : le bouton
+    **« 🛒 Copier les cartes manquantes pour Cardmarket »** de cet encadré
+    copie la liste (`quantité manquante` + nom, une carte par ligne) et ouvre
+    la page des Wants de Cardmarket. Crée/ouvre une liste de wants, clique
+    sur **« Ajouter une Deck List »**, colle la liste, puis lance le Shopping
+    Wizard. Les terrains
+    de base et les cartes en « version différente » ne sont pas exportés.
 - **Version différente de ta collection** (encadré rouge, bloquant) : parmi
   les cartes dont le stock est déjà suffisant, si Moxfield indique que tu la
   possèdes, mais pas dans l'édition/finition précise utilisée par ce deck
