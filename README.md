@@ -58,21 +58,25 @@ pour l'instant.
 - Format attendu, une carte par ligne : `1 Sol Ring`, `2 Island`, etc.
 - Valide : le stock est décrémenté. Reclique sur le bouton (devenu vert)
   pour démonter le deck et réincrémenter le stock.
-- **Version différente de ta collection** (encadré rouge, bloquant) : si
-  Moxfield indique que tu possèdes une carte du deck, mais pas dans
-  l'édition/finition précise utilisée par ce deck (ex. Sol Ring possédé sous
-  une autre édition), et que tu as quand même du stock pour ce nom de carte,
-  elle est listée ici. Comme pour le stock insuffisant, **le montage est
-  bloqué** tant que la ligne n'est pas corrigée ou retirée de la liste — pas
-  de décompte de stock pour cette carte. Cette détection utilise l'indicateur
-  de collection natif de Moxfield ; elle ne fonctionne que via le scraping
-  automatique, pas via un collage manuel depuis le presse-papiers.
+- **Priorité des deux contrôles ci-dessous : le stock d'abord.** Une carte
+  dont le stock est insuffisant (même partiellement) n'apparaît que dans
+  « Stock insuffisant », jamais dans « Version différente » — la version
+  n'est vérifiée qu'une fois le stock déjà suffisant pour cette carte.
 - **Stock insuffisant** (encadré rouge, bloquant) : liste les cartes dont le
   stock disponible ne suffirait pas si ce deck était monté — y compris une
   carte totalement absente du stock. Dans ce cas, **le montage est bloqué**
   — corrige la liste, ajuste ton stock (import collection à jour, ou
   ajustement manuel dans le popup), ou retire la/les cartes en trop avant de
   pouvoir valider.
+- **Version différente de ta collection** (encadré rouge, bloquant) : parmi
+  les cartes dont le stock est déjà suffisant, si Moxfield indique que tu la
+  possèdes, mais pas dans l'édition/finition précise utilisée par ce deck
+  (ex. Sol Ring possédé sous une autre édition), elle est listée ici. Comme
+  pour le stock insuffisant, **le montage est bloqué** tant que la ligne
+  n'est pas corrigée ou retirée de la liste — pas de décompte de stock pour
+  cette carte. Cette détection utilise l'indicateur de collection natif de
+  Moxfield ; elle ne fonctionne que via le scraping automatique, pas via un
+  collage manuel depuis le presse-papiers.
 - **Terrains de base** (Plains, Island, Swamp, Mountain, Forest) : exclus des
   deux blocages ci-dessus, puisqu'en pratique on en a toujours assez et que
   leur édition n'a jamais d'importance. Un encadré jaune séparé

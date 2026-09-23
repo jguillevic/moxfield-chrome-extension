@@ -26,6 +26,21 @@
     return Boolean(m) && !NON_DECK_SLUGS.has(m[1].toLowerCase());
   }
 
+  // Le bouton ne doit s'afficher que sur un deck de format "Commander" — ce
+  // badge (texte "Commander") est un des badges d'en-tête du deck, classe
+  // "badge-header" (nom semble sémantique et volontaire, contrairement aux
+  // classes générées type "H3UM7DGQXHnJUSoQ5Jgv" — confirmé via inspection
+  // HTML réelle). D'autres badges partagent cette classe (Bracket, hubs de
+  // tags comme "Burn"/"Combo"/"Tokens") : on ne retient que celui dont le
+  // texte correspond exactement à "Commander".
+  function hasCommanderBadge() {
+    const badges = document.querySelectorAll(".badge-header");
+    for (const el of badges) {
+      if ((el.textContent || "").trim().toLowerCase() === "commander") return true;
+    }
+    return false;
+  }
+
   function getDeckId() {
     const m = window.location.pathname.match(/\/decks\/([^/]+)/);
     return m ? m[1] : null;
@@ -67,24 +82,45 @@
     return "full";
   }
 
-  // --- Scraping DOM, vue "Text" / "Condensed Text" (méthode de repli) ---
-  // Chaque carte est un <li> contenant un <input type="text" value="N"> (la
-  // quantité) et un <a href="/cards/..."> dont le texte est le nom complet
-  // de la carte. C'est la structure la plus fiable des trois : la quantité
-  // est un attribut explicite (pas du texte à interpréter), et le nom vient
-  // du texte du lien plutôt que d'un attribut alt.
+  // --- Scraping DOM, vue "Text" / "Condensed Text" ---
+  // Chaque carte est un <li data-hash="..."> avec un <a href="/cards/...">
+  // dont le texte est le nom complet de la carte. La quantité était portée
+  // par un <input type="text" value="N">, mais Moxfield l'a remplacé par un
+  // simple <div> ne contenant qu'un nombre (même principe que le badge de
+  // quantité de la vue Visual/Stacks — confirmé via inspection HTML réelle)
+  // — l'ancien <input> ne s'y trouve donc plus, d'où des quantités toujours
+  // ramenées à 1. On garde la lecture de l'<input> en repli si jamais il
+  // réapparaît. Chaque <li> porte aussi un data-hash unique et stable : on
+  // s'en sert pour ignorer un éventuel doublon de rendu (même cause que
+  // pour les images — cf. slotUniqueKey plus bas — Moxfield laisse parfois
+  // un ancien nœud en double sans le détruire).
+  function findListQty(li) {
+    const input = li.querySelector('input[type="text"]');
+    if (input) {
+      const v = parseInt(input.value, 10);
+      if (!Number.isNaN(v) && v > 0) return v;
+    }
+    const leaves = Array.from(li.querySelectorAll("div")).filter((el) => el.children.length === 0);
+    for (const leaf of leaves) {
+      const t = (leaf.textContent || "").trim();
+      if (/^\d{1,3}$/.test(t)) return parseInt(t, 10);
+    }
+    return 1;
+  }
+
   function scrapeCardsFromList() {
     const links = Array.from(document.querySelectorAll('a.table-deck-row-link[href^="/cards/"]')).filter(isVisible);
     const seen = new Map();
+    const seenRowKeys = new Set();
     links.forEach((link) => {
       const li = link.closest("li");
       if (!li) return;
-      const input = li.querySelector('input[type="text"]');
-      let qty = 1;
-      if (input) {
-        const v = parseInt(input.value, 10);
-        if (!Number.isNaN(v) && v > 0) qty = v;
+      const rowKey = li.getAttribute("data-hash");
+      if (rowKey) {
+        if (seenRowKeys.has(rowKey)) return; // doublon de rendu de la même ligne : ignoré
+        seenRowKeys.add(rowKey);
       }
+      const qty = findListQty(li);
       const name = (link.textContent || "").replace(/\s+/g, " ").trim();
       if (!name) return;
       const printingStatus = findCollectionStatusNear(link, li);
@@ -211,6 +247,45 @@
     return Array.from(seen.values());
   }
 
+  // --- Scraping DOM, vue "Visual Grid" ---
+  // Structure différente de "Visual Stacks" (voir scrapeCardsFromImages) :
+  // chaque carte est un <div class="decklist-card" data-hash="..."> qui
+  // regroupe tout au même endroit — pas besoin de deviner une zone
+  // ("slot") par élargissement d'ancêtres comme pour les Stacks :
+  // - nom en texte brut dans .decklist-card-phantomsearch
+  // - quantité en texte brut ("x1", "x2"...) dans .decklist-card-quantity
+  // - statut de collection dans .decklist-card-collection (même marqueur
+  //   natif "collection_full_/pt_/no_" qu'ailleurs)
+  // - "data-hash" unique par entrée, pour ignorer un éventuel doublon de
+  //   rendu (même principe que pour les autres méthodes de scraping).
+  // Confirmé via inspection HTML réelle de la page en vue "Visual Grid".
+  function scrapeCardsFromDecklistCards() {
+    const cardEls = Array.from(document.querySelectorAll("div.decklist-card[data-hash]")).filter(isVisible);
+    const seen = new Map();
+    const seenHashes = new Set();
+    cardEls.forEach((card) => {
+      const hash = card.getAttribute("data-hash");
+      if (hash) {
+        if (seenHashes.has(hash)) return; // doublon de rendu de la même entrée : ignoré
+        seenHashes.add(hash);
+      }
+      const nameEl = card.querySelector(".decklist-card-phantomsearch");
+      const name = nameEl ? (nameEl.textContent || "").trim() : "";
+      if (!name) return;
+      const qtyEl = card.querySelector(".decklist-card-quantity");
+      let qty = 1;
+      if (qtyEl) {
+        const m = (qtyEl.textContent || "").trim().match(/(\d{1,3})/);
+        if (m) qty = parseInt(m[1], 10);
+      }
+      const printingStatus = findCollectionStatusNear(card, card);
+      const key = name.toLowerCase();
+      if (seen.has(key)) seen.get(key).qty += qty;
+      else seen.set(key, { name, qty, printingStatus });
+    });
+    return Array.from(seen.values());
+  }
+
   // --- Scraping texte (méthode de repli) ---
   // Utile pour les vues "Text" / "Condensed Text" de Moxfield, qui affichent
   // directement des lignes "QTE Nom" en texte plutôt que des images.
@@ -248,11 +323,18 @@
       const fromList = scrapeCardsFromList();
       if (fromList.length > 0) return fromList;
     } else if (mode && visualModes.includes(mode)) {
+      // "Visual Grid" (et peut-être d'autres) utilise une structure plus
+      // fiable (div.decklist-card[data-hash]) que "Visual Stacks" — on la
+      // tente en priorité, avant l'ancienne méthode par heuristique d'image.
+      const fromDecklistCards = scrapeCardsFromDecklistCards();
+      if (fromDecklistCards.length > 0) return fromDecklistCards;
       const fromImages = scrapeCardsFromImages();
       if (fromImages.length > 0) return fromImages;
     }
 
     // Mode inconnu, ou la méthode attendue n'a rien trouvé : on essaie tout.
+    const fromDecklistCards = scrapeCardsFromDecklistCards();
+    if (fromDecklistCards.length > 0) return fromDecklistCards;
     const fromImages = scrapeCardsFromImages();
     if (fromImages.length > 0) return fromImages;
     const fromList = scrapeCardsFromList();
@@ -307,17 +389,19 @@
     return set;
   }
 
-  // Zone 1 : cartes que tu as en stock (peu importe l'édition, puisque le
-  // stock est suivi par nom) et que Moxfield signale comme possédées sous
-  // une version différente de celle utilisée par ce deck précis. Une carte
-  // totalement absente du stock (have === 0) ne doit PAS apparaître ici :
-  // c'est un problème de stock insuffisant (zone 2), pas de version.
+  // Zone 1 : cartes dont le stock est SUFFISANT (peu importe l'édition,
+  // puisque le stock est suivi par nom) et que Moxfield signale en plus
+  // comme possédées sous une version différente de celle utilisée par ce
+  // deck précis. Priorité au stock : une carte dont le stock ne suffit pas
+  // (have < besoin), même partiellement, ne doit PAS apparaître ici — c'est
+  // un problème de stock insuffisant (zone 2) d'abord ; on ne regarde la
+  // version que si le stock est déjà suffisant.
   function computeWrongEditionCards(cards, stockMap) {
     const names = [];
     for (const c of cards) {
       const key = normalizeName(c.name);
       const have = stockMap[key] ? stockMap[key].qty : 0;
-      if (have > 0 && lastWrongEditionNames.has(key)) names.push(c.name);
+      if (have >= c.qty && lastWrongEditionNames.has(key)) names.push(c.name);
     }
     return names;
   }
@@ -673,7 +757,12 @@
   }
 
   async function syncButtonToLocation() {
-    if (isDeckPage()) {
+    // Le badge "Commander" est injecté par React après le chargement
+    // initial de la page : au moment précis où l'URL change, il peut ne pas
+    // encore être présent. On ne se fie donc pas qu'au changement d'URL —
+    // cette fonction est rappelée à chaque tick du polling (voir plus bas)
+    // pour réévaluer sa présence tant qu'on reste sur la même page.
+    if (isDeckPage() && hasCommanderBadge()) {
       const deckId = getDeckId();
       ensureButton();
       if (deckId !== currentDeckId) {
@@ -686,14 +775,10 @@
     }
   }
 
-  // Surveille les changements d'URL dus à la navigation SPA de Moxfield.
-  let lastHref = null;
-  setInterval(() => {
-    if (window.location.href !== lastHref) {
-      lastHref = window.location.href;
-      syncButtonToLocation();
-    }
-  }, 500);
+  // Polling léger (voir en-tête du fichier) : sert à la fois à détecter les
+  // changements d'URL de la SPA et à réévaluer le badge "Commander" tant
+  // qu'on reste sur la même page (cf. commentaire de syncButtonToLocation).
+  setInterval(syncButtonToLocation, 500);
 
   syncButtonToLocation();
 })();
