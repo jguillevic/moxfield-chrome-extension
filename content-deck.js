@@ -675,11 +675,26 @@
     return false;
   }
 
+  // Le bouton flottant reste cliquable par-dessus la modale (z-index plus
+  // élevé, pour que les toasts restent visibles au-dessus de l'overlay) : on
+  // refuse donc d'ouvrir une deuxième modale si une est déjà affichée — ou
+  // en cours d'ouverture, car la lecture de l'état du deck (getIsBuilt) est
+  // asynchrone et un double-clic rapide passerait sinon le test du DOM.
+  let overlayOpening = false;
+
   async function openOverlay() {
+    if (overlayOpening || document.querySelector(".msm-overlay")) return;
     const deckId = getDeckId();
     if (!deckId) return;
-    const isBuilt = await getIsBuilt(deckId);
-    const overlay = buildOverlay({ isBuilt });
+    overlayOpening = true;
+    let isBuilt;
+    let overlay;
+    try {
+      isBuilt = await getIsBuilt(deckId);
+      overlay = buildOverlay({ isBuilt });
+    } finally {
+      overlayOpening = false;
+    }
 
     if (!isBuilt) {
       const textarea = overlay.querySelector("#msm-cards-textarea");
