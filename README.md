@@ -6,7 +6,8 @@ carte par carte, selon la decklist. Démonte-le pour réincrémenter.
 
 ## Installation
 
-1. Décompresse ce dossier quelque part sur ton disque.
+1. Clone le dépôt (`git clone https://github.com/jguillevic/moxfield-chrome-extension.git`)
+   ou décompresse ce dossier quelque part sur ton disque.
 2. Ouvre `chrome://extensions`.
 3. Active le **Mode développeur** (en haut à droite).
 4. Clique **Charger l'extension non empaquetée** et sélectionne ce dossier.
@@ -43,13 +44,22 @@ pour l'instant.
 
 ### 2. Monter / démonter un deck
 
-- Va sur la page d'un deck (`moxfield.com/decks/...`), y compris en y
+- Va sur la page d'un deck (`moxfield.com/decks/{id}`), y compris en y
   naviguant depuis l'intérieur de Moxfield (le bouton apparaît/disparaît
-  dynamiquement selon la page affichée, sans besoin de recharger).
+  dynamiquement selon la page affichée, sans besoin de recharger). Le bouton
+  n'apparaît que :
+  - sur la page du deck elle-même (pas sur ses sous-pages comme
+    `/decks/{id}/history`, ni sur les listes comme `/decks/public`) ;
+  - pour un deck au format **Commander** (badge « Commander » dans l'en-tête
+    du deck).
 - Clique sur **« 🧰 Marquer comme monté physiquement »** : la liste de
-  cartes est détectée automatiquement à partir de la page (scan des images
-  de cartes affichées et de leur quantité), quel que soit le mode
-  d'affichage du deck (Visual Stacks, Visual Grid, Text...).
+  cartes est détectée automatiquement à partir de la page, quel que soit le
+  mode d'affichage du deck (Text, Condensed Text, Visual Grid, Visual
+  Stacks...).
+- **Contrôle du total** : au-dessus de la liste, un compteur affiche le
+  nombre total de cartes détectées. S'il ne correspond pas au total annoncé
+  par Moxfield (« N main deck » + « N sideboard »), il passe en rouge — signe
+  d'une erreur de détection à corriger dans la liste.
 - **Vérifie/corrige la liste** avant de valider — c'est un scraping au
   mieux, pas une lecture officielle de Moxfield (qui n'a pas d'API
   publique). Si la liste est vide ou incomplète, clique sur le bouton natif
@@ -73,8 +83,8 @@ pour l'instant.
     copie la liste (`quantité manquante` + nom, une carte par ligne) et ouvre
     la page des Wants de Cardmarket. Crée/ouvre une liste de wants, clique
     sur **« Ajouter une Deck List »**, colle la liste, puis lance le Shopping
-    Wizard. Les terrains
-    de base et les cartes en « version différente » ne sont pas exportés.
+    Wizard. Les terrains de base et les cartes en « version différente » ne
+    sont pas exportés.
 - **Version différente de ta collection** (encadré rouge, bloquant) : parmi
   les cartes dont le stock est déjà suffisant, si Moxfield indique que tu la
   possèdes, mais pas dans l'édition/finition précise utilisée par ce deck
@@ -94,21 +104,32 @@ pour l'instant.
 ### 3. Consulter / ajuster le stock
 
 - Ouvre le popup de l'extension (icône dans la barre d'outils).
-- Tu y vois le stock complet (filtrable), les decks actuellement montés, et
-  tu peux ajuster une quantité à la main avec les boutons +/-.
+- Tu y vois les decks actuellement montés (avec un bouton pour démonter
+  chacun) et le stock complet.
+- La section **Stock** est repliée par défaut : clique sur son titre pour
+  l'afficher, la filtrer par nom, et ajuster une quantité à la main avec les
+  boutons +/-.
+- **Zone de danger** : le bouton **« Réinitialiser tout le stock »** vide
+  entièrement le stock **et** démonte tous les decks marqués comme montés
+  (une confirmation est demandée).
 
 ## Limites connues
 
-- Le scraping repose sur des repères structurels de la page (classe
-  `img-card` sur les images de carte, quantité affichée juste à côté dans
-  le DOM), pas sur une API officielle — Moxfield n'en fournit pas. Ça
-  fonctionne sur les vues visuelles (Visual Stacks, Visual Grid...) et en
-  repli sur les vues texte (Text, Condensed Text). Si Moxfield change sa
-  structure de page, ça peut casser ; le presse-papiers (bouton Copier de
-  Moxfield) reste alors la solution de secours.
-- Le bouton de deck apparaît/disparaît en fonction de l'URL actuelle,
-  surveillée par un polling léger (toutes les 500ms) car Moxfield est une
-  SPA — la navigation interne au site ne recharge pas la page.
+- Le scraping repose sur des repères structurels de la page, pas sur une
+  API officielle — Moxfield n'en fournit pas. La structure lue dépend du
+  mode d'affichage (lu dans le sélecteur « View » de Moxfield) : lignes de
+  liste en vue Text/Condensed Text, tuiles de carte en Visual Grid, images
+  de carte en Visual Stacks. Si Moxfield change sa structure de page, ça
+  peut casser ; le compteur comparé au total du site permet de s'en rendre
+  compte, et le presse-papiers (bouton Copier de Moxfield) reste la
+  solution de secours.
+- Le bouton de deck apparaît/disparaît selon l'URL actuelle et la présence
+  du badge « Commander », réévalués par un polling léger (toutes les 500ms)
+  car Moxfield est une SPA — la navigation interne au site ne recharge pas
+  la page, et le badge est affiché après le chargement.
+- Après avoir rechargé l'extension dans `chrome://extensions`, rafraîchis
+  (F5) les onglets Moxfield déjà ouverts : sinon l'ancienne version de
+  l'extension y reste active mais déconnectée (un message te le rappelle).
 - La synchronisation automatique en tâche de fond (réglage dans le popup)
   ne fonctionne que si Moxfield expose un vrai lien d'export ; ce n'est pas
   garanti sur tous les comptes. L'import via fichier téléchargé reste la
