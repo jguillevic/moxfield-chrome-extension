@@ -3,7 +3,7 @@
   "name": "Moxfield Stock Manager",
   "version": "0.2.0",
   "description": "Gère un stock de cartes physiques à partir de ta collection Moxfield. Flag un deck comme 'monté' pour décrémenter automatiquement le stock.",
-  "permissions": ["storage", "activeTab", "scripting", "alarms", "tabs", "clipboardRead"],
+  "permissions": ["storage", "clipboardRead"],
   "host_permissions": [
     "https://www.moxfield.com/*",
     "https://moxfield.com/*"

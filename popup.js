@@ -147,44 +147,13 @@ function renderStock(state, filter, onlyInDecks) {
   container.appendChild(table);
 }
 
-function formatTimestamp(ts) {
-  if (!ts) return "jamais";
-  return new Date(ts).toLocaleString("fr-FR");
-}
-
-function renderAutoSync(state) {
-  const toggle = document.getElementById("auto-sync-toggle");
-  const interval = document.getElementById("auto-sync-interval");
-  const status = document.getElementById("auto-sync-status");
-
-  toggle.checked = state.settings.autoSyncEnabled;
-  interval.value = String(state.settings.intervalMinutes);
-
-  let statusText = "Dernière synchro auto : " + formatTimestamp(state.lastAutoSync) + ".";
-  if (state.lastAutoSyncError) {
-    statusText += " Dernière erreur : " + state.lastAutoSyncError + " (le bouton manuel reste toujours disponible sur la page collection, ou l'import CSV collé ci-dessous).";
-  }
-  status.textContent = statusText;
-}
-
 async function refresh() {
   const state = await loadState();
   const filter = document.getElementById("stock-filter").value;
   const onlyInDecks = document.getElementById("stock-only-in-decks").checked;
   renderBuiltDecks(state);
   renderStock(state, filter, onlyInDecks);
-  renderAutoSync(state);
 }
-
-async function saveSettings() {
-  const autoSyncEnabled = document.getElementById("auto-sync-toggle").checked;
-  const intervalMinutes = parseInt(document.getElementById("auto-sync-interval").value, 10);
-  await chrome.runtime.sendMessage({ type: "SET_SETTINGS", payload: { autoSyncEnabled, intervalMinutes } });
-  refresh();
-}
-
-document.getElementById("auto-sync-toggle").addEventListener("change", saveSettings);
-document.getElementById("auto-sync-interval").addEventListener("change", saveSettings);
 
 async function importCSVText(csvText, status) {
   if (!csvText || !csvText.trim()) {

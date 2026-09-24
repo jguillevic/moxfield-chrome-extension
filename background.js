@@ -4,39 +4,26 @@
 //   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty}], builtAt: number } }
 
 const STORAGE_KEY = "moxfieldStockManagerState";
-const ALARM_NAME = "msm-auto-sync";
-const COLLECTION_URL_PATTERNS = ["https://www.moxfield.com/collection*", "https://moxfield.com/collection*"];
-
-const DEFAULT_SETTINGS = {
-  autoSyncEnabled: false,
-  intervalMinutes: 30,
-};
 
 function normalizeName(name) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// Seuls stock et builtDecks sont conservés : une ancienne version stockait
+// aussi les réglages de synchro automatique (settings, lastAutoSync...),
+// fonctionnalité retirée car jamais fonctionnelle — ces clés sont ignorées
+// ici et disparaissent à la prochaine écriture de l'état.
 async function getState() {
   const data = await chrome.storage.local.get(STORAGE_KEY);
   const state = data[STORAGE_KEY] || {};
   return {
     stock: state.stock || {},
     builtDecks: state.builtDecks || {},
-    settings: { ...DEFAULT_SETTINGS, ...(state.settings || {}) },
-    lastAutoSync: state.lastAutoSync || null,
-    lastAutoSyncError: state.lastAutoSyncError || null,
   };
 }
 
 async function setState(state) {
   await chrome.storage.local.set({ [STORAGE_KEY]: state });
-}
-
-async function applyAlarmSchedule(settings) {
-  await chrome.alarms.clear(ALARM_NAME);
-  if (settings.autoSyncEnabled) {
-    chrome.alarms.create(ALARM_NAME, { periodInMinutes: settings.intervalMinutes });
-  }
 }
 
 // --- Parsing CSV export Moxfield ---
@@ -149,103 +136,9 @@ async function handleManualAdjust({ name, delta }) {
 }
 
 async function handleResetStock() {
-  const state = await getState();
-  await setState({ stock: {}, builtDecks: {}, settings: state.settings, lastAutoSync: null, lastAutoSyncError: null });
+  await setState({ stock: {}, builtDecks: {} });
   return { ok: true };
 }
-
-async function handleSetSettings(newSettings) {
-  const state = await getState();
-  state.settings = { ...state.settings, ...newSettings };
-  await setState(state);
-  await applyAlarmSchedule(state.settings);
-  return { ok: true, settings: state.settings };
-}
-
-// --- Auto-sync : exécuté DANS un onglet Moxfield/collection déjà ouvert ---
-// (nécessaire car Moxfield n'a pas d'API publique documentée ; on ne peut
-// lire l'export CSV qu'en passant par une page réellement rendue).
-// Cette fonction est injectée telle quelle via chrome.scripting.executeScript,
-// elle doit donc être autonome (pas de référence à des variables externes).
-async function pageFindAndFetchCSV() {
-  function findExportLink() {
-    const anchors = Array.from(document.querySelectorAll("a[href]"));
-    return (
-      anchors.find(
-        (a) =>
-          /export|csv/i.test(a.getAttribute("href") || "") ||
-          /export/i.test(a.getAttribute("download") || "") ||
-          /export|t[ée]l[ée]charger|download/i.test(a.textContent || "") ||
-          /export|download/i.test(a.getAttribute("aria-label") || "")
-      ) || null
-    );
-  }
-  const link = findExportLink();
-  if (!link) return { ok: false, error: "Lien d'export introuvable sur la page." };
-  try {
-    const res = await fetch(link.href, { credentials: "same-origin" });
-    if (!res.ok) return { ok: false, error: "HTTP " + res.status };
-    const csvText = await res.text();
-    return { ok: true, csvText };
-  } catch (e) {
-    return { ok: false, error: e.message || String(e) };
-  }
-}
-
-async function trySyncTab(tabId) {
-  try {
-    const [injection] = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: pageFindAndFetchCSV,
-    });
-    const result = injection && injection.result;
-    if (!result || !result.ok) {
-      const state = await getState();
-      state.lastAutoSyncError = (result && result.error) || "Résultat vide";
-      await setState(state);
-      return;
-    }
-    const importResult = await handleImportCSV(result.csvText);
-    const state = await getState();
-    state.lastAutoSync = Date.now();
-    state.lastAutoSyncError = importResult.ok ? null : importResult.error;
-    await setState(state);
-  } catch (e) {
-    const state = await getState();
-    state.lastAutoSyncError = e.message || String(e);
-    await setState(state);
-  }
-}
-
-async function autoSyncAllCollectionTabs() {
-  const state = await getState();
-  if (!state.settings.autoSyncEnabled) return;
-  const tabs = await chrome.tabs.query({ url: COLLECTION_URL_PATTERNS });
-  for (const tab of tabs) {
-    if (tab.id != null) await trySyncTab(tab.id);
-  }
-}
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM_NAME) autoSyncAllCollectionTabs();
-});
-
-// Sync aussi dès qu'un onglet collection finit de charger (pratique quand tu
-// viens d'ajouter des cartes et que tu retournes/rafraîchis la page).
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete" || !tab.url) return;
-  const isCollectionPage = /^https:\/\/(www\.)?moxfield\.com\/collection/.test(tab.url);
-  if (!isCollectionPage) return;
-  const state = await getState();
-  if (state.settings.autoSyncEnabled) await trySyncTab(tabId);
-});
-
-async function initAlarms() {
-  const state = await getState();
-  await applyAlarmSchedule(state.settings);
-}
-chrome.runtime.onInstalled.addListener(initAlarms);
-chrome.runtime.onStartup.addListener(initAlarms);
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
@@ -265,9 +158,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "RESET_STOCK":
           sendResponse(await handleResetStock());
-          break;
-        case "SET_SETTINGS":
-          sendResponse(await handleSetSettings(msg.payload));
           break;
         default:
           sendResponse({ ok: false, error: "Type de message inconnu: " + msg.type });

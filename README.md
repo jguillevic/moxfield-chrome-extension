@@ -17,30 +17,16 @@ carte par carte, selon la decklist. Démonte-le pour réincrémenter.
 ### 1. Importer ta collection (initialiser le stock)
 
 Ouvre le popup de l'extension (icône dans la barre d'outils Chrome) →
-section **« Import de secours (fichier CSV) »**. Sur Moxfield : ouvre ta
-collection → bouton Export → CSV → enregistre le fichier → choisis-le via
-le bouton **Parcourir** du popup → **Importer ce fichier**.
+section **« Importer ma collection (fichier CSV) »**. Sur Moxfield : ouvre
+ta collection → bouton Export → CSV → enregistre le fichier → choisis-le via
+le bouton **Parcourir** du popup → **Importer ce fichier**. Tu peux aussi
+coller directement le contenu du CSV.
 
 Réimporter écrase les quantités par la nouvelle collection, mais réapplique
 automatiquement les decks déjà marqués comme montés — pas de risque de
-doublon, tu peux réimporter aussi souvent que tu veux.
-
-### 1bis. Synchronisation automatique (optionnelle, fiabilité limitée)
-
-Dans le popup de l'extension, section **« Synchronisation automatique »** :
-coche la case et choisis un intervalle (15 min / 30 min / 1 h / 2 h).
-
-Une fois activée, la synchro se déclenche toute seule :
-- à intervalle régulier, tant qu'un onglet `moxfield.com/collection` est ouvert ;
-- à chaque fois que tu charges/rafraîchis cette page.
-
-**Limite importante** : la synchro automatique en tâche de fond ne fonctionne
-que si Moxfield expose un vrai lien d'export dans la page (ce qui n'est pas
-le cas de la méthode de génération dynamique observée sur ton compte).
-Autrement dit, elle risque de ne rien faire en pratique tant qu'elle n'a pas
-été retravaillée pour utiliser la même méthode d'interception que le popup —
-**l'import via fichier téléchargé (section 1) reste la méthode fiable**
-pour l'instant.
+doublon, tu peux réimporter aussi souvent que tu veux. Il n'y a pas de
+synchronisation automatique : réimporte le CSV quand ta collection Moxfield
+a changé.
 
 ### 2. Monter / démonter un deck
 
@@ -139,10 +125,6 @@ pour l'instant.
 - Après avoir rechargé l'extension dans `chrome://extensions`, rafraîchis
   (F5) les onglets Moxfield déjà ouverts : sinon l'ancienne version de
   l'extension y reste active mais déconnectée (un message te le rappelle).
-- La synchronisation automatique en tâche de fond (réglage dans le popup)
-  ne fonctionne que si Moxfield expose un vrai lien d'export ; ce n'est pas
-  garanti sur tous les comptes. L'import via fichier téléchargé reste la
-  méthode fiable.
 - Le stock est agrégé par **nom de carte**, toutes éditions/finitions
   confondues (pas de distinction par set ou par version foil).
 - Les données sont stockées localement dans le navigateur
