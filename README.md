@@ -109,6 +109,15 @@ pour l'instant.
 - La section **Stock** est repliée par défaut : clique sur son titre pour
   l'afficher, la filtrer par nom, et ajuster une quantité à la main avec les
   boutons +/-.
+- **Savoir où est une carte** : la colonne **Libre** est la quantité
+  disponible hors decks montés, la colonne **Decks** le nombre
+  d'exemplaires dans des decks montés. Clique sur une carte présente dans
+  des decks pour voir lesquels (avec un lien vers chacun) et le total
+  possédé. La case **« Seulement les cartes dans des decks montés »** filtre
+  la liste sur ces cartes.
+- Dans la modale de montage, une carte en stock insuffisant indique aussi
+  **dans quels decks montés** se trouvent ses exemplaires — pratique pour
+  savoir quel deck démonter plutôt que d'acheter.
 - **Zone de danger** : le bouton **« Réinitialiser tout le stock »** vide
   entièrement le stock **et** démonte tous les decks marqués comme montés
   (une confirmation est demandée).

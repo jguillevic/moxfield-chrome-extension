@@ -55,8 +55,13 @@
 
   <section>
     <details id="stock-details">
-      <summary class="section-summary">Stock (<span id="stock-count">0</span> cartes différentes, <span id="stock-total">0</span> exemplaires au total)</summary>
+      <summary class="section-summary">Stock (<span id="stock-count">0</span> cartes différentes, <span id="stock-total">0</span> exemplaires libres, <span id="stock-in-decks">0</span> dans des decks)</summary>
       <input id="stock-filter" type="text" placeholder="Filtrer par nom..." />
+      <label class="switch-row">
+        <input type="checkbox" id="stock-only-in-decks" />
+        Seulement les cartes dans des decks montés
+      </label>
+      <p class="hint">« Libre » = disponible hors decks montés. Clique sur une carte présente dans des decks pour voir lesquels.</p>
       <div id="stock-table"></div>
     </details>
   </section>

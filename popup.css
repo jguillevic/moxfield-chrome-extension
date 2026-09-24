@@ -85,6 +85,29 @@ td, th {
   border-bottom: 1px solid #f0f0f0;
 }
 
+tr.has-decks {
+  cursor: pointer;
+}
+
+tr.has-decks:hover {
+  background: #f5f8fe;
+}
+
+td.in-decks {
+  white-space: nowrap;
+}
+
+tr.deck-usage td {
+  background: #f5f8fe;
+  font-size: 11px;
+  color: #444;
+}
+
+tr.deck-usage ul {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
+
 .negative {
   color: #a12d2d;
   font-weight: 600;

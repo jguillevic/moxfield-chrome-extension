@@ -450,6 +450,26 @@
     return res.ok ? res.state.stock || {} : {};
   }
 
+  // Pour chaque carte (nom normalisé), les decks montés qui la contiennent —
+  // sert à indiquer, pour une carte manquante, quel deck démonter pour la
+  // récupérer. Même règle que le popup : les cartes excludedFromStock
+  // (decks montés avec une ancienne version) n'ont jamais été retirées du
+  // stock, elles ne comptent donc pas comme "prises" par le deck.
+  async function getStockAndDeckUsage() {
+    const res = await safeSendMessage({ type: "GET_STATE" });
+    if (!res.ok) return { stockMap: {}, deckUsage: new Map() };
+    const deckUsage = new Map();
+    for (const deck of Object.values(res.state.builtDecks || {})) {
+      for (const card of deck.cards || []) {
+        if (card.excludedFromStock) continue;
+        const key = normalizeName(card.name);
+        if (!deckUsage.has(key)) deckUsage.set(key, []);
+        deckUsage.get(key).push({ name: deck.name, qty: card.qty });
+      }
+    }
+    return { stockMap: res.state.stock || {}, deckUsage };
+  }
+
   // Zone 2 : cartes dont le stock disponible ne suffirait pas si ce deck
   // était monté — y compris les cartes totalement absentes du stock
   // (have === 0), quel que soit leur statut de version Moxfield.
@@ -464,20 +484,25 @@
     return shortages;
   }
 
-  function renderShortageWarning(el, shortages) {
+  function renderShortageWarning(el, shortages, deckUsage = new Map()) {
     if (shortages.length === 0) {
       el.style.display = "none";
       el.innerHTML = "";
       return;
     }
     el.style.display = "block";
+    const whereText = (s) => {
+      const decks = deckUsage.get(normalizeName(s.name));
+      if (!decks || decks.length === 0) return "";
+      return ` · <strong>dans : ${decks.map((d) => `${escapeHtml(d.name)} (${d.qty})`).join(", ")}</strong>`;
+    };
     el.innerHTML =
       `<strong>⚠️ Stock insuffisant pour ${shortages.length} carte(s) :</strong>` +
       `<button type="button" class="msm-secondary msm-export-btn">🛒 Copier les cartes manquantes pour Cardmarket</button><ul>` +
       shortages
         .map(
           (s) =>
-            `<li>${escapeHtml(s.name)} — as ${s.have}, besoin ${s.need} (manque ${s.missing})</li>`
+            `<li>${escapeHtml(s.name)} — as ${s.have}, besoin ${s.need} (manque ${s.missing})${whereText(s)}</li>`
         )
         .join("") +
       "</ul>";
@@ -716,9 +741,9 @@
         // Terrains de base traités à part (jamais bloquants) — cf. isBasicLand.
         const basicCards = cards.filter((c) => isBasicLand(c.name));
         const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
-        // Une seule lecture du stock, réutilisée pour toutes les zones.
-        const stockMap = await getStockMap();
-        renderShortageWarning(warningEl, computeShortages(nonBasicCards, stockMap));
+        // Une seule lecture de l'état, réutilisée pour toutes les zones.
+        const { stockMap, deckUsage } = await getStockAndDeckUsage();
+        renderShortageWarning(warningEl, computeShortages(nonBasicCards, stockMap), deckUsage);
         renderPrintingWarning(printingWarningEl, computeWrongEditionCards(nonBasicCards, stockMap));
         renderBasicLandNotice(
           basicLandWarningEl,
