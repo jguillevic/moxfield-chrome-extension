@@ -84,6 +84,7 @@ async function handleImportCSV(csvText) {
   for (const deckId of Object.keys(state.builtDecks)) {
     const deck = state.builtDecks[deckId];
     for (const card of deck.cards) {
+      if (card.excludedFromStock) continue; // jamais décomptée au montage : ne pas la décompter ici non plus
       const key = normalizeName(card.name);
       if (freshStock[key]) {
         freshStock[key].qty -= card.qty;

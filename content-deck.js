@@ -647,6 +647,10 @@
     const el = document.createElement("div");
     el.className = "msm-toast" + (isError ? " msm-toast-error" : "");
     el.textContent = message;
+    // Placer le toast au-dessus de la barre d'actions de Moxfield plutôt que
+    // de la masquer (sa hauteur varie selon la largeur de l'écran).
+    const barTop = getActionBarTop();
+    if (barTop !== null) el.style.bottom = `${window.innerHeight - barTop + 12}px`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), isError ? 8000 : 5000);
   }
@@ -679,12 +683,56 @@
     return Boolean(res.state.builtDecks[deckId]);
   }
 
+  // Dernier état connu du deck (monté ou non), gardé pour pouvoir redessiner
+  // le bouton sans relire le stockage quand il est recréé (passage barre ↔
+  // flottant, ou barre re-rendue par React qui a effacé notre bouton).
+  let btnBuilt = false;
+
+  // Icônes Font Awesome Free 6.7.2 (CC BY 4.0) — https://fontawesome.com/license/free
+  // Classe svg-inline--fa : même taille/alignement que les icônes natives de la barre.
+  const BAR_ICONS = {
+    build: {
+      viewBox: "0 0 640 512",
+      path: "M58.9 42.1c3-6.1 9.6-9.6 16.3-8.7L320 64 564.8 33.4c6.7-.8 13.3 2.7 16.3 8.7l41.7 83.4c9 17.9-.6 39.6-19.8 45.1L439.6 217.3c-13.9 4-28.8-1.9-36.2-14.3L320 64 236.6 203c-7.4 12.4-22.3 18.3-36.2 14.3L37.1 170.6c-19.3-5.5-28.8-27.2-19.8-45.1L58.9 42.1zM321.1 128l54.9 91.4c14.9 24.8 44.6 36.6 72.5 28.6L576 211.6l0 167c0 22-15 41.2-36.4 46.6l-204.1 51c-10.2 2.6-20.9 2.6-31 0l-204.1-51C79 419.7 64 400.5 64 378.5l0-167L191.6 248c27.8 8 57.6-3.8 72.5-28.6L318.9 128l2.2 0z",
+    },
+    built: {
+      viewBox: "0 0 512 512",
+      path: "M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z",
+    },
+  };
+
+  function createBarIcon(kind) {
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const { viewBox, path } = BAR_ICONS[kind];
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "svg-inline--fa no-pointer-events");
+    svg.setAttribute("viewBox", viewBox);
+    svg.setAttribute("aria-hidden", "true");
+    const p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("fill", "currentColor");
+    p.setAttribute("d", path);
+    svg.appendChild(p);
+    return svg;
+  }
+
+  function renderButton() {
+    if (!btn) return;
+    const label = btnBuilt ? "Monté physiquement (cliquer pour démonter)" : "Marquer comme monté physiquement";
+    if (btn.dataset.mode === "bar") {
+      btn.replaceChildren(createBarIcon(btnBuilt ? "built" : "build"));
+      btn.title = label;
+      btn.setAttribute("aria-label", label);
+    } else {
+      btn.textContent = (btnBuilt ? "✅ " : "🧰 ") + label;
+    }
+    btn.classList.toggle("msm-btn-built", btnBuilt);
+  }
+
   async function refreshButtonState(deckId) {
     if (!btn) return;
-    const built = await getIsBuilt(deckId);
-    btn.textContent = built ? "✅ Monté physiquement (cliquer pour démonter)" : "🧰 Marquer comme monté physiquement";
-    btn.classList.toggle("msm-btn-built", built);
-    return built;
+    btnBuilt = await getIsBuilt(deckId);
+    renderButton();
+    return btnBuilt;
   }
 
   async function tryFillFromClipboard(textarea) {
@@ -821,12 +869,88 @@
     });
   }
 
+  // Barre d'actions flottante de Moxfield sur la page d'un deck (remonter en
+  // haut, commentaires, like, et sur les decks des autres : avatar, menu
+  // "..."). Son conteneur n'a qu'une classe générée (type
+  // "rueHSSzYMIFGgjgPnfBE", instable) : on la repère plutôt par ses icônes
+  // FontAwesome, dont l'attribut data-icon est stable — c'est le parent
+  // commun du bouton "arrow-up-to-line" et du bouton "comment". Confirmé via
+  // inspection HTML réelle, sur ses propres decks comme sur ceux des autres.
+  function findActionBar() {
+    for (const icon of document.querySelectorAll('svg[data-icon="arrow-up-to-line"]')) {
+      const link = icon.closest("a");
+      const bar = link && link.parentElement;
+      if (bar && bar.querySelector(':scope > a svg[data-icon="comment"]')) return bar;
+    }
+    return null;
+  }
+
+  // Le bouton vit dans la barre Moxfield quand elle existe, sinon en bouton
+  // flottant (repli). Rappelée à chaque tick du polling : si React a re-rendu
+  // la barre et effacé notre bouton, ou si la barre est apparue/disparue, on
+  // le recrée au bon endroit.
+  // Position dans la barre : juste après le bouton "like" (cœur). Sur ses
+  // propres decks c'est le dernier bouton ; sur ceux des autres, ça place le
+  // nôtre avant l'avatar et le menu "..." (4e position). Sans cœur trouvé,
+  // on ajoute simplement à la fin.
+  // Haut (en px depuis le haut de la fenêtre) du bandeau fixe qui contient la
+  // barre d'actions : on remonte jusqu'à l'ancêtre en position fixed/sticky,
+  // qui porte le fond coloré. null si la barre est absente.
+  function getActionBarTop() {
+    const bar = findActionBar();
+    if (!bar) return null;
+    let container = bar;
+    for (let el = bar; el && el !== document.body; el = el.parentElement) {
+      const pos = getComputedStyle(el).position;
+      if (pos === "fixed" || pos === "sticky") { container = el; break; }
+    }
+    const top = container.getBoundingClientRect().top;
+    return top > 0 && top < window.innerHeight ? top : null;
+  }
+
+  function findBarAnchor(bar) {
+    const heart = bar.querySelector(':scope > a svg[data-icon="heart"]');
+    return heart ? heart.closest("a") : null;
+  }
+
+  function isButtonWellPlaced(bar) {
+    if (btn.parentElement !== bar) return false;
+    const anchor = findBarAnchor(bar);
+    return anchor ? btn.previousElementSibling === anchor : true;
+  }
+
   function ensureButton() {
-    if (btn) return btn;
-    btn = document.createElement("button");
-    btn.className = "msm-floating-btn";
-    document.body.appendChild(btn);
+    const bar = findActionBar();
+    const mode = bar ? "bar" : "floating";
+    const upToDate =
+      btn && btn.isConnected && btn.dataset.mode === mode && (mode === "floating" || isButtonWellPlaced(bar));
+    if (upToDate) return btn;
+
+    removeButton();
+    if (bar) {
+      // Mêmes classes utilitaires que les boutons natifs de la barre, pour en
+      // reprendre l'apparence.
+      btn = document.createElement("a");
+      btn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn";
+      btn.setAttribute("role", "button");
+      btn.setAttribute("tabindex", "0");
+      btn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openOverlay();
+        }
+      });
+      const anchor = findBarAnchor(bar);
+      if (anchor) anchor.after(btn);
+      else bar.appendChild(btn);
+    } else {
+      btn = document.createElement("button");
+      btn.className = "msm-floating-btn";
+      document.body.appendChild(btn);
+    }
+    btn.dataset.mode = mode;
     btn.addEventListener("click", () => openOverlay());
+    renderButton();
     return btn;
   }
 
@@ -852,6 +976,7 @@
       }
     } else {
       currentDeckId = null;
+      btnBuilt = false;
       removeButton();
     }
   }

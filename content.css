@@ -18,12 +18,28 @@
   background: #1f56b8;
 }
 
-.msm-btn-built {
+.msm-floating-btn.msm-btn-built {
   background: #2e9e5b;
 }
 
-.msm-btn-built:hover {
+.msm-floating-btn.msm-btn-built:hover {
   background: #257e48;
+}
+
+/* Bouton intégré à la barre d'actions de Moxfield : juste une icône SVG
+   (classe svg-inline--fa de Moxfield), blanche comme les boutons natifs. */
+.msm-bar-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.msm-bar-btn svg {
+  height: 1em;
+}
+
+.msm-bar-btn:hover,
+.msm-bar-btn:focus-visible {
+  opacity: 0.8;
 }
 
 .msm-toast {

@@ -38,7 +38,11 @@ a changé.
     `/decks/{id}/history`, ni sur les listes comme `/decks/public`) ;
   - pour un deck au format **Commander** (badge « Commander » dans l'en-tête
     du deck).
-- Clique sur **« 🧰 Marquer comme monté physiquement »** : la liste de
+- Le bouton est une icône **boîte ouverte** (**cercle coché** quand le deck est monté) ajoutée à la
+  barre d'actions flottante de Moxfield, en bas à droite, juste après le
+  bouton like (cœur). Si cette barre est introuvable, un bouton flottant
+  « 🧰 Marquer comme monté physiquement » prend le relais.
+- Clique sur ce bouton (« Marquer comme monté physiquement ») : la liste de
   cartes est détectée automatiquement à partir de la page, quel que soit le
   mode d'affichage du deck (Text, Condensed Text, Visual Grid, Visual
   Stacks...).
@@ -52,7 +56,7 @@ a changé.
   **« Copier »** de Moxfield puis sur **« 📋 Coller depuis le
   presse-papiers »** dans la fenêtre, ou colle à la main (Ctrl+V).
 - Format attendu, une carte par ligne : `1 Sol Ring`, `2 Island`, etc.
-- Valide : le stock est décrémenté. Reclique sur le bouton (devenu vert)
+- Valide : le stock est décrémenté. Reclique sur le bouton (devenu cercle coché)
   pour démonter le deck et réincrémenter le stock.
 - **Priorité des deux contrôles ci-dessous : le stock d'abord.** Une carte
   dont le stock est insuffisant (même partiellement) n'apparaît que dans
@@ -129,3 +133,9 @@ a changé.
   confondues (pas de distinction par set ou par version foil).
 - Les données sont stockées localement dans le navigateur
   (`chrome.storage.local`) : pas de synchronisation entre appareils.
+
+## Crédits
+
+Icônes du bouton de la barre d'actions : [Font Awesome Free](https://fontawesome.com)
+6.7.2 (`box-open`, `circle-check`), sous licence
+[CC BY 4.0](https://fontawesome.com/license/free).
