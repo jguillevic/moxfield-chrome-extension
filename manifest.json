@@ -3,7 +3,12 @@
   "name": "Moxfield Stock Manager",
   "version": "0.2.0",
   "description": "Gère un stock de cartes physiques à partir de ta collection Moxfield. Flag un deck comme 'monté' pour décrémenter automatiquement le stock.",
-  "permissions": ["storage", "clipboardRead"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAm9I2k0rXQo/mHQ8gAkrnHlqYkbqkP0i0EjUx1bPP57bqisTsIk7mKq4XLuChPrF5DC56rPz4qBS5F+M756+eXR5iCBhWUZR1CLeT0G4YlFjSKwIOSY5qqzLmJTDkvKElMZUdNFrjyCGgDSD/rkMUUz1eJv0PJleDrO5EW/vnUvJcSii+pLd/UsYa9vYSZwRkri6nJ7pDT9wWA8QxSMZeH0FAqFGDuYOklh9ccDhfUIg4QcgrXXpPRs1ZwnujJxz6LSuU6q9G49wI1UDfYUTl8hB9ENef5+DU6T4CsqtpS/a+zkfaGO/PwjKXKET5mAkNNscxwDGiyTHIxmiLy1bjJQIDAQAB",
+  "permissions": ["storage", "clipboardRead", "identity", "identity.email", "alarms"],
+  "oauth2": {
+    "client_id": "494997360432-8sd2j9ajhke5bfd3ra8b8rn0lc15r82t.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/drive.appdata"]
+  },
   "host_permissions": [
     "https://www.moxfield.com/*",
     "https://moxfield.com/*"

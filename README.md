@@ -112,6 +112,41 @@ a changé.
   entièrement le stock **et** démonte tous les decks marqués comme montés
   (une confirmation est demandée).
 
+### 4. Synchronisation Google Drive
+
+- Dans le popup, section **Synchronisation Google Drive** : clique une fois
+  sur **« Connecter Google Drive »** sur chaque PC et autorise l'accès. Ensuite
+  tout est automatique : chaque modification (import, montage, ajustement...)
+  est envoyée sur Drive quelques secondes plus tard, et les changements faits
+  sur un autre PC sont récupérés à l'ouverture du popup, au démarrage du
+  navigateur et toutes les 5 minutes.
+- Les données vont dans un dossier caché de ton Drive, réservé à l'extension
+  (elle n'a accès à aucun autre fichier).
+- **Premier PC connecté** : son stock est envoyé sur Drive. **PC suivants** :
+  si ce PC n'a pas encore de stock, celui de Drive est récupéré ; s'il en a
+  déjà un, le popup te demande lequel garder.
+- **Conflit** (modifications sur deux PC avant qu'ils aient pu se
+  synchroniser) : la version modifiée le plus récemment gagne ; l'autre est
+  conservée dans l'historique.
+- **Historique des versions** : un instantané par jour (et par PC) plus les
+  versions écartées lors d'un conflit, les 10 plus récents conservés. Chacun
+  peut être restauré ; la version restaurée est aussi appliquée aux autres PC.
+- Le bouton **Réinitialiser** de la zone de danger vide aussi le stock des
+  autres PC quand la synchro est active.
+- Si la connexion Google expire, le popup affiche un avertissement et un
+  bouton **« Reconnecter »**. Si le popup se ferme pendant l'autorisation
+  Google, rouvre-le.
+- **Compte utilisé** : celui connecté au profil Chrome, affiché dans le
+  popup (« Compte : ... »). Un seul compte par profil Chrome ; pour gérer
+  plusieurs stocks, utilise un profil Chrome par personne. Pour changer de
+  compte, change celui du profil Chrome : la synchro se met en pause et le
+  popup propose d'envoyer le stock de ce PC sur le nouveau compte ou de
+  récupérer celui du nouveau compte. Revenir à l'ancien compte fait
+  reprendre la synchro normalement.
+- Tant que l'application Google Cloud est en mode « Test », seuls les comptes
+  ajoutés comme utilisateurs de test peuvent se connecter. Nécessite Google
+  Chrome connecté à un compte Google.
+
 ## Limites connues
 
 - Le scraping repose sur des repères structurels de la page, pas sur une
@@ -132,7 +167,8 @@ a changé.
 - Le stock est agrégé par **nom de carte**, toutes éditions/finitions
   confondues (pas de distinction par set ou par version foil).
 - Les données sont stockées localement dans le navigateur
-  (`chrome.storage.local`) : pas de synchronisation entre appareils.
+  (`chrome.storage.local`) ; sans la synchro Google Drive, rien ne se
+  partage entre appareils.
 
 ## Crédits
 
