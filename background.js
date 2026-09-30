@@ -1,7 +1,11 @@
 // background.js — service worker (MV3)
 // Source de vérité unique pour le state : chrome.storage.local
 //   stock       : { [normalizedName]: { name: string, qty: number } }
-//   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty}], builtAt: number } }
+//   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty}], builtAt: number,
+//                   updatedAt?: number,
+//                   pageChanges?: [{name, from, to}], pageCheckedAt?: number } }
+//     pageChanges : différences constatées sur la page Moxfield du deck par
+//     rapport au montage (absent = aucune, ou jamais constaté).
 
 const STORAGE_KEY = "moxfieldStockManagerState";
 
@@ -145,7 +149,30 @@ async function handleUpdateBuiltDeck({ deckId, deckName, url, cards }) {
   if (!deck) throw new Error("Ce deck n'est plus marqué comme monté.");
   moveCardsInStock(state.stock, deck.cards, +1);
   moveCardsInStock(state.stock, cards, -1);
-  state.builtDecks[deckId] = { ...deck, name: deckName, url, cards, updatedAt: Date.now() };
+  const updated = { ...deck, name: deckName, url, cards, updatedAt: Date.now() };
+  delete updated.pageChanges; // le montage correspond de nouveau à la page
+  delete updated.pageCheckedAt;
+  state.builtDecks[deckId] = updated;
+  await setState(state);
+  return { ok: true };
+}
+
+// Constat fait sur la page du deck (content-deck.js) : différences entre la
+// liste Moxfield et le montage, vide si identiques. Sert au badge
+// « Modifié » du popup. N'écrit que si le constat change : la page est
+// vérifiée toutes les 3 secondes, et chaque écriture part sur Drive.
+async function handleSetDeckPageChanges({ deckId, changes }) {
+  const state = await getState();
+  const deck = state.builtDecks[deckId];
+  if (!deck) return { ok: true, ignored: true };
+  if (JSON.stringify(deck.pageChanges || []) === JSON.stringify(changes)) return { ok: true, unchanged: true };
+  if (changes.length > 0) {
+    deck.pageChanges = changes;
+    deck.pageCheckedAt = Date.now();
+  } else {
+    delete deck.pageChanges;
+    delete deck.pageCheckedAt;
+  }
   await setState(state);
   return { ok: true };
 }
@@ -560,6 +587,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "TOGGLE_DECK_BUILT":
           sendResponse(await handleToggleDeck(msg.payload));
+          break;
+        case "SET_DECK_PAGE_CHANGES":
+          sendResponse(await handleSetDeckPageChanges(msg.payload));
           break;
         case "UPDATE_BUILT_DECK":
           sendResponse(await handleUpdateBuiltDeck(msg.payload));

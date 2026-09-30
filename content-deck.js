@@ -401,6 +401,7 @@
     }
     const scraped = pageCards;
     const changes = computeDeckDiff(deck.cards, scraped);
+    reportPageChanges(deckId, changes);
     const since = formatDay(deck.updatedAt || deck.builtAt);
     if (changes.length === 0) {
       changesEl.innerHTML = `<p class="msm-card-count">✅ La liste n'a pas changé depuis le montage (${since}).</p>`;
@@ -534,6 +535,26 @@
   let unreliableChecks = 0;
   const OUTDATED_CHECK_INTERVAL_MS = 3000;
 
+  // Transmet le constat au service worker, pour le badge « Modifié » du
+  // popup. Seulement quand il diffère du dernier envoyé : la vérification
+  // tourne toutes les 3 secondes. Remis à zéro par refreshButtonState (après
+  // un montage, une mise à jour ou un démontage).
+  let lastReportedChanges = null;
+
+  function reportPageChanges(deckId, changes) {
+    const key = deckId + ":" + JSON.stringify(changes);
+    if (key === lastReportedChanges) return;
+    lastReportedChanges = key;
+    const retryLater = () => {
+      lastReportedChanges = null; // extension rechargée entre-temps : on retentera
+    };
+    try {
+      chrome.runtime.sendMessage({ type: "SET_DECK_PAGE_CHANGES", payload: { deckId, changes } }).catch(retryLater);
+    } catch (e) {
+      retryLater(); // contexte invalidé : l'appel lève avant même de renvoyer une promesse
+    }
+  }
+
   async function checkDeckOutdated(deckId) {
     if (!btnBuilt || outdatedCheckRunning || document.querySelector(".msm-overlay")) return;
     if (Date.now() - lastOutdatedCheck < OUTDATED_CHECK_INTERVAL_MS) return;
@@ -561,7 +582,9 @@
       const scraped = deck
         ? completeCardNames(detection.cards, Object.values(res.state.stock || {}), deck.cards)
         : [];
-      const outdated = Boolean(deck) && computeDeckDiff(deck.cards, scraped).length > 0;
+      const changes = deck ? computeDeckDiff(deck.cards, scraped) : [];
+      if (deck) reportPageChanges(deckId, changes);
+      const outdated = changes.length > 0;
       if (deckId === currentDeckId && outdated !== btnOutdated) {
         btnOutdated = outdated;
         renderButton();
@@ -624,6 +647,7 @@
     btnBuilt = await getIsBuilt(deckId);
     if (!btnBuilt) btnOutdated = false;
     lastOutdatedCheck = 0; // réévaluer tout de suite au prochain tick
+    lastReportedChanges = null;
     renderButton();
     return btnBuilt;
   }

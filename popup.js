@@ -7,10 +7,32 @@ async function loadState() {
   return res.state;
 }
 
+// Détail du badge « Modifié » : "+1 Elvish Mystic, −1 Stitcher's Supplier —
+// constaté le 30/09/2026 15:40". Le constat date de la dernière visite de la
+// page du deck (cf. SET_DECK_PAGE_CHANGES dans background.js).
+const MAX_CHANGES_IN_TOOLTIP = 10;
+
+function describePageChanges(deck) {
+  const items = deck.pageChanges.slice(0, MAX_CHANGES_IN_TOOLTIP).map((c) => {
+    const delta = c.to - c.from;
+    return `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${c.name}`;
+  });
+  const more = deck.pageChanges.length - items.length;
+  if (more > 0) items.push(`et ${more} autre(s)`);
+  return (
+    `La liste a changé sur Moxfield depuis le montage : ${items.join(", ")}` +
+    ` — constaté le ${formatDate(deck.pageCheckedAt)}. Ouvre le deck pour mettre à jour le montage.`
+  );
+}
+
 function renderBuiltDecks(state) {
   const list = document.getElementById("built-list");
   const decks = Object.entries(state.builtDecks);
   document.getElementById("built-count").textContent = decks.length;
+  const changedCount = decks.filter(([, d]) => d.pageChanges && d.pageChanges.length > 0).length;
+  const changedEl = document.getElementById("built-changed");
+  changedEl.hidden = changedCount === 0;
+  changedEl.textContent = `${changedCount} modifié${changedCount > 1 ? "s" : ""}`;
   if (decks.length === 0) {
     list.innerHTML = '<p class="hint">Aucun deck monté pour le moment.</p>';
     return;
@@ -23,6 +45,16 @@ function renderBuiltDecks(state) {
     link.href = deck.url;
     link.target = "_blank";
     link.textContent = deck.name;
+    const nameCell = document.createElement("div");
+    nameCell.className = "deck-name";
+    nameCell.appendChild(link);
+    if (deck.pageChanges && deck.pageChanges.length > 0) {
+      const badge = document.createElement("span");
+      badge.className = "badge-changed";
+      badge.textContent = "Modifié";
+      badge.title = describePageChanges(deck);
+      nameCell.appendChild(badge);
+    }
     const btn = document.createElement("button");
     btn.className = "secondary";
     btn.textContent = "Démonter";
@@ -30,7 +62,7 @@ function renderBuiltDecks(state) {
       await send("TOGGLE_DECK_BUILT", { deckId, deckName: deck.name, url: deck.url, cards: [], built: false });
       refresh();
     });
-    row.appendChild(link);
+    row.appendChild(nameCell);
     row.appendChild(btn);
     list.appendChild(row);
   }

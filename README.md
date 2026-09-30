@@ -69,6 +69,14 @@ a changé.
   ajoutées : stock insuffisant ou version différente bloquent la mise à
   jour (le stock disponible compte les exemplaires déjà dans ce deck), les
   terrains de base ne font qu'un avertissement.
+  - Le constat est aussi mémorisé : dans le popup, le deck porte un badge
+    orange **« Modifié »** (détail des différences et date du constat au
+    survol), et l'en-tête « Decks montés » indique combien le sont. Le badge
+    disparaît après « Mettre à jour le montage », au démontage, ou quand la
+    page du deck redevient identique au montage. Il reflète la **dernière
+    visite** de la page du deck : une modification faite ailleurs (autre
+    appareil, onglet fermé tout de suite) n'est connue qu'à la visite
+    suivante.
 - **Priorité des deux contrôles ci-dessous : le stock d'abord.** Une carte
   dont le stock est insuffisant (même partiellement) n'apparaît que dans
   « Stock insuffisant », jamais dans « Version différente » — la version
