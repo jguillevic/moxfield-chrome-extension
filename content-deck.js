@@ -824,12 +824,30 @@
     return scraped.map(({ name, qty }) => ({ name, qty }));
   }
 
+  // Icône de l'extension (déclarée dans web_accessible_resources). getURL
+  // lève une exception si l'extension a été rechargée sans rafraîchir
+  // l'onglet : on se passe alors de l'icône.
+  function extensionIconUrl() {
+    try {
+      return chrome.runtime.getURL("icons/icon32.png");
+    } catch (e) {
+      return null;
+    }
+  }
+
   function buildOverlay({ isBuilt }) {
     const overlay = document.createElement("div");
     overlay.className = "msm-overlay";
+    const iconUrl = extensionIconUrl();
     overlay.innerHTML = `
-      <div class="msm-modal">
-        <h3>${isBuilt ? "Démonter ce deck" : "Marquer ce deck comme monté physiquement"}</h3>
+      <div class="msm-modal" role="dialog" aria-modal="true" aria-labelledby="msm-modal-title">
+        <div class="msm-modal-header">
+          ${iconUrl ? `<img src="${iconUrl}" alt="" width="24" height="24" />` : ""}
+          <div>
+            <div class="msm-modal-brand">Moxfield Stock Manager</div>
+            <h3 id="msm-modal-title">${isBuilt ? "Démonter ce deck" : "Marquer ce deck comme monté physiquement"}</h3>
+          </div>
+        </div>
         ${
           isBuilt
             ? `<p>Ce deck est actuellement marqué comme monté. Le démonter réincrémentera le stock des cartes qu'il utilise.</p>

@@ -1,34 +1,89 @@
+/* Styles injectés dans Moxfield : mêmes couleurs et composants que le popup
+   (popup.css). Les variables sont posées sur nos seuls éléments racines pour
+   ne rien changer au reste de la page. */
+.msm-overlay,
+.msm-toast,
+.msm-floating-btn {
+  --msm-surface: #ffffff;
+  --msm-surface-muted: #f7f8fa;
+  --msm-border: #e3e5ea;
+  --msm-text: #1d2130;
+  --msm-text-muted: #6b7080;
+  --msm-accent: #5b4fd6;
+  --msm-accent-soft: #eeecfd;
+  --msm-accent-fill: #5b4fd6;
+  --msm-accent-fill-hover: #4c41c0;
+  --msm-ok: #1f8a4c;
+  --msm-warn: #9a6200;
+  --msm-warn-soft: #fdf3dd;
+  --msm-danger: #c0392b;
+  --msm-danger-soft: #fdecea;
+  --msm-danger-fill: #c0392b;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .msm-overlay,
+  .msm-toast,
+  .msm-floating-btn {
+    --msm-surface: #1f2229;
+    --msm-surface-muted: #262a32;
+    --msm-border: #333844;
+    --msm-text: #e8eaf0;
+    --msm-text-muted: #9aa0ae;
+    --msm-accent: #8c82ff;
+    --msm-accent-soft: #2c2946;
+    --msm-accent-fill: #5f54e0;
+    --msm-accent-fill-hover: #6f65ec;
+    --msm-ok: #4cc27f;
+    --msm-warn: #e6b04a;
+    --msm-warn-soft: #3a2f17;
+    --msm-danger: #ef6b5e;
+    --msm-danger-soft: #3b2220;
+    --msm-danger-fill: #b8392d;
+  }
+}
+
+.msm-overlay [hidden] {
+  display: none !important;
+}
+
+/* --- Bouton flottant (repli quand la barre d'actions est introuvable) --- */
+
 .msm-floating-btn {
   position: fixed;
   bottom: 20px;
   right: 20px;
   z-index: 999999;
-  background: #2d6cdf;
-  color: white;
-  border: none;
-  border-radius: 8px;
   padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--msm-accent-fill);
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 .msm-floating-btn:hover {
-  background: #1f56b8;
+  background: var(--msm-accent-fill-hover);
 }
 
 .msm-floating-btn.msm-btn-built {
-  background: #2e9e5b;
+  background: var(--msm-ok);
 }
 
-.msm-floating-btn.msm-btn-built:hover {
-  background: #257e48;
+.msm-floating-btn.msm-btn-outdated {
+  background: #c77c02;
 }
 
-/* Bouton intégré à la barre d'actions de Moxfield : juste une icône SVG
-   (classe svg-inline--fa de Moxfield), blanche comme les boutons natifs. */
+/* --- Bouton intégré à la barre d'actions de Moxfield : juste une icône SVG
+   (classe svg-inline--fa de Moxfield), blanche comme les boutons natifs. --- */
+
 .msm-bar-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
 }
@@ -42,147 +97,7 @@
   opacity: 0.8;
 }
 
-.msm-toast {
-  position: fixed;
-  bottom: 70px;
-  right: 20px;
-  z-index: 999999;
-  background: #222;
-  color: white;
-  padding: 10px 14px;
-  border-radius: 6px;
-  max-width: 320px;
-  font-size: 13px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
-
-.msm-toast-error {
-  background: #a12d2d;
-}
-
-.msm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 999998;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.msm-modal {
-  background: white;
-  color: #1a1a1a;
-  border-radius: 10px;
-  padding: 20px;
-  width: 480px;
-  max-width: 90vw;
-  max-height: 85vh;
-  overflow: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-}
-
-.msm-modal h3 {
-  margin-top: 0;
-}
-
-.msm-modal textarea {
-  width: 100%;
-  box-sizing: border-box;
-  font-family: monospace;
-  font-size: 13px;
-}
-
-.msm-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.msm-modal-actions button {
-  padding: 8px 14px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: #f2f2f2;
-  cursor: pointer;
-}
-
-.msm-modal-actions .msm-primary {
-  background: #2d6cdf;
-  color: white;
-  border-color: #2d6cdf;
-}
-
-.msm-secondary {
-  display: block;
-  margin: 8px 0;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #2d6cdf;
-  background: white;
-  color: #2d6cdf;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.msm-secondary:hover {
-  background: #eef3fd;
-}
-
-.msm-card-count {
-  font-size: 12px;
-  color: #555;
-  margin: 2px 0 4px;
-}
-
-.msm-card-count-mismatch {
-  color: #a12d2d;
-  font-weight: 600;
-}
-
-.msm-shortage-warning {
-  background: #fdecea;
-  border: 1px solid #e6a19a;
-  color: #7a271a;
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-top: 8px;
-  font-size: 12px;
-  max-height: 160px;
-  overflow-y: auto;
-}
-
-.msm-shortage-warning ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
-}
-
-/* Terrains de base : avertissement non bloquant (n'empêche pas de valider),
-   distinct visuellement des alertes rouges bloquantes ci-dessus. */
-.msm-info-warning {
-  background: #fff8e1;
-  border: 1px solid #f0d58c;
-  color: #6b5300;
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-top: 8px;
-  font-size: 12px;
-  max-height: 160px;
-  overflow-y: auto;
-}
-
-.msm-info-warning ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
-}
-
-/* Deck monté dont la liste a changé depuis le montage : pastille orange sur
-   l'icône de la barre, bouton flottant orange. */
-.msm-bar-btn {
-  position: relative;
-}
-
+/* Deck monté dont la liste a changé depuis le montage. */
 .msm-bar-btn.msm-btn-outdated::after {
   content: "";
   position: absolute;
@@ -195,38 +110,256 @@
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
-.msm-floating-btn.msm-btn-outdated {
-  background: #c77c02;
+/* --- Toasts --- */
+
+.msm-toast {
+  position: fixed;
+  bottom: 70px;
+  right: 20px;
+  z-index: 999999;
+  max-width: 340px;
+  padding: 10px 14px;
+  border: 1px solid var(--msm-border);
+  border-left: 4px solid var(--msm-accent);
+  border-radius: 10px;
+  background: var(--msm-surface);
+  color: var(--msm-text);
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
-.msm-floating-btn.msm-btn-outdated:hover {
-  background: #a66702;
+.msm-toast-error {
+  border-left-color: var(--msm-danger);
+  background: var(--msm-danger-soft);
+  color: var(--msm-danger);
 }
 
-.msm-changes {
-  background: #fff8e1;
-  border: 1px solid #f0d58c;
-  color: #4d3c00;
-  border-radius: 6px;
+/* --- Fenêtre de montage / démontage --- */
+
+.msm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 18, 0.6);
+}
+
+.msm-modal {
+  box-sizing: border-box;
+  width: 500px;
+  max-width: 92vw;
+  max-height: 86vh;
+  overflow: auto;
+  padding: 18px 20px;
+  border: 1px solid var(--msm-border);
+  border-radius: 12px;
+  background: var(--msm-surface);
+  color: var(--msm-text);
+  font-size: 13px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+.msm-modal *,
+.msm-modal *::before,
+.msm-modal *::after {
+  box-sizing: border-box;
+}
+
+.msm-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.msm-modal-header img {
+  flex-shrink: 0;
+}
+
+.msm-modal-brand {
+  color: var(--msm-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.msm-modal h3 {
+  margin: 0;
+  color: var(--msm-text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.msm-modal p {
+  margin: 0 0 10px;
+  color: var(--msm-text-muted);
+}
+
+.msm-modal strong {
+  color: inherit;
+}
+
+.msm-modal textarea {
+  display: block;
+  width: 100%;
+  margin: 0;
   padding: 8px 10px;
-  margin-top: 8px;
+  border: 1px solid var(--msm-border);
+  border-radius: 8px;
+  background: var(--msm-surface-muted);
+  color: var(--msm-text);
+  font-family: Consolas, monospace;
   font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.msm-modal textarea:focus,
+.msm-modal button:focus-visible {
+  outline: 2px solid var(--msm-accent);
+  outline-offset: 1px;
+}
+
+/* Boutons : neutre par défaut, violet pour l'action principale (mêmes
+   styles que le popup). */
+.msm-modal button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--msm-border);
+  border-radius: 8px;
+  background: var(--msm-surface-muted);
+  color: var(--msm-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.msm-modal button:hover {
+  border-color: var(--msm-text-muted);
+}
+
+.msm-modal button.msm-primary {
+  background: var(--msm-accent-fill);
+  border-color: var(--msm-accent-fill);
+  color: #fff;
+}
+
+.msm-modal button.msm-primary:hover {
+  background: var(--msm-accent-fill-hover);
+  border-color: var(--msm-accent-fill-hover);
+}
+
+.msm-modal button:disabled,
+.msm-modal button:disabled:hover {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--msm-border);
+}
+
+.msm-modal button.msm-primary:disabled {
+  border-color: var(--msm-accent-fill);
+}
+
+.msm-modal .msm-secondary {
+  margin: 0 0 10px;
+}
+
+.msm-modal .msm-export-btn {
+  margin: 6px 0 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.msm-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--msm-border);
+}
+
+/* Compteur de cartes et messages d'état. */
+.msm-card-count {
+  margin: 0 0 6px;
+  color: var(--msm-text-muted);
+  font-size: 12px;
+}
+
+.msm-modal p.msm-card-count {
+  margin: 0 0 6px;
+}
+
+.msm-card-count-mismatch {
+  color: var(--msm-danger);
+  font-weight: 600;
+}
+
+.msm-modal details summary {
+  color: var(--msm-accent);
+  cursor: pointer;
+}
+
+/* Encadrés : rouge = bloquant, orange = à vérifier / changements. */
+.msm-shortage-warning,
+.msm-info-warning,
+.msm-changes {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.msm-shortage-warning,
+.msm-info-warning {
+  max-height: 170px;
+  overflow-y: auto;
+}
+
+.msm-shortage-warning {
+  background: var(--msm-danger-soft);
+  color: var(--msm-danger);
+}
+
+.msm-info-warning,
+.msm-changes {
+  background: var(--msm-warn-soft);
+  color: var(--msm-warn);
+}
+
+.msm-shortage-warning ul,
+.msm-info-warning ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
 
 .msm-changes p {
   margin: 6px 0 0;
+  color: inherit;
 }
 
+/* Différences entre la page et le montage. */
 .msm-diff {
-  list-style: none;
+  max-height: 180px;
   margin: 6px 0 0;
   padding: 0;
-  max-height: 180px;
   overflow-y: auto;
+  list-style: none;
 }
 
 .msm-diff li {
   padding: 1px 0;
+  color: var(--msm-text);
 }
 
 .msm-diff-delta {
@@ -237,18 +370,13 @@
 }
 
 .msm-diff-add .msm-diff-delta {
-  color: #1f8a4c;
+  color: var(--msm-ok);
 }
 
 .msm-diff-remove .msm-diff-delta {
-  color: #c0392b;
+  color: var(--msm-danger);
 }
 
 .msm-diff-detail {
-  color: #7a6a33;
-}
-
-.msm-modal-actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  color: var(--msm-text-muted);
 }
