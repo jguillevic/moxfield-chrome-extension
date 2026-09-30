@@ -239,7 +239,13 @@
     return `${boardMatch ? boardMatch[1] : "?"}:${printing}`;
   }
 
-  function scrapeCardsFromImages() {
+  // oneTilePerCopy : vue "Visual Stacks (Split)", où chaque exemplaire a sa
+  // propre tuile (3 tuiles pour une carte en 3 exemplaires, sans badge de
+  // quantité). Le dédoublonnage par impression (slotStableKey) y fusionnerait
+  // les exemplaires : on garde l'id complet, un par tuile. Un éventuel
+  // doublon périmé fausserait alors le total, ce que le contrôle par rapport
+  // au total Moxfield signale.
+  function scrapeCardsFromImages(oneTilePerCopy = false) {
     const imgs = Array.from(document.querySelectorAll("img.img-card[alt]")).filter(isVisible);
     const seen = new Map();
     const seenSlotKeys = new Set();
@@ -250,7 +256,7 @@
       const wrapperId = slotWrapperId(img);
       if (!wrapperId) return; // pas une vraie tuile de deck (ex. aperçu au survol) : ignorée
       const slot = findSlotContainer(img);
-      const slotKey = slotStableKey(wrapperId, slot);
+      const slotKey = oneTilePerCopy ? wrapperId : slotStableKey(wrapperId, slot);
       if (seenSlotKeys.has(slotKey)) return; // doublon DOM périmé de la même entrée : ignoré
       seenSlotKeys.add(slotKey);
       const qty = findQtyNear(img, slot);
@@ -345,6 +351,7 @@
     const mode = viewSelect ? viewSelect.value : null;
     const textModes = ["table", "condensedTable"];
     const visualModes = ["visual", "stacks", "splitStacks", "spoiler"];
+    const oneTilePerCopy = mode === "splitStacks";
 
     if (mode && textModes.includes(mode)) {
       const fromList = scrapeCardsFromList();
@@ -355,14 +362,14 @@
       // tente en priorité, avant l'ancienne méthode par heuristique d'image.
       const fromDecklistCards = scrapeCardsFromDecklistCards();
       if (fromDecklistCards.length > 0) return fromDecklistCards;
-      const fromImages = scrapeCardsFromImages();
+      const fromImages = scrapeCardsFromImages(oneTilePerCopy);
       if (fromImages.length > 0) return fromImages;
     }
 
     // Mode inconnu, ou la méthode attendue n'a rien trouvé : on essaie tout.
     const fromDecklistCards = scrapeCardsFromDecklistCards();
     if (fromDecklistCards.length > 0) return fromDecklistCards;
-    const fromImages = scrapeCardsFromImages();
+    const fromImages = scrapeCardsFromImages(oneTilePerCopy);
     if (fromImages.length > 0) return fromImages;
     const fromList = scrapeCardsFromList();
     if (fromList.length > 0) return fromList;
