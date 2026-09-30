@@ -15,6 +15,20 @@
 </aside>
 <select name="viewMode" id="viewMode"><option value="table">Text</option><option value="condensedTable">Condensed Text</option><option value="visual">Visual Grid</option><option value="stacks">Visual Stacks</option><option value="splitStacks">Visual Stacks (Split)</option><option value="spoiler">Visual Spoiler</option></select>
 <div class="stack-wrapper">
+  <!-- Pile périmée laissée après une modification : tuile SANS marqueur de
+       collection, quantité obsolète, placée avant la vraie tuile. En
+       remontant l'arbre, la recherche du marqueur tombe sur celui d'une autre
+       carte (le commandant) : la tuile ne doit pas compter en plus, et c'est
+       la vraie qui doit être gardée (constaté : 163 cartes détectées pour
+       100 après une modification, jusqu'au F5). -->
+  <div class="stack-container">
+    <div class="stack">
+      <div class="tile" style="top: 0px;">
+        <div class="qty show-on-hover">2</div>
+        <div class="wrapper img-card-foil" id="id9001-legal-ZOwRDF0"><img alt="Golgari Thug" class="img-card" src="card-ZOwRD.webp"></div>
+      </div>
+    </div>
+  </div>
   <div class="stack-container">
     <div class="stack-title"><a class="table-deck-row-link" role="button"><span title="Commander">Commander</span><span>(1)</span></a></div>
     <div class="stack">

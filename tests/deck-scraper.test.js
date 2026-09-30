@@ -52,6 +52,12 @@ test("Visual Stacks : une tuile recréée après modification ne compte qu'une f
   assert.equal(birds.qty, 1);
 });
 
+test("Visual Stacks : une tuile périmée sans marqueur de collection est écartée au profit de la vraie", () => {
+  const scraper = loadPage("stacks.html", "stacks");
+  const thug = scraper.scrapeCardsGuess().find((c) => c.name === "Golgari Thug");
+  assert.equal(thug.qty, 1);
+});
+
 test("Visual Stacks : les images de l'aperçu latéral (Transform, Back, Front) sont ignorées", () => {
   const scraper = loadPage("stacks.html", "stacks");
   const names = scraper.scrapeCardsGuess().map((c) => c.name);

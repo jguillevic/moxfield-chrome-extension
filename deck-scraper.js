@@ -188,15 +188,14 @@ function createDeckScraper(win) {
   // au milieu de "id6", "id8"...) sans toujours retirer les anciennes —
   // dédoublonner sur l'id complet comptait alors ces cartes deux fois
   // (constaté : 163 cartes détectées pour 100). La partie stable est
-  // "legal-<code>" (impression, suffixe "F0" si foil) ; on y ajoute la zone
-  // du deck ("mainboard", "commanders"...), lue dans l'id du marqueur de
-  // collection (ex. "collection_full_1586_mainboard_J7O5m"), car Moxfield
-  // regroupe toujours une même impression d'une même zone en une entrée.
-  function slotStableKey(wrapperId, slot) {
-    const printing = wrapperId.replace(/^id\d+-/, "");
-    const marker = slot && slot.querySelector('[id^="collection_"]');
-    const boardMatch = marker && marker.id.match(/^collection_[a-z]+_\d+_([a-z]+)_/i);
-    return `${boardMatch ? boardMatch[1] : "?"}:${printing}`;
+  // "legal-<code>" (impression, suffixe "F0" si foil) : Moxfield regroupe
+  // toujours une même impression en une seule entrée, et un deck Commander
+  // n'a jamais la même impression dans deux zones. La zone du deck (lue
+  // dans le marqueur de collection) n'y figure plus : les tuiles périmées
+  // n'ont pas toujours ce marqueur, et la clé différait alors de celle de
+  // la vraie tuile (163 cartes à nouveau, réglé par un F5).
+  function slotStableKey(wrapperId) {
+    return wrapperId.replace(/^id\d+-/, "");
   }
 
   // oneTilePerCopy : vue "Visual Stacks (Split)", où chaque exemplaire a sa
@@ -207,8 +206,11 @@ function createDeckScraper(win) {
   // au total Moxfield signale.
   function scrapeCardsFromImages(oneTilePerCopy = false) {
     const imgs = Array.from(document.querySelectorAll("img.img-card[alt]")).filter(isVisible);
-    const seen = new Map();
-    const seenSlotKeys = new Set();
+    // Une entrée par tuile retenue. Entre deux tuiles d'une même entrée, on
+    // garde celle qui porte le marqueur de collection : c'est la tuile à
+    // jour, la périmée pouvant en être dépourvue (et avoir une quantité
+    // obsolète).
+    const tiles = new Map();
     imgs.forEach((img) => {
       const name = (img.getAttribute("alt") || "").trim();
       if (!name) return;
@@ -216,18 +218,27 @@ function createDeckScraper(win) {
       const wrapperId = slotWrapperId(img);
       if (!wrapperId) return; // pas une vraie tuile de deck (ex. aperçu au survol) : ignorée
       const slot = findSlotContainer(img);
-      const slotKey = oneTilePerCopy ? wrapperId : slotStableKey(wrapperId, slot);
-      if (seenSlotKeys.has(slotKey)) return; // doublon DOM périmé de la même entrée : ignoré
-      seenSlotKeys.add(slotKey);
-      const qty = findQtyNear(img, slot);
-      const printingStatus = slot ? findCollectionStatusNear(img, slot) : "unknown";
-      const key = name.toLowerCase();
-      if (seen.has(key)) {
-        seen.get(key).qty += qty;
-      } else {
-        seen.set(key, { name, qty, printingStatus });
-      }
+      const slotKey = oneTilePerCopy ? wrapperId : slotStableKey(wrapperId);
+      // Marqueur cherché sur la tuile elle-même (parent du conteneur d'image),
+      // pas dans `slot` : faute de marqueur propre, findSlotContainer remonte
+      // jusqu'à un ancêtre qui contient celui d'une AUTRE carte.
+      const tile = img.parentElement.parentElement;
+      const hasMarker = Boolean(tile && tile.querySelector('[id^="collection_"]'));
+      const previous = tiles.get(slotKey);
+      if (previous && (previous.hasMarker || !hasMarker)) return; // doublon DOM périmé : ignoré
+      tiles.set(slotKey, {
+        name,
+        qty: findQtyNear(img, slot),
+        printingStatus: slot ? findCollectionStatusNear(img, slot) : "unknown",
+        hasMarker,
+      });
     });
+    const seen = new Map();
+    for (const { name, qty, printingStatus } of tiles.values()) {
+      const key = name.toLowerCase();
+      if (seen.has(key)) seen.get(key).qty += qty;
+      else seen.set(key, { name, qty, printingStatus });
+    }
     return Array.from(seen.values());
   }
 
