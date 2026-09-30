@@ -195,7 +195,7 @@ npm install
 npm test
 ```
 
-- `tests/fixtures/*.html` : une page par vue (Text, Visual Grid, Visual Spoiler, Visual
+- `tests/fixtures/*.html` : une page par vue (Text, Condensed Text, Visual Grid, Visual Spoiler, Visual
   Stacks, Visual Stacks (Split)), reproduisant la structure réelle de
   Moxfield avec le même deck de 7 cartes, et les pièges déjà rencontrés
   (cartes double face, foil, quantité > 1, tuile en double après une

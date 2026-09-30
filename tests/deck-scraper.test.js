@@ -20,6 +20,7 @@ const EXPECTED_TEXT = EXPECTED_VISUAL.map((l) => l.replace(FULL_DFC, "Revitalizi
 
 const VIEWS = [
   { name: "Text", fixture: "text.html", viewMode: "table", expected: EXPECTED_TEXT },
+  { name: "Condensed Text", fixture: "condensed.html", viewMode: "condensedTable", expected: EXPECTED_TEXT },
   { name: "Visual Grid", fixture: "grid.html", viewMode: "visual", expected: EXPECTED_VISUAL },
   { name: "Visual Stacks", fixture: "stacks.html", viewMode: "stacks", expected: EXPECTED_VISUAL },
   { name: "Visual Stacks (Split)", fixture: "split.html", viewMode: "splitStacks", expected: EXPECTED_VISUAL },
