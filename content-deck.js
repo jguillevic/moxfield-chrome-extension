@@ -641,16 +641,23 @@
     return changes.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Liste de la page, ou null si on ne peut pas s'y fier : rien de détecté
-  // (liste pas encore affichée), total officiel introuvable ou différent du
-  // total détecté (détection incomplète). On ne conclut alors rien, pour ne
-  // pas signaler à tort un deck modifié.
-  function scrapeReliableDeckList() {
+  // Liste de la page, avec reliable = false si on ne peut pas s'y fier : rien
+  // de détecté (liste pas encore affichée), total officiel introuvable ou
+  // différent du total détecté (détection incomplète). On ne conclut alors
+  // rien, pour ne pas signaler à tort un deck modifié.
+  function scrapeDeckListWithCheck() {
     const cards = scrapeCardsGuess();
-    if (cards.length === 0) return null;
     const total = cards.reduce((sum, c) => sum + c.qty, 0);
-    if (getSiteDeclaredTotal() !== total) return null;
-    return cards;
+    const siteTotal = getSiteDeclaredTotal();
+    return { cards, total, siteTotal, reliable: cards.length > 0 && siteTotal === total };
+  }
+
+  function unreliableListMessage({ cards, total, siteTotal }) {
+    if (cards.length === 0) return "aucune carte détectée sur la page.";
+    const detected = `${total} carte${total === 1 ? "" : "s"} détectée${total === 1 ? "" : "s"} sur la page`;
+    return siteTotal === null
+      ? `${detected}, mais total annoncé par Moxfield (« N main deck ») introuvable.`
+      : `${detected}, alors que Moxfield en annonce ${siteTotal}.`;
   }
 
   // Vérifications avant la mise à jour, sur les seules cartes ajoutées ou
@@ -701,16 +708,28 @@
   // montage ». Renvoie la nouvelle liste à enregistrer, ou null.
   async function prepareDeckUpdate(overlay, deckId) {
     const changesEl = overlay.querySelector("#msm-deck-changes");
+    changesEl.innerHTML = '<p class="msm-card-count">Vérification de la liste…</p>';
     const { stockMap, deckUsage, builtDecks } = await getStockAndDeckUsage(deckId);
     const deck = builtDecks[deckId];
-    if (!deck) return null;
-    const scraped = scrapeReliableDeckList();
-    if (!scraped) {
-      changesEl.innerHTML =
-        '<p class="msm-card-count">Impossible de vérifier si la liste a changé depuis le montage : ' +
-        "la liste détectée sur la page ne correspond pas au total annoncé par Moxfield.</p>";
+    if (!deck) {
+      changesEl.innerHTML = "";
       return null;
     }
+    // Juste après un chargement ou une modification, Moxfield peut ne pas
+    // avoir fini d'afficher la liste (images construites progressivement en
+    // Visual Stacks) : on laisse quelques secondes avant de conclure.
+    let detection = scrapeDeckListWithCheck();
+    for (let waited = 0; !detection.reliable && waited < 3000; waited += 300) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      detection = scrapeDeckListWithCheck();
+    }
+    if (!detection.reliable) {
+      changesEl.innerHTML =
+        '<p class="msm-card-count">Impossible de vérifier si la liste a changé depuis le montage : ' +
+        `${escapeHtml(unreliableListMessage(detection))}</p>`;
+      return null;
+    }
+    const scraped = detection.cards;
     const changes = computeDeckDiff(deck.cards, scraped);
     const since = formatDay(deck.updatedAt || deck.builtAt);
     if (changes.length === 0) {
@@ -832,8 +851,9 @@
     outdatedCheckRunning = true;
     lastOutdatedCheck = Date.now();
     try {
-      const scraped = scrapeReliableDeckList();
-      if (!scraped) return; // liste pas fiable pour l'instant : on garde l'état précédent
+      const detection = scrapeDeckListWithCheck();
+      if (!detection.reliable) return; // liste pas fiable pour l'instant : on garde l'état précédent
+      const scraped = detection.cards;
       // Pas safeSendMessage : après un rechargement de l'extension, ce
       // contrôle en fond afficherait son toast toutes les 3 secondes.
       const res = await chrome.runtime.sendMessage({ type: "GET_STATE" });
