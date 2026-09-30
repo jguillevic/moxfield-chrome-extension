@@ -181,6 +181,34 @@ a changé.
   (`chrome.storage.local`) ; sans la synchro Google Drive, rien ne se
   partage entre appareils.
 
+## Développement
+
+### Tests de la lecture des decks
+
+La lecture de la liste d'un deck sur la page (`deck-scraper.js`) est la
+partie la plus fragile : elle dépend de la structure HTML de Moxfield, qui
+diffère selon la vue et peut changer sans prévenir. Elle est couverte par
+des tests automatisés (Node 18+) :
+
+```
+npm install
+npm test
+```
+
+- `tests/fixtures/*.html` : une page par vue (Text, Visual Grid, Visual
+  Stacks, Visual Stacks (Split)), reproduisant la structure réelle de
+  Moxfield avec le même deck de 7 cartes, et les pièges déjà rencontrés
+  (cartes double face, foil, quantité > 1, tuile en double après une
+  modification, restes cachés d'une autre vue, images de l'aperçu latéral).
+- **Ajouter une vraie page** (recommandé quand Moxfield change quelque
+  chose) : sur la page du deck, DevTools → Elements → clic droit sur
+  `<html>` → Copy → Copy outerHTML, colle dans
+  `tests/fixtures/pages/<nom>.html`, et crée à côté `<nom>.json` :
+  `{ "viewMode": "stacks", "total": 100 }` (valeur du sélecteur « View » :
+  `table`, `condensedTable`, `visual`, `stacks`, `splitStacks`, `spoiler`).
+  Ajoute si possible `"cards": ["1 Sol Ring", ...]` — la liste du bouton
+  « Copier » de Moxfield — pour vérifier aussi le détail.
+
 ## Crédits
 
 Icônes du bouton de la barre d'actions : [Font Awesome Free](https://fontawesome.com)

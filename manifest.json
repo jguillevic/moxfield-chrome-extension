@@ -37,7 +37,7 @@
         "https://www.moxfield.com/*",
         "https://moxfield.com/*"
       ],
-      "js": ["content-deck.js"],
+      "js": ["deck-scraper.js", "content-deck.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
