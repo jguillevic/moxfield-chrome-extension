@@ -288,12 +288,21 @@
         seenHashes.add(hash);
       }
       const nameEl = card.querySelector(".decklist-card-phantomsearch");
-      const name = nameEl ? (nameEl.textContent || "").trim() : "";
+      let name = nameEl ? (nameEl.textContent || "").trim() : "";
       if (!name) return;
+      // Carte double face : le texte ne donne que la face avant ("Revitalizing
+      // Repast"), l'image le nom complet ("Revitalizing Repast // Old-Growth
+      // Grove"), qui est celui du stock.
+      const imgAlt = ((card.querySelector("img.img-card[alt]") || {}).alt || "").trim();
+      if (imgAlt.includes(" // ") && normalizeName(imgAlt).startsWith(normalizeName(name))) name = imgAlt;
+      // La quantité est la valeur d'un <input> ("x" + <input value="3">) :
+      // absente de textContent, qui ne contient que le "x". Le texte ("x3")
+      // reste lu en repli si Moxfield revient à un affichage texte.
       const qtyEl = card.querySelector(".decklist-card-quantity");
       let qty = 1;
       if (qtyEl) {
-        const m = (qtyEl.textContent || "").trim().match(/(\d{1,3})/);
+        const input = qtyEl.querySelector("input");
+        const m = ((input && input.value) || qtyEl.textContent || "").trim().match(/(\d{1,3})/);
         if (m) qty = parseInt(m[1], 10);
       }
       const printingStatus = findCollectionStatusNear(card, card);
