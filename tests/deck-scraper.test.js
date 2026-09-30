@@ -23,6 +23,7 @@ const VIEWS = [
   { name: "Visual Grid", fixture: "grid.html", viewMode: "visual", expected: EXPECTED_VISUAL },
   { name: "Visual Stacks", fixture: "stacks.html", viewMode: "stacks", expected: EXPECTED_VISUAL },
   { name: "Visual Stacks (Split)", fixture: "split.html", viewMode: "splitStacks", expected: EXPECTED_VISUAL },
+  { name: "Visual Spoiler", fixture: "spoiler.html", viewMode: "spoiler", expected: EXPECTED_VISUAL },
 ];
 
 for (const view of VIEWS) {
