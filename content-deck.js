@@ -92,7 +92,7 @@
   // ramenées à 1. On garde la lecture de l'<input> en repli si jamais il
   // réapparaît. Chaque <li> porte aussi un data-hash unique et stable : on
   // s'en sert pour ignorer un éventuel doublon de rendu (même cause que
-  // pour les images — cf. slotUniqueKey plus bas — Moxfield laisse parfois
+  // pour les images — cf. slotStableKey plus bas — Moxfield laisse parfois
   // un ancien nœud en double sans le détruire).
   function findListQty(li) {
     const input = li.querySelector('input[type="text"]');
@@ -217,9 +217,26 @@
   // et on ignore purement toute image qui ne le porte pas.
   const SLOT_ID_PATTERN = /^id\d+-legal-.+$/;
 
-  function slotUniqueKey(imgEl) {
+  function slotWrapperId(imgEl) {
     const wrapperId = imgEl.parentElement && imgEl.parentElement.id;
     return wrapperId && SLOT_ID_PATTERN.test(wrapperId) ? wrapperId : null;
+  }
+
+  // Le <N> de "id<N>-legal-<code>" est un compteur de rendu, pas un
+  // identifiant de l'entrée : après une modification du deck, Moxfield
+  // recrée des tuiles avec de nouveaux numéros (ex. "id1585-legal-J7O5m"
+  // au milieu de "id6", "id8"...) sans toujours retirer les anciennes —
+  // dédoublonner sur l'id complet comptait alors ces cartes deux fois
+  // (constaté : 163 cartes détectées pour 100). La partie stable est
+  // "legal-<code>" (impression, suffixe "F0" si foil) ; on y ajoute la zone
+  // du deck ("mainboard", "commanders"...), lue dans l'id du marqueur de
+  // collection (ex. "collection_full_1586_mainboard_J7O5m"), car Moxfield
+  // regroupe toujours une même impression d'une même zone en une entrée.
+  function slotStableKey(wrapperId, slot) {
+    const printing = wrapperId.replace(/^id\d+-/, "");
+    const marker = slot && slot.querySelector('[id^="collection_"]');
+    const boardMatch = marker && marker.id.match(/^collection_[a-z]+_\d+_([a-z]+)_/i);
+    return `${boardMatch ? boardMatch[1] : "?"}:${printing}`;
   }
 
   function scrapeCardsFromImages() {
@@ -230,11 +247,12 @@
       const name = (img.getAttribute("alt") || "").trim();
       if (!name) return;
       if (FLIP_ICON_ALT_BLOCKLIST.has(name.toLowerCase())) return;
-      const slotKey = slotUniqueKey(img);
-      if (!slotKey) return; // pas une vraie tuile de deck (ex. aperçu au survol) : ignorée
+      const wrapperId = slotWrapperId(img);
+      if (!wrapperId) return; // pas une vraie tuile de deck (ex. aperçu au survol) : ignorée
+      const slot = findSlotContainer(img);
+      const slotKey = slotStableKey(wrapperId, slot);
       if (seenSlotKeys.has(slotKey)) return; // doublon DOM périmé de la même entrée : ignoré
       seenSlotKeys.add(slotKey);
-      const slot = findSlotContainer(img);
       const qty = findQtyNear(img, slot);
       const printingStatus = slot ? findCollectionStatusNear(img, slot) : "unknown";
       const key = name.toLowerCase();
@@ -629,6 +647,31 @@
     return map;
   }
 
+  // Cartes double face : les vues visuelles donnent le nom complet
+  // ("Boggart Trawler // Boggart Bog", comme l'export CSV qui alimente le
+  // stock), la vue Text seulement la face avant ("Boggart Trawler" — le
+  // lien ne contient que ce texte). Sans correction, une même carte avait
+  // deux noms selon la vue : fausses différences avec le montage, et carte
+  // introuvable dans le stock. On retrouve le nom complet dans les listes de
+  // référence fournies (stock, liste du montage).
+  function frontFaceKey(name) {
+    return normalizeName(name).split(" // ")[0];
+  }
+
+  function completeCardNames(cards, ...referenceLists) {
+    const fullNames = new Map();
+    for (const list of referenceLists) {
+      for (const c of list) {
+        if (!c.name.includes(" // ")) continue;
+        const key = frontFaceKey(c.name);
+        if (!fullNames.has(key)) fullNames.set(key, c.name);
+      }
+    }
+    return cards.map((c) =>
+      c.name.includes(" // ") ? c : { ...c, name: fullNames.get(frontFaceKey(c.name)) || c.name }
+    );
+  }
+
   function computeDeckDiff(oldCards, newCards) {
     const before = cardsByKey(oldCards);
     const after = cardsByKey(newCards);
@@ -723,13 +766,22 @@
       await new Promise((resolve) => setTimeout(resolve, 300));
       detection = scrapeDeckListWithCheck();
     }
+    const pageCards = completeCardNames(detection.cards, Object.values(stockMap), deck.cards);
     if (!detection.reliable) {
+      // Écarts entre la liste détectée (non fiable) et le montage : aide à
+      // comprendre d'où vient l'erreur de détection (doublons, quantités mal
+      // lues...).
+      const suspect = pageCards.length > 0 ? computeDeckDiff(deck.cards, pageCards) : [];
       changesEl.innerHTML =
         '<p class="msm-card-count">Impossible de vérifier si la liste a changé depuis le montage : ' +
-        `${escapeHtml(unreliableListMessage(detection))}</p>`;
+        `${escapeHtml(unreliableListMessage(detection))}</p>` +
+        (suspect.length > 0
+          ? `<details class="msm-card-count"><summary>Voir ce qui a été détecté (${suspect.length} écart(s) avec le montage)</summary>` +
+            `${renderDeckDiff(suspect)}</details>`
+          : "");
       return null;
     }
-    const scraped = detection.cards;
+    const scraped = pageCards;
     const changes = computeDeckDiff(deck.cards, scraped);
     const since = formatDay(deck.updatedAt || deck.builtAt);
     if (changes.length === 0) {
@@ -843,6 +895,7 @@
   let btnOutdated = false;
   let lastOutdatedCheck = 0;
   let outdatedCheckRunning = false;
+  let unreliableChecks = 0;
   const OUTDATED_CHECK_INTERVAL_MS = 3000;
 
   async function checkDeckOutdated(deckId) {
@@ -852,12 +905,26 @@
     lastOutdatedCheck = Date.now();
     try {
       const detection = scrapeDeckListWithCheck();
-      if (!detection.reliable) return; // liste pas fiable pour l'instant : on garde l'état précédent
-      const scraped = detection.cards;
+      if (!detection.reliable) {
+        // Un bref passage non fiable (liste en cours d'affichage) garde
+        // l'état précédent pour éviter un clignotement ; au-delà, on ne sait
+        // plus si le deck a changé et on retire la pastille plutôt que de
+        // signaler à tort une modification.
+        unreliableChecks++;
+        if (unreliableChecks >= 2 && btnOutdated && deckId === currentDeckId) {
+          btnOutdated = false;
+          renderButton();
+        }
+        return;
+      }
+      unreliableChecks = 0;
       // Pas safeSendMessage : après un rechargement de l'extension, ce
       // contrôle en fond afficherait son toast toutes les 3 secondes.
       const res = await chrome.runtime.sendMessage({ type: "GET_STATE" });
       const deck = res && res.ok ? res.state.builtDecks[deckId] : null;
+      const scraped = deck
+        ? completeCardNames(detection.cards, Object.values(res.state.stock || {}), deck.cards)
+        : [];
       const outdated = Boolean(deck) && computeDeckDiff(deck.cards, scraped).length > 0;
       if (deckId === currentDeckId && outdated !== btnOutdated) {
         btnOutdated = outdated;
@@ -994,7 +1061,7 @@
       };
 
       // Scraping DOM de la page (méthode adaptée à la vue active).
-      const guessed = scrapeCardsGuess();
+      const guessed = completeCardNames(scrapeCardsGuess(), Object.values(await getStockMap()));
       if (guessed.length > 0) {
         textarea.value = cardsToText(guessed);
         lastWrongEditionNames = buildWrongEditionSet(guessed);
@@ -1192,6 +1259,7 @@
       if (deckId !== currentDeckId) {
         currentDeckId = deckId;
         btnOutdated = false;
+        unreliableChecks = 0;
         await refreshButtonState(deckId);
       }
       checkDeckOutdated(deckId);
