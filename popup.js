@@ -169,6 +169,15 @@ async function importCSVText(csvText, status) {
   }
 }
 
+// Le vrai champ fichier est masqué derrière un bouton stylé : on affiche
+// nous-mêmes le nom du fichier choisi.
+function showChosenFile() {
+  const file = document.getElementById("csv-file-input").files[0];
+  document.getElementById("csv-file-name").textContent = file ? file.name : "Aucun fichier choisi";
+}
+
+document.getElementById("csv-file-input").addEventListener("change", showChosenFile);
+
 document.getElementById("import-btn").addEventListener("click", async () => {
   const fileInput = document.getElementById("csv-file-input");
   const status = document.getElementById("import-status");
@@ -181,6 +190,7 @@ document.getElementById("import-btn").addEventListener("click", async () => {
     const csvText = await file.text();
     await importCSVText(csvText, status);
     fileInput.value = "";
+    showChosenFile();
   } catch (e) {
     status.textContent = "Impossible de lire le fichier : " + e.message;
   }
@@ -196,11 +206,143 @@ document.getElementById("import-paste-btn").addEventListener("click", async () =
 document.getElementById("stock-filter").addEventListener("input", refresh);
 document.getElementById("stock-only-in-decks").addEventListener("change", refresh);
 
+// --- Synchronisation Google Drive ---
+// Le travail se fait dans le service worker ; le popup ne fait qu'afficher
+// l'état de la synchro, qu'il relit à chaque changement du stockage local.
+function formatDate(value) {
+  return new Date(value).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+}
+
+let syncMeta = null;
+
+async function renderSync() {
+  const res = await send("GET_SYNC_STATUS");
+  syncMeta = res.meta;
+  const m = syncMeta;
+  const blocked = m.pendingChoice || m.accountMismatch;
+  document.getElementById("sync-off").hidden = m.enabled;
+  document.getElementById("sync-choice").hidden = !(m.enabled && m.pendingChoice);
+  document.getElementById("sync-account-changed").hidden = !(m.enabled && !m.pendingChoice && m.accountMismatch);
+  document.getElementById("sync-on").hidden = !(m.enabled && !blocked);
+  document.getElementById("sync-reconnect-btn").hidden = !m.lastError;
+  document.getElementById("sync-account").textContent = m.accountEmail || "inconnu";
+  if (m.accountMismatch) {
+    document.getElementById("sync-old-account").textContent = m.accountEmail || "inconnu";
+    document.getElementById("sync-new-account").textContent = m.accountMismatch.email || "inconnu";
+  }
+  if (m.pendingChoice) {
+    document.getElementById("sync-choice-date").textContent = `modifiées le ${formatDate(m.pendingChoice.remoteUpdatedAt)}`;
+  }
+  document.getElementById("sync-avatar").textContent = (m.accountEmail || "?").charAt(0);
+
+  const state = document.getElementById("sync-state");
+  let pill;
+  if (!m.enabled) {
+    pill = ["off", "Non synchronisé"];
+    state.textContent = "";
+  } else if (blocked) {
+    pill = ["pending", "En pause"];
+  } else if (m.lastError) {
+    pill = ["error", "Erreur de synchro"];
+    state.className = "sync-error";
+    state.textContent = m.lastError;
+  } else if (m.dirty || !m.lastSyncAt) {
+    pill = ["pending", "Envoi en cours"];
+    state.className = "";
+    state.textContent = m.lastSyncAt ? "Modifications en attente d'envoi…" : "Première synchronisation…";
+  } else {
+    pill = ["ok", "Synchronisé"];
+    state.className = "";
+    state.textContent = `Dernière synchro : ${formatDate(m.lastSyncAt)}`;
+  }
+  const pillEl = document.getElementById("sync-pill");
+  pillEl.className = `pill ${pill[0]}`;
+  pillEl.textContent = pill[1];
+}
+
+async function runSyncAction(type, payload, pendingText) {
+  const status = document.getElementById("sync-status");
+  status.textContent = pendingText;
+  const res = await send(type, payload);
+  status.textContent = res.ok ? "" : "Erreur : " + res.error;
+  renderSync();
+  return res;
+}
+
+const SNAPSHOT_REASONS = { daily: "", conflict: " — version écartée lors d'un conflit", manual: " — sauvegarde manuelle" };
+
+async function renderSnapshots() {
+  const container = document.getElementById("sync-snapshots");
+  container.innerHTML = '<p class="hint">Chargement…</p>';
+  const res = await send("DRIVE_LIST_SNAPSHOTS");
+  if (!res.ok) {
+    container.innerHTML = "";
+    document.getElementById("sync-status").textContent = "Erreur : " + res.error;
+    return;
+  }
+  if (res.snapshots.length === 0) {
+    container.innerHTML = '<p class="hint">Aucune version dans l\'historique pour le moment.</p>';
+    return;
+  }
+  container.innerHTML = "";
+  for (const s of res.snapshots) {
+    const row = document.createElement("div");
+    row.className = "deck-row";
+    const label = document.createElement("span");
+    label.className = "hint";
+    label.textContent = `${formatDate(s.createdTime)}${SNAPSHOT_REASONS[s.reason] ?? ""}`;
+    const btn = document.createElement("button");
+    btn.className = "secondary";
+    btn.textContent = "Restaurer";
+    btn.addEventListener("click", async () => {
+      if (!confirm(`Remplacer le stock et les decks montés par la version du ${formatDate(s.createdTime)} ? Elle sera aussi appliquée à tes autres PC.`)) return;
+      const r = await runSyncAction("DRIVE_RESTORE_SNAPSHOT", { fileId: s.id }, "Restauration…");
+      if (r.ok) {
+        document.getElementById("sync-status").textContent = `Restauré : ${r.cardCount} cartes différentes, ${r.deckCount} decks montés.`;
+      }
+    });
+    row.appendChild(label);
+    row.appendChild(btn);
+    container.appendChild(row);
+  }
+}
+
+document.getElementById("sync-connect-btn").addEventListener("click", () => runSyncAction("DRIVE_CONNECT", undefined, "Connexion…"));
+document.getElementById("sync-reconnect-btn").addEventListener("click", () => runSyncAction("DRIVE_CONNECT", undefined, "Connexion…"));
+document.getElementById("sync-keep-remote-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "remote" }, "Récupération depuis Drive…"));
+document.getElementById("sync-keep-local-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "local" }, "Envoi vers Drive…"));
+document.getElementById("sync-account-keep-local-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "local" }, "Envoi vers le nouveau compte…"));
+document.getElementById("sync-account-keep-remote-btn").addEventListener("click", () => {
+  if (confirm("Remplacer le stock de ce PC par celui du nouveau compte ? (s'il n'en a pas, le stock de ce PC y sera envoyé)")) {
+    runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "remote" }, "Récupération depuis le nouveau compte…");
+  }
+});
+document.getElementById("sync-now-btn").addEventListener("click", () => runSyncAction("SYNC_NOW", undefined, "Synchronisation…"));
+document.getElementById("sync-disconnect-btn").addEventListener("click", () => {
+  if (confirm("Arrêter la synchronisation sur ce PC ? Les données restent sur ce PC et sur Drive.")) {
+    runSyncAction("DRIVE_DISCONNECT", undefined, "");
+  }
+});
+document.getElementById("sync-history").addEventListener("toggle", (e) => {
+  if (e.target.open) renderSnapshots();
+});
+
 document.getElementById("reset-btn").addEventListener("click", async () => {
-  if (confirm("Réinitialiser tout le stock et tous les decks montés ?")) {
+  const warning = syncMeta?.enabled ? "\n\nLa synchronisation est active : tes autres PC seront aussi vidés." : "";
+  if (confirm("Réinitialiser tout le stock et tous les decks montés ?" + warning)) {
     await send("RESET_STOCK");
     refresh();
   }
 });
 
+// Un changement venant de Drive (ou d'un onglet Moxfield) met le popup à jour.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.moxfieldStockManagerState) refresh();
+  if (changes.moxfieldStockManagerSync) renderSync();
+});
+
 refresh();
+renderSync().then(() => {
+  if (syncMeta.enabled) send("SYNC_NOW"); // récupère tout de suite les changements d'un autre PC
+});

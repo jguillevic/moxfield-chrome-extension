@@ -6,45 +6,138 @@
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <h1>📦 Moxfield Stock Manager</h1>
+  <header class="app-header">
+    <div class="brand">
+      <img src="icons/icon32.png" alt="" width="22" height="22" />
+      <h1>Moxfield Stock Manager</h1>
+    </div>
+    <span id="sync-pill" class="pill off">Non synchronisé</span>
+  </header>
 
-  <section>
-    <h2>Importer ma collection (fichier CSV)</h2>
-    <p class="hint">
-      Sur Moxfield : ouvre ta collection → bouton Export → CSV → enregistre le fichier, puis choisis-le ci-dessous.
-      Réimporter met le stock à jour sans perdre les decks montés.
-    </p>
-    <input type="file" id="csv-file-input" accept=".csv,text/csv" />
-    <button id="import-btn">Importer ce fichier</button>
-    <span id="import-status"></span>
-    <details>
-      <summary class="hint">Ou coller le texte directement</summary>
-      <textarea id="csv-input" rows="4" placeholder="Count,Tradelist Count,Name,Edition,..."></textarea>
-      <button id="import-paste-btn">Importer ce texte collé</button>
+  <div class="stats">
+    <div class="stat">
+      <span class="stat-value" id="stock-count">0</span>
+      <span class="stat-label">cartes différentes</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="stock-total">0</span>
+      <span class="stat-label">exemplaires libres</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="stock-in-decks">0</span>
+      <span class="stat-label">dans des decks</span>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Decks montés <span class="count" id="built-count">0</span></h2>
+    <div id="built-list" class="list"></div>
+  </section>
+
+  <section class="card">
+    <details id="stock-details">
+      <summary><h2>Stock</h2></summary>
+      <div class="card-body">
+        <input id="stock-filter" type="search" placeholder="Filtrer par nom…" />
+        <label class="check-row">
+          <input type="checkbox" id="stock-only-in-decks" />
+          Seulement les cartes dans des decks montés
+        </label>
+        <p class="hint">« Libre » = disponible hors decks montés. Clique sur une carte présente dans des decks pour voir lesquels.</p>
+        <div id="stock-table" class="table-wrap"></div>
+      </div>
     </details>
   </section>
 
-  <section class="danger-zone">
-    <h2>⚠️ Zone de danger</h2>
-    <button id="reset-btn" class="danger">Réinitialiser tout le stock</button>
-    <p class="hint">Vide entièrement le stock et démonte tous les decks marqués comme montés physiquement.</p>
-  </section>
-
-  <section>
-    <h2>Decks montés physiquement (<span id="built-count">0</span>)</h2>
-    <div id="built-list"></div>
-  </section>
-
-  <section>
-    <details id="stock-details">
-      <summary class="section-summary">Stock (<span id="stock-count">0</span> cartes différentes, <span id="stock-total">0</span> exemplaires libres, <span id="stock-in-decks">0</span> dans des decks)</summary>
-      <input id="stock-filter" type="text" placeholder="Filtrer par nom..." />
-      <label class="switch-row">
-        <input type="checkbox" id="stock-only-in-decks" />
-        Seulement les cartes dans des decks montés
+  <section class="card">
+    <h2>Importer ma collection</h2>
+    <p class="hint">
+      Sur Moxfield : collection → Export → CSV. Réimporter met le stock à jour sans perdre les decks montés.
+    </p>
+    <div class="file-row">
+      <label class="button file-button">
+        <input type="file" id="csv-file-input" accept=".csv,text/csv" hidden />
+        Choisir un fichier CSV
       </label>
-      <p class="hint">« Libre » = disponible hors decks montés. Clique sur une carte présente dans des decks pour voir lesquels.</p>
-      <div id="stock-table"></div>
+      <span id="csv-file-name" class="file-name">Aucun fichier choisi</span>
+    </div>
+    <div class="actions">
+      <button id="import-btn" class="primary">Importer</button>
+      <span id="import-status" class="status"></span>
+    </div>
+    <details class="sub-details">
+      <summary>Ou coller le texte du CSV</summary>
+      <textarea id="csv-input" rows="4" placeholder="Count,Tradelist Count,Name,Edition,..."></textarea>
+      <button id="import-paste-btn" class="primary">Importer ce texte</button>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Synchronisation Google Drive</h2>
+
+    <div id="sync-off" hidden>
+      <p class="hint">
+        Sauvegarde automatique dans un dossier privé de ton Drive et synchronisation entre tes PC.
+        À faire une seule fois par PC. Si le popup se ferme pendant l'autorisation Google, rouvre-le.
+      </p>
+      <button id="sync-connect-btn" class="primary">Connecter Google Drive</button>
+    </div>
+
+    <div id="sync-choice" hidden>
+      <div class="notice warning">
+        Drive contient déjà des données (<span id="sync-choice-date"></span>) et ce PC a aussi un stock.
+        Lesquelles garder ? L'autre version restera dans l'historique.
+      </div>
+      <div class="actions">
+        <button id="sync-keep-remote-btn" class="primary">Garder celles de Drive</button>
+        <button id="sync-keep-local-btn">Garder celles de ce PC</button>
+      </div>
+    </div>
+
+    <div id="sync-account-changed" hidden>
+      <div class="notice error">
+        Le compte Google de Chrome a changé : <strong id="sync-old-account"></strong> →
+        <strong id="sync-new-account"></strong>. Synchronisation en pause.
+      </div>
+      <div class="actions stacked">
+        <button id="sync-account-keep-local-btn" class="primary">Envoyer le stock de ce PC sur le nouveau compte</button>
+        <button id="sync-account-keep-remote-btn">Récupérer le stock du nouveau compte</button>
+      </div>
+      <p class="hint">
+        La version remplacée reste dans l'historique. Revenir à l'ancien compte dans Chrome fait reprendre la synchro.
+      </p>
+    </div>
+
+    <div id="sync-on" hidden>
+      <div class="account" title="Pour changer de compte, change celui du profil Chrome : l'extension te demandera quoi faire.">
+        <span class="avatar" id="sync-avatar">?</span>
+        <div class="account-text">
+          <span class="account-email" id="sync-account"></span>
+          <span class="hint">Compte du profil Chrome</span>
+        </div>
+      </div>
+      <p id="sync-state"></p>
+      <div class="actions">
+        <button id="sync-reconnect-btn" class="primary" hidden>Reconnecter</button>
+        <button id="sync-now-btn">Synchroniser maintenant</button>
+        <button id="sync-disconnect-btn" class="ghost">Déconnecter</button>
+      </div>
+      <details id="sync-history" class="sub-details">
+        <summary>Historique des versions (10 dernières)</summary>
+        <div id="sync-snapshots" class="list"></div>
+      </details>
+    </div>
+
+    <span id="sync-status" class="status"></span>
+  </section>
+
+  <section class="card danger-zone">
+    <details>
+      <summary><h2>Zone de danger</h2></summary>
+      <div class="card-body">
+        <p class="hint">Vide entièrement le stock et démonte tous les decks marqués comme montés physiquement.</p>
+        <button id="reset-btn" class="danger">Réinitialiser tout le stock</button>
+      </div>
     </details>
   </section>
 
