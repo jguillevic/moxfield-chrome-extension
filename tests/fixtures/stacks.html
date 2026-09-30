@@ -14,13 +14,28 @@
   </div>
 </aside>
 <select name="viewMode" id="viewMode"><option value="table">Text</option><option value="condensedTable">Condensed Text</option><option value="visual">Visual Grid</option><option value="stacks">Visual Stacks</option><option value="splitStacks">Visual Stacks (Split)</option><option value="spoiler">Visual Spoiler</option></select>
+<!-- Zone « Considering » (maybeboard), affichée par Moxfield dans la page :
+     à ignorer (constaté : 63 cartes en Considering → 163 détectées pour 100).
+     Birds of Paradise y est aussi, même impression que dans le deck, placée
+     avant : elle ne doit pas masquer la vraie. -->
+<div class="stack-wrapper considering"><div class="stack-container"><div class="stack">
+  <div class="tile" style="top: 0px;">
+    <div class="qty show-on-hover">1</div>
+    <div class="marker"><a id="collection_full_1212_maybeboard_N9wzQ" class="fa-stack"><span aria-label="Found in collection"></span></a></div>
+    <div class="wrapper" id="id1211-legal-N9wzQ"><img alt="Arboreal Grazer" class="img-card" src="card-N9wzQ.webp"></div>
+  </div>
+  <div class="tile" style="top: 30px;">
+    <div class="qty show-on-hover">1</div>
+    <div class="marker"><a id="collection_full_1214_maybeboard_EZA0w" class="fa-stack"><span aria-label="Found in collection"></span></a></div>
+    <div class="wrapper" id="id1213-legal-EZA0w"><img alt="Birds of Paradise" class="img-card" src="card-EZA0w.webp"></div>
+  </div>
+</div></div></div>
 <div class="stack-wrapper">
   <!-- Pile périmée laissée après une modification : tuile SANS marqueur de
        collection, quantité obsolète, placée avant la vraie tuile. En
        remontant l'arbre, la recherche du marqueur tombe sur celui d'une autre
        carte (le commandant) : la tuile ne doit pas compter en plus, et c'est
-       la vraie qui doit être gardée (constaté : 163 cartes détectées pour
-       100 après une modification, jusqu'au F5). -->
+       la vraie qui doit être gardée. -->
   <div class="stack-container">
     <div class="stack">
       <div class="tile" style="top: 0px;">

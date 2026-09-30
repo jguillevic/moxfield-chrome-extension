@@ -39,6 +39,12 @@ for (const view of VIEWS) {
     assert.equal(totalOf(scraper.scrapeCardsGuess()), 7);
   });
 
+  test(`${view.name} : les cartes de la zone Considering sont exclues`, () => {
+    const cards = loadPage(view.fixture, view.viewMode).scrapeCardsGuess();
+    assert.ok(!cards.some((c) => c.name === "Arboreal Grazer"), "carte de Considering comptée");
+    assert.equal(cards.find((c) => c.name === "Birds of Paradise").qty, 1);
+  });
+
   test(`${view.name} : carte possédée dans une autre version repérée`, () => {
     const scraper = loadPage(view.fixture, view.viewMode);
     const birds = scraper.scrapeCardsGuess().find((c) => c.name === "Birds of Paradise");

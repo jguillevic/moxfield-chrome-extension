@@ -50,6 +50,9 @@ a changé.
   nombre total de cartes détectées. S'il ne correspond pas au total annoncé
   par Moxfield (« N main deck » + « N sideboard »), il passe en rouge — signe
   d'une erreur de détection à corriger dans la liste.
+- Les cartes de la zone **« Considering »** (cartes envisagées) ne sont
+  jamais comptées, même quand Moxfield les affiche sous le deck : elles ne
+  font pas partie du deck physique.
 - **Vérifie/corrige la liste** avant de valider — c'est un scraping au
   mieux, pas une lecture officielle de Moxfield (qui n'a pas d'API
   publique). Si la liste est vide ou incomplète, clique sur le bouton natif

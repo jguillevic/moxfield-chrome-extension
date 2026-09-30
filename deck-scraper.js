@@ -42,6 +42,27 @@ function createDeckScraper(win) {
     return "full";
   }
 
+  // --- Zones du deck ---
+  // Le marqueur de collection porte aussi la zone de la carte :
+  // "collection_full_1212_maybeboard_N9wzQ". La zone « Considering »
+  // (maybeboard) contient les cartes envisagées, pas celles du deck : elles
+  // ne comptent ni dans le total « N main deck » de Moxfield ni dans le deck
+  // physique. Moxfield peut l'afficher sous le deck dans toutes les vues —
+  // constaté : 63 cartes en Considering → 163 détectées pour un deck de 100.
+  const IGNORED_BOARDS = new Set(["maybeboard"]);
+
+  // scopeEl : la ligne / la carte / la tuile de CETTE carte (pas un ancêtre
+  // commun à plusieurs cartes, qui donnerait la zone d'une voisine).
+  function boardOf(scopeEl) {
+    const marker = scopeEl && scopeEl.querySelector('[id^="collection_"]');
+    const m = marker && marker.id.match(/^collection_[a-z]+_\d+_([a-z]+)_/i);
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  function isIgnoredBoard(scopeEl) {
+    return IGNORED_BOARDS.has(boardOf(scopeEl));
+  }
+
   // --- Scraping DOM, vue "Text" / "Condensed Text" ---
   // Chaque carte est un <li data-hash="..."> avec un <a href="/cards/...">
   // dont le texte est le nom complet de la carte. La quantité était portée
@@ -75,6 +96,9 @@ function createDeckScraper(win) {
     links.forEach((link) => {
       const li = link.closest("li");
       if (!li) return;
+      // Avant le dédoublonnage : une carte à la fois dans le deck et dans
+      // Considering peut porter le même data-hash dans les deux zones.
+      if (isIgnoredBoard(li)) return;
       const rowKey = li.getAttribute("data-hash");
       if (rowKey) {
         if (seenRowKeys.has(rowKey)) return; // doublon de rendu de la même ligne : ignoré
@@ -187,13 +211,12 @@ function createDeckScraper(win) {
   // recrée des tuiles avec de nouveaux numéros (ex. "id1585-legal-J7O5m"
   // au milieu de "id6", "id8"...) sans toujours retirer les anciennes —
   // dédoublonner sur l'id complet comptait alors ces cartes deux fois
-  // (constaté : 163 cartes détectées pour 100). La partie stable est
-  // "legal-<code>" (impression, suffixe "F0" si foil) : Moxfield regroupe
-  // toujours une même impression en une seule entrée, et un deck Commander
-  // n'a jamais la même impression dans deux zones. La zone du deck (lue
-  // dans le marqueur de collection) n'y figure plus : les tuiles périmées
-  // n'ont pas toujours ce marqueur, et la clé différait alors de celle de
-  // la vraie tuile (163 cartes à nouveau, réglé par un F5).
+  // La partie stable est "legal-<code>" (impression, suffixe "F0" si foil) :
+  // Moxfield regroupe toujours une même impression en une seule entrée, et
+  // un deck Commander n'a pas la même impression dans deux zones jouées (la
+  // zone Considering est écartée avant, cf. IGNORED_BOARDS). La zone n'entre
+  // pas dans la clé, pour qu'une tuile périmée privée de son marqueur de
+  // collection soit quand même reconnue comme doublon.
   function slotStableKey(wrapperId) {
     return wrapperId.replace(/^id\d+-/, "");
   }
@@ -223,6 +246,7 @@ function createDeckScraper(win) {
       // pas dans `slot` : faute de marqueur propre, findSlotContainer remonte
       // jusqu'à un ancêtre qui contient celui d'une AUTRE carte.
       const tile = img.parentElement.parentElement;
+      if (isIgnoredBoard(tile)) return; // zone Considering : pas une carte du deck
       const hasMarker = Boolean(tile && tile.querySelector('[id^="collection_"]'));
       const previous = tiles.get(slotKey);
       if (previous && (previous.hasMarker || !hasMarker)) return; // doublon DOM périmé : ignoré
@@ -259,6 +283,7 @@ function createDeckScraper(win) {
     const seen = new Map();
     const seenHashes = new Set();
     cardEls.forEach((card) => {
+      if (isIgnoredBoard(card)) return; // zone Considering, avant le dédoublonnage (cf. scrapeCardsFromList)
       const hash = card.getAttribute("data-hash");
       if (hash) {
         if (seenHashes.has(hash)) return; // doublon de rendu de la même entrée : ignoré
