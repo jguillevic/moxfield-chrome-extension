@@ -58,6 +58,17 @@ a changé.
 - Format attendu, une carte par ligne : `1 Sol Ring`, `2 Island`, etc.
 - Valide : le stock est décrémenté. Reclique sur le bouton (devenu cercle coché)
   pour démonter le deck et réincrémenter le stock.
+- **Deck modifié après son montage** : tant que tu es sur la page d'un deck
+  monté, l'extension compare la liste affichée à celle enregistrée au
+  montage (seulement quand le total détecté correspond à celui annoncé par
+  Moxfield, pour éviter les fausses alertes). Si elle a changé, une
+  **pastille orange** apparaît sur le bouton. Clique dessus : la fenêtre
+  liste les différences (`+1 Counterspell (0 → 1)`, `−1 Rhystic Study (1 → 0)`)
+  et propose **« Mettre à jour le montage »**, qui n'ajuste le stock que pour
+  les cartes modifiées. Mêmes contrôles qu'au montage, sur les seules cartes
+  ajoutées : stock insuffisant ou version différente bloquent la mise à
+  jour (le stock disponible compte les exemplaires déjà dans ce deck), les
+  terrains de base ne font qu'un avertissement.
 - **Priorité des deux contrôles ci-dessous : le stock d'abord.** Une carte
   dont le stock est insuffisant (même partiellement) n'apparaît que dans
   « Stock insuffisant », jamais dans « Version différente » — la version

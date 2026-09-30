@@ -176,3 +176,79 @@
   margin: 4px 0 0;
   padding-left: 18px;
 }
+
+/* Deck monté dont la liste a changé depuis le montage : pastille orange sur
+   l'icône de la barre, bouton flottant orange. */
+.msm-bar-btn {
+  position: relative;
+}
+
+.msm-bar-btn.msm-btn-outdated::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5a623;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.msm-floating-btn.msm-btn-outdated {
+  background: #c77c02;
+}
+
+.msm-floating-btn.msm-btn-outdated:hover {
+  background: #a66702;
+}
+
+.msm-changes {
+  background: #fff8e1;
+  border: 1px solid #f0d58c;
+  color: #4d3c00;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.msm-changes p {
+  margin: 6px 0 0;
+}
+
+.msm-diff {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.msm-diff li {
+  padding: 1px 0;
+}
+
+.msm-diff-delta {
+  display: inline-block;
+  min-width: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.msm-diff-add .msm-diff-delta {
+  color: #1f8a4c;
+}
+
+.msm-diff-remove .msm-diff-delta {
+  color: #c0392b;
+}
+
+.msm-diff-detail {
+  color: #7a6a33;
+}
+
+.msm-modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

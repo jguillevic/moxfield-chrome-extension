@@ -107,30 +107,45 @@ async function handleImportCSV(csvText) {
   return { ok: true, cardCount: Object.keys(parsed).length, totalQty };
 }
 
+// sign = -1 : les cartes partent dans un deck (montage) ; +1 : elles
+// reviennent au stock (démontage).
+function moveCardsInStock(stock, cards, sign) {
+  for (const card of cards) {
+    if (card.excludedFromStock) continue; // absente de la collection Moxfield : jamais décomptée
+    const key = normalizeName(card.name);
+    if (!stock[key]) stock[key] = { name: card.name, qty: 0 };
+    stock[key].qty += sign * card.qty;
+  }
+}
+
 async function handleToggleDeck({ deckId, deckName, url, cards, built }) {
   const state = await getState();
 
   if (built) {
     if (state.builtDecks[deckId]) return { ok: true, alreadyBuilt: true };
-    for (const card of cards) {
-      if (card.excludedFromStock) continue; // absente de la collection Moxfield : pas décomptée
-      const key = normalizeName(card.name);
-      if (!state.stock[key]) state.stock[key] = { name: card.name, qty: 0 };
-      state.stock[key].qty -= card.qty;
-    }
+    moveCardsInStock(state.stock, cards, -1);
     state.builtDecks[deckId] = { name: deckName, url, cards, builtAt: Date.now() };
   } else {
     const deck = state.builtDecks[deckId];
     if (!deck) return { ok: true, wasNotBuilt: true };
-    for (const card of deck.cards) {
-      if (card.excludedFromStock) continue;
-      const key = normalizeName(card.name);
-      if (!state.stock[key]) state.stock[key] = { name: card.name, qty: 0 };
-      state.stock[key].qty += card.qty;
-    }
+    moveCardsInStock(state.stock, deck.cards, +1);
     delete state.builtDecks[deckId];
   }
 
+  await setState(state);
+  return { ok: true };
+}
+
+// Deck monté dont la liste a changé sur Moxfield : équivaut à le démonter
+// puis le remonter avec la nouvelle liste, en une seule écriture — seules
+// les cartes modifiées voient donc leur stock bouger.
+async function handleUpdateBuiltDeck({ deckId, deckName, url, cards }) {
+  const state = await getState();
+  const deck = state.builtDecks[deckId];
+  if (!deck) throw new Error("Ce deck n'est plus marqué comme monté.");
+  moveCardsInStock(state.stock, deck.cards, +1);
+  moveCardsInStock(state.stock, cards, -1);
+  state.builtDecks[deckId] = { ...deck, name: deckName, url, cards, updatedAt: Date.now() };
   await setState(state);
   return { ok: true };
 }
@@ -545,6 +560,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "TOGGLE_DECK_BUILT":
           sendResponse(await handleToggleDeck(msg.payload));
+          break;
+        case "UPDATE_BUILT_DECK":
+          sendResponse(await handleUpdateBuiltDeck(msg.payload));
           break;
         case "MANUAL_ADJUST_STOCK":
           sendResponse(await handleManualAdjust(msg.payload));
