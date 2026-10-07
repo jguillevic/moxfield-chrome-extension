@@ -169,7 +169,8 @@ contenu du CSV. Même effet qu'une récupération automatique.
 - Tu y vois les decks actuellement montés (avec un bouton pour démonter
   chacun) et le stock complet.
 - La section **Stock** est repliée par défaut : clique sur son titre pour
-  l'afficher, la filtrer par nom, et ajuster une quantité à la main avec les
+  l'afficher (200 premières cartes ; le filtre cherche dans tout le stock),
+  la filtrer par nom, et ajuster une quantité à la main avec les
   boutons +/- (écrasé à la récupération suivante de ta collection Moxfield,
   si elle est active).
 - **Savoir où est une carte** : la colonne **Libre** est la quantité
@@ -295,7 +296,8 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   (`moxfield-collection.js`, réponses simulées) — appels et jetons, session
   absente ou expirée, refus, réseau coupé, changement de l'API.
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
-  de test avec un faux `chrome`) — section « Collection Moxfield ».
+  de test avec un faux `chrome`) — section « Collection Moxfield »,
+  affichage du stock (tableau limité, filtre).
 - `tests/content-deck.test.js` : bouton de la page d'un deck
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock

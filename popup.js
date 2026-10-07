@@ -105,6 +105,12 @@ function buildDeckUsage(builtDecks) {
 // Lignes dépliées (détail des decks), conservées entre deux rafraîchissements.
 const expandedCards = new Set();
 
+// Une collection complète compte des milliers de cartes : construire toutes
+// les lignes rendait l'ouverture du popup lente (plusieurs secondes). Le
+// tableau n'est donc construit que section dépliée, et limité aux premières
+// lignes — le filtre cherche toujours dans tout le stock.
+const MAX_STOCK_ROWS = 200;
+
 function renderStock(state, filter, onlyInDecks) {
   const container = document.getElementById("stock-table");
   const usage = buildDeckUsage(state.builtDecks);
@@ -123,6 +129,11 @@ function renderStock(state, filter, onlyInDecks) {
   document.getElementById("stock-total").textContent = Object.values(state.stock).reduce((sum, c) => sum + c.qty, 0);
   document.getElementById("stock-in-decks").textContent = inDecksTotal;
 
+  if (!document.getElementById("stock-details").open) {
+    container.innerHTML = "";
+    return;
+  }
+
   const entries = Array.from(rows.values())
     .filter((c) => !filter || c.name.toLowerCase().includes(filter.toLowerCase()))
     .filter((c) => !onlyInDecks || usage.has(c.key))
@@ -137,7 +148,7 @@ function renderStock(state, filter, onlyInDecks) {
 
   const table = document.createElement("table");
   table.innerHTML = "<tr><th>Carte</th><th>Libre</th><th>Decks</th><th></th></tr>";
-  for (const card of entries) {
+  for (const card of entries.slice(0, MAX_STOCK_ROWS)) {
     const u = usage.get(card.key);
     const expanded = u && expandedCards.has(card.key);
     const tr = document.createElement("tr");
@@ -182,6 +193,12 @@ function renderStock(state, filter, onlyInDecks) {
   }
   container.innerHTML = "";
   container.appendChild(table);
+  if (entries.length > MAX_STOCK_ROWS) {
+    const more = document.createElement("p");
+    more.className = "hint";
+    more.textContent = `… et ${entries.length - MAX_STOCK_ROWS} autre(s) carte(s) : affine avec le filtre.`;
+    container.appendChild(more);
+  }
 }
 
 async function refresh() {
@@ -241,6 +258,7 @@ document.getElementById("import-paste-btn").addEventListener("click", async () =
 });
 
 document.getElementById("stock-filter").addEventListener("input", refresh);
+document.getElementById("stock-details").addEventListener("toggle", refresh);
 document.getElementById("stock-only-in-decks").addEventListener("change", refresh);
 
 // --- Récupération de la collection Moxfield ---

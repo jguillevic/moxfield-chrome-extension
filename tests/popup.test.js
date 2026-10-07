@@ -173,3 +173,55 @@ test("récupération faite en fond pendant que le popup est ouvert : affichage m
   await settle();
   assert.match(p.$("collection-changes").textContent, /\+1 Sol Ring/);
 });
+
+// --- Section Stock : une collection complète compte des milliers de cartes ---
+
+function bigState(count) {
+  const stock = {};
+  for (let i = 0; i < count; i++) {
+    const name = `Card ${String(i).padStart(4, "0")}`;
+    stock[name.toLowerCase()] = { name, qty: 1 };
+  }
+  return { stock, builtDecks: {} };
+}
+
+async function openStock(p) {
+  const details = p.$("stock-details");
+  details.open = true;
+  details.dispatchEvent(new details.ownerDocument.defaultView.Event("toggle"));
+  await settle();
+}
+
+test("stock replié : chiffres affichés, tableau non construit", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: bigState(500) }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("stock-count").textContent, "500");
+  assert.equal(p.$("stock-table").querySelectorAll("tr").length, 0);
+});
+
+test("stock déplié : 200 lignes au plus, avec le nombre de cartes restantes", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: bigState(500) }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  await openStock(p);
+  const rows = p.$("stock-table").querySelectorAll("tr");
+  assert.equal(rows.length, 201, "en-tête + 200 cartes");
+  assert.match(rows[1].textContent, /Card 0000/);
+  assert.equal(p.$("stock-table").querySelector("p.hint").textContent, "… et 300 autre(s) carte(s) : affine avec le filtre.");
+});
+
+test("filtre : cherche dans tout le stock, au-delà des 200 premières", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: bigState(500) }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  await openStock(p);
+  const filter = p.$("stock-filter");
+  filter.value = "Card 0450";
+  filter.dispatchEvent(new filter.ownerDocument.defaultView.Event("input"));
+  await settle();
+  const rows = p.$("stock-table").querySelectorAll("tr");
+  assert.equal(rows.length, 2);
+  assert.match(rows[1].textContent, /Card 0450/);
+  assert.equal(p.$("stock-table").querySelector("p.hint"), null);
+});
