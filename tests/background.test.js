@@ -18,6 +18,7 @@ const COLLECTION_KEY = "moxfieldStockManagerCollection";
 // options.moxfieldCSV : collection renvoyée par le faux Moxfield (CSV), ou
 // une Error à lever ; sans elle, tout appel réseau fait échouer le test.
 // options.cookies : cookies de moxfield.com (session ouverte par défaut).
+// options.drive : fausse API Google Drive, (url, options) => réponse.
 function loadBackground(initialState, options = {}) {
   const storage = {};
   if (initialState) storage[STORAGE_KEY] = initialState;
@@ -59,17 +60,22 @@ function loadBackground(initialState, options = {}) {
     cookies: {
       getAll: async () => options.cookies || [{ name: "refresh_token_ABC12", value: "rt" }],
     },
+    identity: { getAuthToken: async () => ({ token: "jeton-google" }), removeCachedAuthToken: async () => {} },
   };
   // Faux Moxfield : jetons puis CSV (cf. tests/moxfield-collection.test.js
   // pour le détail des appels).
-  async function fetch(url) {
+  async function fetch(url, init) {
+    if (url.includes("googleapis.com")) return options.drive(url, init);
     counts.fetches++;
     if (options.moxfieldCSV === undefined) throw new Error(`appel réseau inattendu : ${url}`);
     if (options.moxfieldCSV instanceof Error) throw options.moxfieldCSV;
     const body = url.includes("/token/") ? JSON.stringify({ access_token: "jeton" }) : options.moxfieldCSV;
     return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
   }
-  const context = vm.createContext({ chrome, fetch, setTimeout, clearTimeout, console });
+  const context = vm.createContext({
+    chrome, fetch, setTimeout, clearTimeout, console,
+    Blob, Response, FormData, TextDecoder, CompressionStream, DecompressionStream,
+  });
   context.importScripts = (...files) => files.forEach((f) => vm.runInContext(read(f), context));
   vm.runInContext(read("background.js"), context);
 
@@ -726,4 +732,80 @@ test("collection de 50 000 cartes : import, historique et page de deck restent l
   assert.equal(Object.keys(context.stock).length, 99);
   const contextSize = JSON.stringify(context).length;
   assert.ok(contextSize < 50 * 1024, `réponse à la page : ${contextSize} octets`);
+});
+
+// --- Fichiers Google Drive compressés ---
+
+const zlib = require("zlib");
+const DOC = { app: "moxfield-stock-manager", version: 1, updatedAt: 5, state: { stock: { "sol ring": { name: "Sol Ring", qty: 2 } }, builtDecks: {}, history: [] } };
+
+// Fausse API Drive : enregistre les envois, répond avec le contenu donné.
+function fakeDrive(fileContent) {
+  const calls = [];
+  const drive = async (url, init = {}) => {
+    calls.push({ url, init });
+    return new Response(fileContent === undefined ? JSON.stringify({ id: "f1", version: "3" }) : fileContent, { status: 200 });
+  };
+  return { drive, calls };
+}
+
+async function bytesOf(blob) {
+  return Buffer.from(await blob.arrayBuffer());
+}
+
+test("Drive : document compressé (gzip) puis relu à l'identique", async () => {
+  const bg = loadBackground();
+  const blob = await bg.context.encodeDoc(DOC);
+  const bytes = await bytesOf(blob);
+  assert.equal(blob.type, "application/gzip");
+  assert.deepEqual([bytes[0], bytes[1]], [0x1f, 0x8b], "signature gzip");
+  assert.deepEqual(JSON.parse(zlib.gunzipSync(bytes).toString()), DOC);
+  assert.deepEqual(plain(await bg.context.decodeDoc(bytes)), DOC);
+});
+
+test("Drive : fichier enregistré avant la compression (JSON) toujours lisible", async () => {
+  const bg = loadBackground();
+  const bytes = Buffer.from(JSON.stringify(DOC));
+  assert.deepEqual(plain(await bg.context.decodeDoc(bytes)), DOC);
+});
+
+test("Drive : une grosse collection est au moins 3 fois plus légère", async () => {
+  const bg = loadBackground();
+  const stock = {};
+  for (let i = 0; i < 30000; i++) stock[`card ${i}`] = { name: `Card ${i} of the Multiverse`, qty: 1 + (i % 4) };
+  const doc = { ...DOC, state: { stock, builtDecks: {}, history: [] } };
+  const raw = Buffer.byteLength(JSON.stringify(doc));
+  const compressed = (await bytesOf(await bg.context.encodeDoc(doc))).length;
+  assert.ok(compressed * 3 < raw, `${raw} → ${compressed} octets`);
+});
+
+test("Drive : mise à jour du fichier d'état envoyée compressée", async () => {
+  const { drive, calls } = fakeDrive();
+  const bg = loadBackground(undefined, { drive });
+  await bg.context.uploadStateDoc("f1", DOC);
+  const [call] = calls;
+  assert.equal(call.init.method, "PATCH");
+  assert.equal(call.init.headers["Content-Type"], "application/gzip");
+  assert.deepEqual(JSON.parse(zlib.gunzipSync(await bytesOf(call.init.body)).toString()), DOC);
+});
+
+test("Drive : nouveau fichier (état ou version de l'historique) envoyé compressé", async () => {
+  const { drive, calls } = fakeDrive();
+  const bg = loadBackground(undefined, { drive });
+  await bg.context.uploadStateDoc(null, DOC);
+  const form = calls[0].init.body;
+  const metadata = JSON.parse(await form.get("metadata").text());
+  assert.equal(metadata.name, "moxfield-stock-state.json");
+  assert.equal(metadata.mimeType, "application/gzip");
+  assert.deepEqual(JSON.parse(zlib.gunzipSync(await bytesOf(form.get("file"))).toString()), DOC);
+});
+
+test("Drive : lecture d'un fichier compressé comme d'un ancien fichier JSON", async () => {
+  for (const content of [zlib.gzipSync(JSON.stringify(DOC)), JSON.stringify(DOC)]) {
+    const { drive } = fakeDrive(content);
+    const bg = loadBackground(undefined, { drive });
+    const parsed = await bg.context.downloadDoc("f1");
+    assert.deepEqual(plain(parsed.state.stock), DOC.state.stock);
+    assert.equal(parsed.updatedAt, 5);
+  }
 });

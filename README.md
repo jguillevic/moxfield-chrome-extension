@@ -246,7 +246,12 @@ en cas de conflit : rien ne s'y perd).
   sur un autre PC sont récupérés à l'ouverture du popup, au démarrage du
   navigateur et toutes les 5 minutes.
 - Les données vont dans un dossier caché de ton Drive, réservé à l'extension
-  (elle n'a accès à aucun autre fichier).
+  (elle n'a accès à aucun autre fichier). Les fichiers y sont compressés
+  (gzip) : 4 à 5 fois plus légers pour une grosse collection. Les fichiers
+  enregistrés avant la compression restent lisibles, mais **tous tes PC
+  doivent avoir une version de l'extension qui la gère** : une ancienne
+  version ne sait pas lire un fichier compressé (erreur de synchro, sans
+  perte de données — mets-la à jour).
 - **Premier PC connecté** : son stock est envoyé sur Drive. **PC suivants** :
   si ce PC n'a pas encore de stock, celui de Drive est récupéré ; s'il en a
   déjà un, le popup te demande lequel garder.
@@ -302,8 +307,8 @@ en cas de conflit : rien ne s'y perd).
   état stocké d'environ 3 Mo (permission `unlimitedStorage` : pas de
   plafond de 10 Mo), détail de l'historique limité à 200 cartes par action,
   et la page d'un deck ne reçoit que le stock de ses propres cartes. Chaque
-  modification renvoie en revanche tout l'état sur Google Drive (quelques Mo
-  avec une telle collection).
+  modification renvoie en revanche tout l'état sur Google Drive, compressé
+  (quelques centaines de Ko avec une telle collection).
 - Les données sont stockées localement dans le navigateur
   (`chrome.storage.local`) ; sans la synchro Google Drive, rien ne se
   partage entre appareils.
@@ -349,10 +354,11 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
   CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
   réinitialisation, historique (y compris sa fusion lors de la synchro
-  Drive), récupération de la collection, stock envoyé à la page d'un deck,
-  collection de 50 000 cartes
-  (import, alarme horaire, récupération après une modification de la
-  collection sur Moxfield, erreurs, cartes non couvertes).
+  Drive), fichiers Drive compressés (et lecture des anciens), récupération
+  de la collection (import, alarme horaire, récupération après une
+  modification de la collection sur Moxfield, erreurs, cartes non
+  couvertes), stock envoyé à la page d'un deck, collection de 50 000
+  cartes.
 - `tests/history.test.js` : historique (`history.js`) — ajout, limite de
   200 entrées, détail limité à 200 cartes par entrée, fusion, différences
   de listes, libellés.

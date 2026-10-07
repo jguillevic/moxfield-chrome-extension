@@ -42,8 +42,8 @@ joue des proxies ou d'autres formats.
   déclenche-t-elle la récupération 30 s après (comme l'ajout et la
   modification) ? Sinon, capturer l'appel et l'ajouter à la détection.
 - **Synchro Drive des grosses collections** : chaque modification renvoie
-  tout l'état (quelques Mo à 50 000 cartes). Compresser le fichier (gzip,
-  intégré au navigateur) ou séparer l'historique, après mesure.
+  encore tout l'état (compressé : quelques centaines de Ko à 50 000 cartes).
+  Si ça devient gênant : séparer l'historique dans son propre fichier.
 - **Tests manquants** : la synchro Google Drive, le popup (hors section
   « Collection Moxfield »), la fenêtre de montage et l'intégration à la
   barre d'actions Moxfield n'ont pas de tests automatisés.
@@ -61,4 +61,4 @@ joue des proxies ou d'autres formats.
   octobre 2026.
 - Tenue aux grosses collections (50 000 cartes) : stockage illimité,
   détail de l'historique borné, page de deck limitée au stock de ses
-  cartes — octobre 2026.
+  cartes, fichiers Google Drive compressés — octobre 2026.

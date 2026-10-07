@@ -390,15 +390,35 @@ async function findStateFile(interactive = false) {
   return (await res.json()).files[0] || null;
 }
 
+// Fichiers Drive compressés (gzip, intégré au navigateur) : chaque
+// modification renvoie tout l'état, plusieurs Mo pour une grosse collection
+// (÷4 à ÷5 une fois compressé), et l'historique des versions en garde 10.
+// Les fichiers sont reconnus à leur contenu, pas à leur nom (inchangé) : les
+// sauvegardes d'avant la compression, en JSON, restent lisibles.
+const GZIP_TYPE = "application/gzip";
+
+async function encodeDoc(doc) {
+  const stream = new Blob([JSON.stringify(doc)]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Blob([await new Response(stream).arrayBuffer()], { type: GZIP_TYPE });
+}
+
+async function decodeDoc(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const gzipped = bytes[0] === 0x1f && bytes[1] === 0x8b; // signature gzip
+  if (!gzipped) return JSON.parse(new TextDecoder().decode(bytes));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return JSON.parse(await new Response(stream).text());
+}
+
 async function downloadDoc(fileId) {
   const res = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`);
-  return parseDoc(await res.json());
+  return parseDoc(await decodeDoc(await res.arrayBuffer()));
 }
 
 async function createDriveFile(metadata, doc) {
   const form = new FormData();
-  form.append("metadata", new Blob([JSON.stringify({ ...metadata, parents: ["appDataFolder"], mimeType: "application/json" })], { type: "application/json" }));
-  form.append("file", new Blob([JSON.stringify(doc)], { type: "application/json" }));
+  form.append("metadata", new Blob([JSON.stringify({ ...metadata, parents: ["appDataFolder"], mimeType: GZIP_TYPE })], { type: "application/json" }));
+  form.append("file", await encodeDoc(doc));
   const res = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,version`, { method: "POST", body: form });
   return res.json();
 }
@@ -407,8 +427,8 @@ async function uploadStateDoc(fileId, doc) {
   if (!fileId) return createDriveFile({ name: DRIVE_STATE_FILE }, doc);
   const res = await driveFetch(`${DRIVE_UPLOAD_API}/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,version`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(doc),
+    headers: { "Content-Type": GZIP_TYPE },
+    body: await encodeDoc(doc),
   });
   return res.json();
 }
