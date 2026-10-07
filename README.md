@@ -42,6 +42,24 @@ a changé.
   barre d'actions flottante de Moxfield, en bas à droite, juste après le
   bouton like (cœur). Si cette barre est introuvable, un bouton flottant
   « 🧰 Marquer comme monté physiquement » prend le relais.
+- **Faisabilité visible sans ouvrir la fenêtre** : sur un deck pas encore
+  monté, une pastille sur le bouton indique si le deck est montable avec le
+  stock libre — **✓ verte** s'il l'est, **rouge avec un nombre** sinon (nombre
+  d'exemplaires qui bloqueraient le montage : stock insuffisant ou version
+  différente, mêmes règles que ci-dessous). Le détail apparaît au survol
+  (« 3 cartes bloquent le montage : 2 manquantes en stock, 1 dans une autre
+  version (59/62 cartes disponibles en stock libre, hors terrains de base)
+  — manque Sol Ring (1)... »), et la fenêtre de montage affiche le même
+  total au-dessus de la liste.
+  Les terrains de base ne comptent ni dans la pastille ni dans ce total :
+  s'ils manquent, c'est seulement signalé au survol, sans jamais rendre le
+  deck « non montable ». La pastille n'apparaît que quand le total
+  détecté correspond à celui annoncé par Moxfield, et se met à jour en
+  direct : dès que le deck change sur la page (version d'une carte changée,
+  carte ajoutée...) et dès que le stock change (autre onglet, synchro
+  Drive, popup). Pendant que Moxfield redessine la liste, elle garde son
+  dernier état ; elle ne disparaît que si la liste reste incohérente plus de
+  3 secondes.
 - Clique sur ce bouton (« Marquer comme monté physiquement ») : la liste de
   cartes est détectée automatiquement à partir de la page, quel que soit le
   mode d'affichage du deck (Text, Condensed Text, Visual Grid, Visual
@@ -219,6 +237,22 @@ npm test
   `table`, `condensedTable`, `visual`, `stacks`, `splitStacks`, `spoiler`).
   Ajoute si possible `"cards": ["1 Sol Ring", ...]` — la liste du bouton
   « Copier » de Moxfield — pour vérifier aussi le détail.
+
+### Autres tests
+
+Lancés par le même `npm test` :
+
+- `tests/deck-checks.test.js` : contrôles d'une liste par rapport au stock
+  (`deck-checks.js`) — stock insuffisant, version différente, terrains de
+  base, mise à jour d'un deck monté, faisabilité affichée sur le bouton,
+  lecture d'une liste collée.
+- `tests/content-deck.test.js` : bouton de la page d'un deck
+  (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
+  faisabilité affichée, recalcul en direct quand la page ou le stock
+  change, tolérance à une liste brièvement incohérente.
+
+Non couverts : la synchro Google Drive, le popup, la fenêtre de montage et
+l'intégration à la barre d'actions de Moxfield.
 
 ## Crédits
 

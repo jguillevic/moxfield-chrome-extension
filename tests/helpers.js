@@ -45,4 +45,4 @@ function totalOf(cards) {
   return cards.reduce((sum, c) => sum + c.qty, 0);
 }
 
-module.exports = { FIXTURES_DIR, loadPage, summarize, totalOf };
+module.exports = { FIXTURES_DIR, loadPage, simulateLayout, summarize, totalOf };

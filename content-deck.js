@@ -55,40 +55,25 @@
   const { normalizeName, scrapeCardsGuess, getSiteDeclaredTotal, completeCardNames, computeDeckDiff } =
     createDeckScraper(window);
 
-  // Cartes que Moxfield indique comme présentes dans ta collection, mais
-  // pas dans la version utilisée par ce deck ("collection_pt_...", aria-label
-  // "Partially in collection" — confirmé via inspection DOM réelle, ex. Sol
-  // Ring possédé sous une autre édition). Bloque le montage tant que la
-  // liste n'est pas corrigée/retirée — même traitement que le stock
-  // insuffisant (zone 2) plutôt qu'un décompte silencieux. Calculé au moment
-  // du scraping DOM ; vide si la liste vient du presse-papiers (pas d'info
-  // disponible dans du texte brut collé).
+  // Contrôles de la liste par rapport au stock : voir deck-checks.js.
+  const {
+    isBasicLand,
+    buildWrongEditionSet,
+    computeWrongEditionCards,
+    computeShortages,
+    parseCardsText,
+    evaluateDeckUpdate,
+    computeDeckAvailability,
+    blockingSummary,
+    availabilityLabel,
+  } = createDeckChecks(normalizeName);
+
+  // Cartes possédées dans une autre version que celle du deck (cf.
+  // buildWrongEditionSet), pour la liste affichée dans la fenêtre. Bloque le
+  // montage tant que la liste n'est pas corrigée/retirée — même traitement
+  // que le stock insuffisant plutôt qu'un décompte silencieux. Vide si la
+  // liste vient du presse-papiers.
   let lastWrongEditionNames = new Set();
-
-  function buildWrongEditionSet(scrapedCards) {
-    const set = new Set();
-    for (const c of scrapedCards) {
-      if (c.printingStatus === "partial") set.add(normalizeName(c.name));
-    }
-    return set;
-  }
-
-  // Zone 1 : cartes dont le stock est SUFFISANT (peu importe l'édition,
-  // puisque le stock est suivi par nom) et que Moxfield signale en plus
-  // comme possédées sous une version différente de celle utilisée par ce
-  // deck précis. Priorité au stock : une carte dont le stock ne suffit pas
-  // (have < besoin), même partiellement, ne doit PAS apparaître ici — c'est
-  // un problème de stock insuffisant (zone 2) d'abord ; on ne regarde la
-  // version que si le stock est déjà suffisant.
-  function computeWrongEditionCards(cards, stockMap) {
-    const names = [];
-    for (const c of cards) {
-      const key = normalizeName(c.name);
-      const have = stockMap[key] ? stockMap[key].qty : 0;
-      if (have >= c.qty && lastWrongEditionNames.has(key)) names.push(c.name);
-    }
-    return names;
-  }
 
   function renderPrintingWarning(el, names) {
     if (names.length === 0) {
@@ -101,16 +86,6 @@
       `<strong>🚫 Présentes dans ta collection mais pas dans la bonne version pour ce deck (${names.length} carte(s))</strong> — montage bloqué, corrige ou retire ces lignes avant de valider :<ul>` +
       names.map((n) => `<li>${escapeHtml(n)}</li>`).join("") +
       "</ul>";
-  }
-
-  // Terrains de base : en pratique tu en as (presque) toujours assez, et
-  // l'édition n'a jamais d'importance pour eux. On ne bloque donc jamais le
-  // montage à cause d'un terrain de base (ni "version différente", ni
-  // "stock insuffisant") — juste un avertissement non bloquant séparé.
-  const BASIC_LAND_NAMES = new Set(["plains", "island", "swamp", "mountain", "forest"]);
-
-  function isBasicLand(name) {
-    return BASIC_LAND_NAMES.has(normalizeName(name));
   }
 
   function debounce(fn, delayMs) {
@@ -151,20 +126,6 @@
       }
     }
     return { stockMap: res.state.stock || {}, deckUsage, builtDecks: res.state.builtDecks || {} };
-  }
-
-  // Zone 2 : cartes dont le stock disponible ne suffirait pas si ce deck
-  // était monté — y compris les cartes totalement absentes du stock
-  // (have === 0), quel que soit leur statut de version Moxfield.
-  function computeShortages(cards, stockMap) {
-    const shortages = [];
-    for (const c of cards) {
-      const key = normalizeName(c.name);
-      const have = stockMap[key] ? stockMap[key].qty : 0;
-      const missing = c.qty - have;
-      if (missing > 0) shortages.push({ name: c.name, have, need: c.qty, missing });
-    }
-    return shortages;
   }
 
   function renderShortageWarning(el, shortages, deckUsage = new Map()) {
@@ -282,19 +243,6 @@
     return cards.map((c) => `${c.qty} ${c.name}`).join("\n");
   }
 
-  function parseCardsText(text) {
-    return text
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith("//"))
-      .map((line) => {
-        const m = line.match(/^(\d{1,3})\s*[x×]?\s+(.+)$/);
-        if (!m) return null;
-        return { qty: parseInt(m[1], 10), name: m[2].trim() };
-      })
-      .filter(Boolean);
-  }
-
   // --- Deck modifié depuis son montage ---
   // La liste enregistrée au montage est figée : si le deck est modifié
   // ensuite sur Moxfield, le stock ne correspond plus aux cartes réellement
@@ -319,32 +267,6 @@
     return siteTotal === null
       ? `${detected}, mais total annoncé par Moxfield (« N main deck ») introuvable.`
       : `${detected}, alors que Moxfield en annonce ${siteTotal}.`;
-  }
-
-  // Vérifications avant la mise à jour, sur les seules cartes ajoutées ou
-  // en plus grand nombre (mêmes règles qu'au montage, cf. updateWarnings).
-  // Le stock disponible pour elles inclut les exemplaires déjà pris par ce
-  // deck, que la mise à jour lui rend d'abord.
-  function evaluateDeckUpdate(changes, deck, stockMap) {
-    const available = {};
-    for (const [key, c] of Object.entries(stockMap)) available[key] = { ...c };
-    for (const c of deck.cards) {
-      if (c.excludedFromStock) continue;
-      const key = normalizeName(c.name);
-      if (!available[key]) available[key] = { name: c.name, qty: 0 };
-      available[key].qty += c.qty;
-    }
-    const increased = changes.filter((c) => c.to > c.from).map((c) => ({ name: c.name, qty: c.to }));
-    const basic = increased.filter((c) => isBasicLand(c.name));
-    const nonBasic = increased.filter((c) => !isBasicLand(c.name));
-    const check = {
-      shortages: computeShortages(nonBasic, available),
-      wrongEdition: computeWrongEditionCards(nonBasic, available),
-      basicShortages: computeShortages(basic, available),
-      basicWrongEdition: computeWrongEditionCards(basic, available),
-    };
-    check.blocked = check.shortages.length > 0 || check.wrongEdition.length > 0;
-    return check;
   }
 
   function renderDeckDiff(changes) {
@@ -409,7 +331,7 @@
     }
 
     lastWrongEditionNames = buildWrongEditionSet(scraped);
-    const check = evaluateDeckUpdate(changes, deck, stockMap);
+    const check = evaluateDeckUpdate(changes, deck, stockMap, lastWrongEditionNames);
     changesEl.innerHTML =
       '<div class="msm-changes">' +
       `<strong>La liste a changé sur Moxfield depuis le montage (${since}) :</strong>` +
@@ -465,6 +387,7 @@
                </p>
                <button id="msm-paste-clipboard" class="msm-secondary">📋 Coller depuis le presse-papiers</button>
                <div id="msm-card-count" class="msm-card-count"></div>
+               <div id="msm-blocking-summary" class="msm-card-count msm-card-count-mismatch" hidden></div>
                <textarea id="msm-cards-textarea" rows="12" placeholder="1 Sol Ring&#10;1 Sidisi, Brood Tyrant&#10;..."></textarea>
                <div id="msm-printing-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-shortage-warning" class="msm-shortage-warning" style="display:none"></div>
@@ -530,10 +453,28 @@
   // computeDeckDiff) : réévalué régulièrement tant qu'on reste sur la page,
   // car le deck peut être modifié sur place, sans navigation.
   let btnOutdated = false;
-  let lastOutdatedCheck = 0;
-  let outdatedCheckRunning = false;
-  let unreliableChecks = 0;
-  const OUTDATED_CHECK_INTERVAL_MS = 3000;
+
+  // Deck pas encore monté : faisabilité avec le stock libre (cf.
+  // computeDeckAvailability), null tant que la liste de la page n'est pas
+  // fiable. Réévaluée elle aussi régulièrement : le stock peut changer
+  // ailleurs (autre onglet, synchro Drive, popup).
+  let btnAvailability = null;
+
+  let lastStatusCheck = 0;
+  let statusCheckRunning = false;
+  // Contrôle demandé pendant qu'un autre tournait : relancé à la fin de
+  // celui-ci, pour ne pas manquer un changement survenu entre-temps.
+  let statusCheckPending = false;
+  // Début de la période où la liste de la page n'est pas fiable (0 si elle
+  // l'est), cf. UNRELIABLE_GRACE_MS.
+  let unreliableSince = 0;
+  // Filet de sécurité : la page et le stock déclenchent eux-mêmes un
+  // contrôle quand ils changent (cf. watchDeckChanges).
+  const STATUS_CHECK_INTERVAL_MS = 3000;
+  // Après une modification, Moxfield peut afficher un moment une liste
+  // incohérente (ancienne tuile pas encore retirée) : la pastille garde son
+  // dernier état tant que ça ne dure pas plus longtemps que ça.
+  const UNRELIABLE_GRACE_MS = 3000;
 
   // Transmet le constat au service worker, pour le badge « Modifié » du
   // popup. Seulement quand il diffère du dernier envoyé : la vérification
@@ -555,44 +496,116 @@
     }
   }
 
-  async function checkDeckOutdated(deckId) {
-    if (!btnBuilt || outdatedCheckRunning || document.querySelector(".msm-overlay")) return;
-    if (Date.now() - lastOutdatedCheck < OUTDATED_CHECK_INTERVAL_MS) return;
-    outdatedCheckRunning = true;
-    lastOutdatedCheck = Date.now();
+  // Contrôle en fond de la liste de la page : deck monté modifié depuis le
+  // montage, ou faisabilité d'un deck pas encore monté. immediate : contrôle
+  // déclenché par un changement de la page ou du stock, sans attendre
+  // l'intervalle.
+  async function checkDeckStatus(deckId, immediate = false) {
+    if (document.querySelector(".msm-overlay")) return;
+    if (statusCheckRunning) {
+      if (immediate) statusCheckPending = true;
+      return;
+    }
+    if (!immediate && Date.now() - lastStatusCheck < STATUS_CHECK_INTERVAL_MS) return;
+    statusCheckRunning = true;
+    lastStatusCheck = Date.now();
     try {
       const detection = scrapeDeckListWithCheck();
       if (!detection.reliable) {
         // Un bref passage non fiable (liste en cours d'affichage) garde
         // l'état précédent pour éviter un clignotement ; au-delà, on ne sait
-        // plus si le deck a changé et on retire la pastille plutôt que de
-        // signaler à tort une modification.
-        unreliableChecks++;
-        if (unreliableChecks >= 2 && btnOutdated && deckId === currentDeckId) {
+        // plus ce que contient le deck et on retire la pastille plutôt que
+        // d'afficher un constat faux.
+        if (!unreliableSince) unreliableSince = Date.now();
+        const tooLong = Date.now() - unreliableSince >= UNRELIABLE_GRACE_MS;
+        if (tooLong && (btnOutdated || btnAvailability) && deckId === currentDeckId) {
           btnOutdated = false;
+          btnAvailability = null;
           renderButton();
         }
         return;
       }
-      unreliableChecks = 0;
+      unreliableSince = 0;
       // Pas safeSendMessage : après un rechargement de l'extension, ce
       // contrôle en fond afficherait son toast toutes les 3 secondes.
       const res = await chrome.runtime.sendMessage({ type: "GET_STATE" });
-      const deck = res && res.ok ? res.state.builtDecks[deckId] : null;
-      const scraped = deck
-        ? completeCardNames(detection.cards, Object.values(res.state.stock || {}), deck.cards)
-        : [];
-      const changes = deck ? computeDeckDiff(deck.cards, scraped) : [];
-      if (deck) reportPageChanges(deckId, changes);
-      const outdated = changes.length > 0;
-      if (deckId === currentDeckId && outdated !== btnOutdated) {
-        btnOutdated = outdated;
-        renderButton();
+      if (!res || !res.ok || deckId !== currentDeckId) return;
+      const stockMap = res.state.stock || {};
+      const deck = res.state.builtDecks[deckId];
+      if (deck) {
+        const scraped = completeCardNames(detection.cards, Object.values(stockMap), deck.cards);
+        const changes = computeDeckDiff(deck.cards, scraped);
+        reportPageChanges(deckId, changes);
+        const outdated = changes.length > 0;
+        if (outdated !== btnOutdated || btnAvailability) {
+          btnOutdated = outdated;
+          btnAvailability = null;
+          renderButton();
+        }
+      } else {
+        const availability = computeDeckAvailability(
+          completeCardNames(detection.cards, Object.values(stockMap)),
+          stockMap
+        );
+        // Redessiner seulement si le constat change : sinon l'infobulle
+        // ouverte au survol disparaîtrait toutes les 3 secondes.
+        if (JSON.stringify(availability) !== JSON.stringify(btnAvailability)) {
+          btnAvailability = availability;
+          renderButton();
+        }
       }
     } catch (e) {
       // contexte d'extension invalidé : l'utilisateur sera prévenu à son prochain clic
     } finally {
-      outdatedCheckRunning = false;
+      statusCheckRunning = false;
+      if (statusCheckPending) {
+        statusCheckPending = false;
+        if (currentDeckId) checkDeckStatus(currentDeckId, true);
+      }
+    }
+  }
+
+  // Recalcul dès que la liste du deck change sur la page (carte ajoutée,
+  // version changée...) ou que le stock change (autre onglet, popup, synchro
+  // Drive), sans attendre le prochain contrôle périodique. Les changements
+  // de la page arrivent en rafale pendant un rendu React : on attend qu'elle
+  // se stabilise un court instant.
+  const PAGE_SETTLE_MS = 400;
+  // Clé du stock et des decks montés dans chrome.storage.local (STORAGE_KEY
+  // de background.js) ; les réglages de synchro, à côté, n'importent pas ici.
+  const STATE_STORAGE_KEY = "moxfieldStockManagerState";
+
+  function isOwnNode(node) {
+    const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    return Boolean(el && el.closest(".msm-bar-btn, .msm-floating-btn, .msm-overlay, .msm-toast"));
+  }
+
+  function isOwnMutation(m) {
+    if (isOwnNode(m.target)) return true;
+    // Ajout/retrait d'un de nos éléments directement dans la page (toast,
+    // fenêtre, bouton flottant).
+    const nodes = [...m.addedNodes, ...m.removedNodes];
+    return m.type === "childList" && nodes.length > 0 && nodes.every(isOwnNode);
+  }
+
+  function watchDeckChanges() {
+    const recheck = debounce(() => {
+      if (currentDeckId) checkDeckStatus(currentDeckId, true);
+    }, PAGE_SETTLE_MS);
+    new MutationObserver((mutations) => {
+      // Nos propres changements (pastille redessinée, toast...) ne
+      // concernent pas la liste : les ignorer évite de relancer un contrôle
+      // à chaque affichage de son résultat.
+      if (currentDeckId && mutations.some((m) => !isOwnMutation(m))) recheck();
+      // id : marqueurs de collection (collection_full_/pt_/no_), qui changent
+      // avec la version ; src/alt : image d'une carte remplacée sur place.
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["id", "src", "alt"] });
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === "local" && changes[STATE_STORAGE_KEY] && currentDeckId) checkDeckStatus(currentDeckId, true);
+      });
+    } catch (e) {
+      // contexte d'extension invalidé : le contrôle périodique prend le relais
     }
   }
 
@@ -626,6 +639,7 @@
   function renderButton() {
     if (!btn) return;
     const outdated = btnBuilt && btnOutdated;
+    const availability = btnBuilt ? null : btnAvailability;
     const label = !btnBuilt
       ? "Marquer comme monté physiquement"
       : outdated
@@ -633,20 +647,31 @@
         : "Monté physiquement (cliquer pour démonter)";
     if (btn.dataset.mode === "bar") {
       btn.replaceChildren(createBarIcon(btnBuilt ? "built" : "build"));
-      btn.title = label;
-      btn.setAttribute("aria-label", label);
+      if (availability) {
+        // Pastille : ✓ si montable, sinon nombre d'exemplaires bloquants.
+        const badge = document.createElement("span");
+        badge.className = "msm-avail-badge" + (availability.blocking === 0 ? " msm-avail-ok" : "");
+        badge.textContent = availability.blocking === 0 ? "✓" : String(availability.blocking);
+        badge.setAttribute("aria-hidden", "true");
+        btn.appendChild(badge);
+      }
+      const fullLabel = availability ? `${label} — ${availabilityLabel(availability)}` : label;
+      btn.title = fullLabel;
+      btn.setAttribute("aria-label", fullLabel);
     } else {
-      btn.textContent = (outdated ? "⚠️ " : btnBuilt ? "✅ " : "🧰 ") + label;
+      const counts = availability ? ` · ${availability.available}/${availability.total} dispo` : "";
+      btn.textContent = (outdated ? "⚠️ " : btnBuilt ? "✅ " : "🧰 ") + label + counts;
+      btn.title = availability ? availabilityLabel(availability) : "";
     }
     btn.classList.toggle("msm-btn-built", btnBuilt);
-    btn.classList.toggle("msm-btn-outdated", outdated);
-  }
+    btn.classList.toggle("msm-btn-outdated", outdated);  }
 
   async function refreshButtonState(deckId) {
     if (!btn) return;
     btnBuilt = await getIsBuilt(deckId);
     if (!btnBuilt) btnOutdated = false;
-    lastOutdatedCheck = 0; // réévaluer tout de suite au prochain tick
+    btnAvailability = null;
+    lastStatusCheck = 0; // réévaluer tout de suite au prochain tick
     lastReportedChanges = null;
     renderButton();
     return btnBuilt;
@@ -695,12 +720,14 @@
       const printingWarningEl = overlay.querySelector("#msm-printing-warning");
       const basicLandWarningEl = overlay.querySelector("#msm-basic-land-warning");
       const cardCountEl = overlay.querySelector("#msm-card-count");
+      const blockingSummaryEl = overlay.querySelector("#msm-blocking-summary");
       const siteDeclaredTotal = getSiteDeclaredTotal();
 
       const updateWarnings = async () => {
         const cards = parseCardsText(textarea.value);
         renderCardCount(cardCountEl, cards, siteDeclaredTotal);
         if (cards.length === 0) {
+          blockingSummaryEl.hidden = true;
           renderShortageWarning(warningEl, []);
           renderPrintingWarning(printingWarningEl, []);
           renderBasicLandNotice(basicLandWarningEl, [], []);
@@ -711,11 +738,15 @@
         const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
         // Une seule lecture de l'état, réutilisée pour toutes les zones.
         const { stockMap, deckUsage } = await getStockAndDeckUsage();
+        // Même total que la pastille du bouton (cf. computeDeckAvailability).
+        const summary = blockingSummary(computeDeckAvailability(cards, stockMap, lastWrongEditionNames));
+        blockingSummaryEl.hidden = !summary;
+        blockingSummaryEl.textContent = summary ? `🚫 ${summary}.` : "";
         renderShortageWarning(warningEl, computeShortages(nonBasicCards, stockMap), deckUsage);
-        renderPrintingWarning(printingWarningEl, computeWrongEditionCards(nonBasicCards, stockMap));
+        renderPrintingWarning(printingWarningEl, computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames));
         renderBasicLandNotice(
           basicLandWarningEl,
-          computeWrongEditionCards(basicCards, stockMap),
+          computeWrongEditionCards(basicCards, stockMap, lastWrongEditionNames),
           computeShortages(basicCards, stockMap)
         );
       };
@@ -753,7 +784,7 @@
           const { stockMap, builtDecks } = await getStockAndDeckUsage(deckId);
           const deck = builtDecks[deckId];
           if (!deck) throw new Error("Ce deck n'est plus marqué comme monté.");
-          if (evaluateDeckUpdate(computeDeckDiff(deck.cards, updatedCards), deck, stockMap).blocked) {
+          if (evaluateDeckUpdate(computeDeckDiff(deck.cards, updatedCards), deck, stockMap, lastWrongEditionNames).blocked) {
             toast("Mise à jour impossible — stock insuffisant ou version différente.", true);
             return;
           }
@@ -790,7 +821,7 @@
           // a été modifié depuis le dernier passage de updateWarnings.
           const stockMap = await getStockMap();
           const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
-          const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap);
+          const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
           if (wrongEdition.length > 0) {
             toast(`Montage impossible — version différente de ta collection pour : ${wrongEdition.join(", ")}`, true);
             return;
@@ -919,14 +950,15 @@
       if (deckId !== currentDeckId) {
         currentDeckId = deckId;
         btnOutdated = false;
-        unreliableChecks = 0;
+        unreliableSince = 0;
         await refreshButtonState(deckId);
       }
-      checkDeckOutdated(deckId);
+      checkDeckStatus(deckId);
     } else {
       currentDeckId = null;
       btnBuilt = false;
       btnOutdated = false;
+      btnAvailability = null;
       removeButton();
     }
   }
@@ -937,4 +969,5 @@
   setInterval(syncButtonToLocation, 500);
 
   syncButtonToLocation();
+  watchDeckChanges();
 })();

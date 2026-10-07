@@ -110,6 +110,32 @@
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
+/* Deck pas encore monté : faisabilité avec le stock libre (✓ si montable,
+   sinon nombre de cartes bloquantes). Pas de pointer-events, pour que
+   l'infobulle du bouton s'affiche aussi au survol de la pastille. */
+.msm-avail-badge {
+  position: absolute;
+  top: -4px;
+  right: -12px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.msm-avail-badge.msm-avail-ok {
+  background: #1f8a4c;
+}
+
 /* --- Toasts --- */
 
 .msm-toast {
