@@ -12,6 +12,42 @@ carte par carte, selon la decklist. Démonte-le pour réincrémenter.
 3. Active le **Mode développeur** (en haut à droite).
 4. Clique **Charger l'extension non empaquetée** et sélectionne ce dossier.
 
+### Installer l'extension pour son propre compte
+
+**Compte Moxfield : rien à paramétrer.** L'extension n'a aucun compte
+Moxfield codé en dur : elle utilise celui qui est connecté sur
+moxfield.com dans le Chrome où elle est installée (son identifiant est lu
+dans le cookie de session). Chacun récupère donc sa propre collection, sans
+saisir d'identifiant ni de mot de passe.
+
+**Synchronisation Google Drive : crée ta propre application Google
+Cloud.** Le `manifest.json` du dépôt pointe vers l'application Google Cloud
+de l'auteur (`oauth2.client_id`), réservée à son usage : remplace-la par la
+tienne avant de connecter Drive. Sans synchro, tout le reste fonctionne (les
+données restent sur ce PC).
+
+1. Sur [console.cloud.google.com](https://console.cloud.google.com), crée un
+   projet et active l'**API Google Drive**.
+2. Configure l'**écran de consentement OAuth** (type « Externe »), ajoute le
+   champ d'accès `https://www.googleapis.com/auth/drive.appdata`, et ajoute
+   ton compte Google comme utilisateur de test (l'application peut rester en
+   mode « Test » : elle ne sert qu'à toi).
+3. Donne à l'extension sa propre clé, pour que son identifiant soit le même
+   sur tous tes PC. Dans un terminal (avec OpenSSL) :
+   ```
+   openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out cle-extension.pem
+   openssl rsa -in cle-extension.pem -pubout -outform DER | openssl base64 -A
+   ```
+   Remplace la valeur de `"key"` dans `manifest.json` par le texte affiché.
+   Garde `cle-extension.pem` pour toi (les fichiers `.pem` sont exclus du
+   dépôt par `.gitignore`).
+4. Recharge l'extension dans `chrome://extensions` et copie son
+   **identifiant** (ID).
+5. Dans la console Google Cloud, crée un **identifiant client OAuth** de type
+   **« Extension Chrome »**, avec cet identifiant d'extension.
+6. Remplace la valeur de `oauth2.client_id` dans `manifest.json` par
+   l'identifiant client obtenu, puis recharge l'extension.
+
 ## Utilisation
 
 ### 1. Récupérer ta collection (initialiser le stock)
@@ -231,7 +267,8 @@ en cas de conflit : rien ne s'y perd).
   popup propose d'envoyer le stock de ce PC sur le nouveau compte ou de
   récupérer celui du nouveau compte. Revenir à l'ancien compte fait
   reprendre la synchro normalement.
-- Tant que l'application Google Cloud est en mode « Test », seuls les comptes
+- Nécessite ta propre application Google Cloud (cf. « Installer
+  l'extension pour son propre compte ») : en mode « Test », seuls les comptes
   ajoutés comme utilisateurs de test peuvent se connecter. Nécessite Google
   Chrome connecté à un compte Google.
 

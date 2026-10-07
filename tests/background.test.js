@@ -57,7 +57,7 @@ function loadBackground(initialState, options = {}) {
       onCompleted: { addListener: (fn, filter) => webRequestListeners.push({ fn, filter: clone(filter) }) },
     },
     cookies: {
-      getAll: async () => options.cookies || [{ name: "refresh_token_XN1JV", value: "rt" }],
+      getAll: async () => options.cookies || [{ name: "refresh_token_ABC12", value: "rt" }],
     },
   };
   // Faux Moxfield : jetons puis CSV (cf. tests/moxfield-collection.test.js

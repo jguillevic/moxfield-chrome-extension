@@ -11,7 +11,7 @@ const CSV = '"Count","Tradelist Count","Name","Edition"\n"2","0","Sol Ring","c21
 const LOGGED_IN = [
   { name: "_ga", value: "GA1.1" },
   { name: "refresh_token", value: "rt-1" },
-  { name: "refresh_token_XN1JV", value: "rt-1" },
+  { name: "refresh_token_ABC12", value: "rt-1" },
 ];
 
 function jsonResponse(status, body) {
@@ -60,7 +60,7 @@ test("récupération : les trois appels du site, dans l'ordre", async () => {
   assert.equal(refresh.url, "https://api2.moxfield.com/v1/account/token/refresh");
   assert.equal(refresh.options.method, "POST");
   assert.equal(refresh.options.credentials, "include", "cookie de renouvellement joint");
-  assert.deepEqual(JSON.parse(refresh.options.body), { userId: "XN1JV", isAppLogin: false });
+  assert.deepEqual(JSON.parse(refresh.options.body), { userId: "ABC12", isAppLogin: false });
 
   assert.equal(download.url, "https://api2.moxfield.com/v1/account/token/download");
   assert.equal(download.options.method, "POST");
@@ -72,7 +72,7 @@ test("récupération : les trois appels du site, dans l'ordre", async () => {
 
 test("userId : déduit du nom du cookie de renouvellement", async () => {
   const { client } = fakeMoxfield();
-  assert.equal(await client.findUserId(), "XN1JV");
+  assert.equal(await client.findUserId(), "ABC12");
 });
 
 test("userId : avec plusieurs comptes, celui du jeton courant", async () => {
