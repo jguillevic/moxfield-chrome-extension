@@ -246,6 +246,10 @@ Lancés par le même `npm test` :
   (`deck-checks.js`) — stock insuffisant, version différente, terrains de
   base, mise à jour d'un deck monté, faisabilité affichée sur le bouton,
   lecture d'une liste collée.
+- `tests/background.test.js` : gestion du stock par le service worker
+  (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
+  CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
+  ajustement manuel, réinitialisation.
 - `tests/content-deck.test.js` : bouton de la page d'un deck
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock
