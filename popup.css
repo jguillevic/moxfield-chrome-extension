@@ -592,16 +592,3 @@ tr.deck-usage ul {
   font-weight: 700;
 }
 
-.qty-controls {
-  white-space: nowrap;
-  text-align: right;
-}
-
-.qty-controls button {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 13px;
-  line-height: 1;
-}

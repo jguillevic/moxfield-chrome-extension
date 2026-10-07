@@ -48,10 +48,10 @@ connexion, renouvelé de la même façon — tu restes connecté). Si tu te
 déconnectes de Moxfield, la récupération s'arrête jusqu'à ta prochaine
 connexion.
 
-La collection Moxfield **fait référence** : chaque récupération remplace
-les quantités du stock (un ajustement manuel fait dans le popup est donc
-écrasé à la récupération suivante — ajuste plutôt ta collection sur
-Moxfield). Les decks déjà marqués comme montés sont réappliqués, sans risque
+La collection Moxfield est **la seule référence** du stock : chaque
+récupération remplace les quantités du stock, et l'extension ne permet pas
+de les modifier — pour corriger une quantité, modifie ta collection sur
+Moxfield (récupérée 30 secondes plus tard). Les decks déjà marqués comme montés sont réappliqués, sans risque
 de doublon. Si rien n'a changé, le stock n'est pas réécrit.
 
 **Import manuel (solution de secours)** : section **« Import manuel
@@ -137,9 +137,8 @@ contenu du CSV. Même effet qu'une récupération automatique.
 - **Stock insuffisant** (encadré rouge, bloquant) : liste les cartes dont le
   stock disponible ne suffirait pas si ce deck était monté — y compris une
   carte totalement absente du stock. Dans ce cas, **le montage est bloqué**
-  — corrige la liste, ajuste ton stock (import collection à jour, ou
-  ajustement manuel dans le popup), ou retire la/les cartes en trop avant de
-  pouvoir valider.
+  — corrige la liste, mets ta collection Moxfield à jour (ajout des cartes
+  achetées), ou retire la/les cartes en trop avant de pouvoir valider.
   - **Acheter les cartes manquantes sur Cardmarket** : le bouton
     **« 🛒 Copier les cartes manquantes pour Cardmarket »** de cet encadré
     copie la liste (`quantité manquante` + nom, une carte par ligne) et ouvre
@@ -163,16 +162,15 @@ contenu du CSV. Même effet qu'une récupération automatique.
   manque ou si l'édition diffère, mais **n'empêche jamais** de valider le
   montage ; le stock est décompté normalement (peut devenir négatif).
 
-### 3. Consulter / ajuster le stock
+### 3. Consulter le stock
 
 - Ouvre le popup de l'extension (icône dans la barre d'outils).
 - Tu y vois les decks actuellement montés (avec un bouton pour démonter
   chacun) et le stock complet.
 - La section **Stock** est repliée par défaut : clique sur son titre pour
-  l'afficher (200 premières cartes ; le filtre cherche dans tout le stock),
-  la filtrer par nom, et ajuster une quantité à la main avec les
-  boutons +/- (écrasé à la récupération suivante de ta collection Moxfield,
-  si elle est active).
+  l'afficher (200 premières cartes ; le filtre cherche dans tout le stock)
+  et la filtrer par nom. Les quantités ne se modifient pas ici : elles
+  viennent de ta collection Moxfield.
 - **Savoir où est une carte** : la colonne **Libre** est la quantité
   disponible hors decks montés, la colonne **Decks** le nombre
   d'exemplaires dans des decks montés. Clique sur une carte présente dans
@@ -190,7 +188,7 @@ contenu du CSV. Même effet qu'une récupération automatique.
 
 - Dans le popup, section **Synchronisation Google Drive** : clique une fois
   sur **« Connecter Google Drive »** sur chaque PC et autorise l'accès. Ensuite
-  tout est automatique : chaque modification (import, montage, ajustement...)
+  tout est automatique : chaque modification (récupération de la collection, montage...)
   est envoyée sur Drive quelques secondes plus tard, et les changements faits
   sur un autre PC sont récupérés à l'ouverture du popup, au démarrage du
   navigateur et toutes les 5 minutes.
@@ -289,7 +287,7 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
 - `tests/background.test.js` : gestion du stock par le service worker
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
   CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
-  ajustement manuel, réinitialisation, récupération de la collection
+  réinitialisation, récupération de la collection
   (import, alarme horaire, récupération après une modification de la
   collection sur Moxfield, erreurs, cartes non couvertes).
 - `tests/moxfield-collection.test.js` : dialogue avec Moxfield

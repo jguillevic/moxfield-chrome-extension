@@ -49,6 +49,10 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 
 ## Règles métier
 
+- La collection Moxfield est la seule source de vérité du stock : pas
+  d'ajustement de quantités possédées dans l'extension (on corrige la
+  collection sur Moxfield). L'extension ne fait que retirer du stock libre
+  les cartes des decks montés.
 - Le stock est suivi par nom de carte (toutes éditions confondues), stocké
   sous forme normalisée (`normalizeName`).
 - Terrains de base (Plains, Island, Swamp, Mountain, Forest) : jamais

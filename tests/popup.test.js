@@ -208,6 +208,7 @@ test("stock déplié : 200 lignes au plus, avec le nombre de cartes restantes", 
   const rows = p.$("stock-table").querySelectorAll("tr");
   assert.equal(rows.length, 201, "en-tête + 200 cartes");
   assert.match(rows[1].textContent, /Card 0000/);
+  assert.equal(p.$("stock-table").querySelectorAll("button").length, 0, "quantités non modifiables : Moxfield fait référence");
   assert.equal(p.$("stock-table").querySelector("p.hint").textContent, "… et 300 autre(s) carte(s) : affine avec le filtre.");
 });
 

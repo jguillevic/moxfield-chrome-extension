@@ -328,13 +328,11 @@ test("constat de modification d'un deck non monté : ignoré", async () => {
   assert.deepEqual((await bg.state()).builtDecks, {});
 });
 
-test("ajustement manuel : +/− sur une carte existante ou nouvelle", async () => {
+test("pas d'ajustement manuel du stock : Moxfield est la seule source de vérité", async () => {
   const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 1 } }, builtDecks: {} });
-  await bg.send({ type: "MANUAL_ADJUST_STOCK", payload: { name: "sol  RING", delta: 2 } });
-  await bg.send({ type: "MANUAL_ADJUST_STOCK", payload: { name: "Counterspell", delta: -1 } });
-  const state = await bg.state();
-  assert.deepEqual(quantities(state), { "sol ring": 3, counterspell: -1 });
-  assert.equal(state.stock["sol ring"].name, "Sol Ring", "nom d'origine conservé");
+  const res = await bg.send({ type: "MANUAL_ADJUST_STOCK", payload: { name: "Sol Ring", delta: 2 } });
+  assert.equal(res.ok, false);
+  assert.deepEqual(quantities(await bg.state()), { "sol ring": 1 });
 });
 
 test("réinitialisation : stock et decks montés vidés", async () => {
@@ -349,7 +347,7 @@ test("chaque modification marque l'état à synchroniser", async () => {
   const before = (await bg.send({ type: "GET_SYNC_STATUS" })).meta;
   assert.equal(before.dirty, false);
   assert.equal(before.enabled, false);
-  await bg.send({ type: "MANUAL_ADJUST_STOCK", payload: { name: "Sol Ring", delta: 1 } });
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
   const after = (await bg.send({ type: "GET_SYNC_STATUS" })).meta;
   assert.equal(after.dirty, true);
   assert.ok(after.localUpdatedAt > 0);
@@ -401,10 +399,9 @@ test("récupération sans changement : aucune écriture du stock (rien n'est env
   assert.deepEqual(meta.lastChanges, first.changes, "derniers changements conservés");
 });
 
-test("récupération : un ajustement manuel est écrasé par la collection", async () => {
-  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
-  await bg.send({ type: "COLLECTION_FETCH_NOW" });
-  await bg.send({ type: "MANUAL_ADJUST_STOCK", payload: { name: "Sol Ring", delta: 1 } });
+test("récupération : un stock qui diverge de Moxfield est remis en conformité", async () => {
+  const diverging = { stock: { "sol ring": { name: "Sol Ring", qty: 4 }, "rhystic study": { name: "Rhystic Study", qty: 1 }, island: { name: "Island", qty: 10 } }, builtDecks: {} };
+  const bg = loadBackground(diverging, { moxfieldCSV: COLLECTION_CSV });
   const res = await bg.send({ type: "COLLECTION_FETCH_NOW" });
   assert.deepEqual(res.changes, [{ name: "Sol Ring", from: 4, to: 3 }]);
   assert.equal((await bg.state()).stock["sol ring"].qty, 3);

@@ -194,15 +194,6 @@ async function handleSetDeckPageChanges({ deckId, changes }) {
   return { ok: true };
 }
 
-async function handleManualAdjust({ name, delta }) {
-  const state = await getState();
-  const key = normalizeName(name);
-  if (!state.stock[key]) state.stock[key] = { name, qty: 0 };
-  state.stock[key].qty += delta;
-  await setState(state);
-  return { ok: true };
-}
-
 // --- Synchronisation Google Drive ---
 // L'état complet est stocké dans un fichier unique de l'appDataFolder de
 // Drive : dossier caché, propre à l'extension (scope drive.appdata), sans
@@ -769,9 +760,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "UPDATE_BUILT_DECK":
           sendResponse(await handleUpdateBuiltDeck(msg.payload));
-          break;
-        case "MANUAL_ADJUST_STOCK":
-          sendResponse(await handleManualAdjust(msg.payload));
           break;
         case "GET_SYNC_STATUS":
           sendResponse({ ok: true, meta: await getSyncMeta() });

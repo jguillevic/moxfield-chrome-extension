@@ -147,7 +147,7 @@ function renderStock(state, filter, onlyInDecks) {
   }
 
   const table = document.createElement("table");
-  table.innerHTML = "<tr><th>Carte</th><th>Libre</th><th>Decks</th><th></th></tr>";
+  table.innerHTML = "<tr><th>Carte</th><th>Libre</th><th>Decks</th></tr>";
   for (const card of entries.slice(0, MAX_STOCK_ROWS)) {
     const u = usage.get(card.key);
     const expanded = u && expandedCards.has(card.key);
@@ -157,19 +157,7 @@ function renderStock(state, filter, onlyInDecks) {
       <td>${escapeHtml(card.name)}</td>
       <td class="${card.qty < 0 ? "negative" : ""}">${card.qty}</td>
       <td class="in-decks">${u ? `${u.total} ${expanded ? "▾" : "▸"}` : "—"}</td>
-      <td class="qty-controls">
-        <button data-delta="-1">-</button>
-        <button data-delta="1">+</button>
-      </td>
     `;
-    tr.querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation(); // ne pas déplier la ligne en ajustant la quantité
-        const delta = parseInt(btn.dataset.delta, 10);
-        await send("MANUAL_ADJUST_STOCK", { name: card.name, delta });
-        refresh();
-      });
-    });
     if (u) {
       tr.addEventListener("click", () => {
         if (expandedCards.has(card.key)) expandedCards.delete(card.key);
@@ -183,7 +171,7 @@ function renderStock(state, filter, onlyInDecks) {
       const detail = document.createElement("tr");
       detail.className = "deck-usage";
       detail.innerHTML =
-        `<td colspan="4">Total possédé : ${card.qty + u.total}<ul>` +
+        `<td colspan="3">Total possédé : ${card.qty + u.total}<ul>` +
         u.decks
           .map((d) => `<li><a href="${escapeHtml(d.url)}" target="_blank">${escapeHtml(d.name)}</a> ×${d.qty}</li>`)
           .join("") +
