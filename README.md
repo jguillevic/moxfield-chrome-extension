@@ -240,7 +240,8 @@ npm test
 
 ### Autres tests
 
-Lancés par le même `npm test` :
+Lancés par le même `npm test`, et automatiquement sur GitHub à chaque push
+sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
 
 - `tests/deck-checks.test.js` : contrôles d'une liste par rapport au stock
   (`deck-checks.js`) — stock insuffisant, version différente, terrains de

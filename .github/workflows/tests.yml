@@ -1,0 +1,21 @@
+# Tests automatisés (npm test) à chaque push sur main.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  # Lancement à la main depuis l'onglet Actions de GitHub.
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # jsdom 30 demande Node ^22.22.2 ou ^24.15.0.
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
