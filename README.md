@@ -14,19 +14,51 @@ carte par carte, selon la decklist. Démonte-le pour réincrémenter.
 
 ## Utilisation
 
-### 1. Importer ta collection (initialiser le stock)
+### 1. Récupérer ta collection (initialiser le stock)
 
-Ouvre le popup de l'extension (icône dans la barre d'outils Chrome) →
-section **« Importer ma collection (fichier CSV) »**. Sur Moxfield : ouvre
-ta collection → bouton Export → CSV → enregistre le fichier → choisis-le via
-le bouton **Parcourir** du popup → **Importer ce fichier**. Tu peux aussi
-coller directement le contenu du CSV.
+**Automatiquement** : il suffit d'être connecté à Moxfield dans Chrome.
+L'extension récupère ta collection depuis ton compte, puis l'importe :
 
-Réimporter écrase les quantités par la nouvelle collection, mais réapplique
-automatiquement les decks déjà marqués comme montés — pas de risque de
-doublon, tu peux réimporter aussi souvent que tu veux. Il n'y a pas de
-synchronisation automatique : réimporte le CSV quand ta collection Moxfield
-a changé.
+- **30 secondes après une modification de ta collection sur Moxfield**
+  (ajout, changement de quantité, suppression — depuis la page
+  [collection](https://moxfield.com/collection) ou ailleurs sur le site).
+  Chaque nouvelle modification repousse ce délai : tu peux saisir plusieurs
+  cartes d'affilée, la récupération a lieu après une pause ;
+- **toutes les heures** et au démarrage du navigateur, **même sans onglet
+  Moxfield ouvert** — pour les modifications faites ailleurs (autre PC,
+  application mobile).
+
+Dans le popup, section **« Collection Moxfield »** :
+
+- **« Récupérer maintenant »** pour ne pas attendre (ex. juste après avoir
+  ajouté des cartes à ta collection sur Moxfield) ;
+- la case **« Récupérer automatiquement »** pour désactiver/réactiver ces
+  récupérations automatiques ;
+- la date de la dernière récupération, les **derniers changements**
+  (`+1 Rhystic Study, −2 Sol Ring`) et, en rouge, la raison d'un échec
+  (session Moxfield expirée, Moxfield injoignable ou ayant changé son
+  fonctionnement...) ;
+- une alerte si ta collection **ne couvre plus des cartes de decks montés**
+  (carte retirée de la collection alors qu'elle est dans un deck monté),
+  avec les decks concernés — terrains de base exclus.
+
+L'extension ne connaît ni ne stocke ton mot de passe : elle réutilise la
+session Moxfield ouverte dans Chrome, comme le site lui-même (même jeton de
+connexion, renouvelé de la même façon — tu restes connecté). Si tu te
+déconnectes de Moxfield, la récupération s'arrête jusqu'à ta prochaine
+connexion.
+
+La collection Moxfield **fait référence** : chaque récupération remplace
+les quantités du stock (un ajustement manuel fait dans le popup est donc
+écrasé à la récupération suivante — ajuste plutôt ta collection sur
+Moxfield). Les decks déjà marqués comme montés sont réappliqués, sans risque
+de doublon. Si rien n'a changé, le stock n'est pas réécrit.
+
+**Import manuel (solution de secours)** : section **« Import manuel
+(fichier CSV) »** du popup. Sur Moxfield : ouvre ta collection → bouton
+Export → CSV → enregistre le fichier → choisis-le via le bouton **Choisir un
+fichier CSV** du popup → **Importer**. Tu peux aussi coller directement le
+contenu du CSV. Même effet qu'une récupération automatique.
 
 ### 2. Monter / démonter un deck
 
@@ -138,7 +170,8 @@ a changé.
   chacun) et le stock complet.
 - La section **Stock** est repliée par défaut : clique sur son titre pour
   l'afficher, la filtrer par nom, et ajuster une quantité à la main avec les
-  boutons +/-.
+  boutons +/- (écrasé à la récupération suivante de ta collection Moxfield,
+  si elle est active).
 - **Savoir où est une carte** : la colonne **Libre** est la quantité
   disponible hors decks montés, la colonne **Decks** le nombre
   d'exemplaires dans des decks montés. Clique sur une carte présente dans
@@ -206,6 +239,11 @@ a changé.
   l'extension y reste active mais déconnectée (un message te le rappelle).
 - Le stock est agrégé par **nom de carte**, toutes éditions/finitions
   confondues (pas de distinction par set ou par version foil).
+- La récupération automatique de la collection reproduit les appels que
+  fait le site Moxfield (pas d'API publique) : s'ils changent, elle échoue
+  avec un message dans le popup, et l'import manuel du CSV reste
+  disponible. Elle nécessite d'être connecté à Moxfield dans ce profil
+  Chrome.
 - Les données sont stockées localement dans le navigateur
   (`chrome.storage.local`) ; sans la synchro Google Drive, rien ne se
   partage entre appareils.
@@ -250,14 +288,21 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
 - `tests/background.test.js` : gestion du stock par le service worker
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
   CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
-  ajustement manuel, réinitialisation.
+  ajustement manuel, réinitialisation, récupération de la collection
+  (import, alarme horaire, récupération après une modification de la
+  collection sur Moxfield, erreurs, cartes non couvertes).
+- `tests/moxfield-collection.test.js` : dialogue avec Moxfield
+  (`moxfield-collection.js`, réponses simulées) — appels et jetons, session
+  absente ou expirée, refus, réseau coupé, changement de l'API.
+- `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
+  de test avec un faux `chrome`) — section « Collection Moxfield ».
 - `tests/content-deck.test.js` : bouton de la page d'un deck
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock
   change, tolérance à une liste brièvement incohérente.
 
-Non couverts : la synchro Google Drive, le popup, la fenêtre de montage et
-l'intégration à la barre d'actions de Moxfield.
+Non couverts : la synchro Google Drive, le reste du popup, la fenêtre de
+montage et l'intégration à la barre d'actions de Moxfield.
 
 ## Crédits
 

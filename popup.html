@@ -53,9 +53,29 @@
   </section>
 
   <section class="card">
-    <h2>Importer ma collection</h2>
+    <h2>Collection Moxfield</h2>
     <p class="hint">
-      Sur Moxfield : collection → Export → CSV. Réimporter met le stock à jour sans perdre les decks montés.
+      Récupérée depuis ton compte Moxfield (il suffit d'y être connecté dans Chrome), même Moxfield fermé.
+      Elle fait référence : un ajustement manuel du stock est écrasé à la récupération suivante.
+    </p>
+    <label class="check-row">
+      <input type="checkbox" id="collection-auto" />
+      Récupérer automatiquement (après chaque modification sur Moxfield, et toutes les heures)
+    </label>
+    <p id="collection-state" class="hint"></p>
+    <p id="collection-changes" class="hint" hidden></p>
+    <div id="collection-uncovered" class="notice error" hidden></div>
+    <div class="actions">
+      <button id="collection-fetch-btn" class="primary">Récupérer maintenant</button>
+      <span id="collection-status" class="status"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Import manuel (fichier CSV)</h2>
+    <p class="hint">
+      Solution de secours si la récupération automatique échoue. Sur Moxfield : collection → Export → CSV.
+      Réimporter met le stock à jour sans perdre les decks montés.
     </p>
     <div class="file-row">
       <label class="button file-button">

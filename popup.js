@@ -12,15 +12,20 @@ async function loadState() {
 // page du deck (cf. SET_DECK_PAGE_CHANGES dans background.js).
 const MAX_CHANGES_IN_TOOLTIP = 10;
 
-function describePageChanges(deck) {
-  const items = deck.pageChanges.slice(0, MAX_CHANGES_IN_TOOLTIP).map((c) => {
+// "+1 Elvish Mystic, −1 Stitcher's Supplier, et 3 autre(s)".
+function formatChanges(changes) {
+  const items = changes.slice(0, MAX_CHANGES_IN_TOOLTIP).map((c) => {
     const delta = c.to - c.from;
     return `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${c.name}`;
   });
-  const more = deck.pageChanges.length - items.length;
+  const more = changes.length - items.length;
   if (more > 0) items.push(`et ${more} autre(s)`);
+  return items.join(", ");
+}
+
+function describePageChanges(deck) {
   return (
-    `La liste a changé sur Moxfield depuis le montage : ${items.join(", ")}` +
+    `La liste a changé sur Moxfield depuis le montage : ${formatChanges(deck.pageChanges)}` +
     ` — constaté le ${formatDate(deck.pageCheckedAt)}. Ouvre le deck pour mettre à jour le montage.`
   );
 }
@@ -238,6 +243,61 @@ document.getElementById("import-paste-btn").addEventListener("click", async () =
 document.getElementById("stock-filter").addEventListener("input", refresh);
 document.getElementById("stock-only-in-decks").addEventListener("change", refresh);
 
+// --- Récupération de la collection Moxfield ---
+// Faite par le service worker (toutes les heures, cf. background.js) ; le
+// popup affiche son état et permet de la lancer à la main.
+async function renderCollection() {
+  const { meta, uncovered } = await send("GET_COLLECTION_STATUS");
+  document.getElementById("collection-auto").checked = meta.enabled;
+
+  const state = document.getElementById("collection-state");
+  const lastSuccess = meta.lastSuccessAt ? `Dernière récupération : ${formatDate(meta.lastSuccessAt)}.` : "";
+  if (meta.lastError) {
+    state.className = "sync-error";
+    state.textContent = `${meta.lastError.message}${lastSuccess ? ` ${lastSuccess}` : ""}`;
+  } else {
+    state.className = "hint";
+    state.textContent = lastSuccess || "Pas encore récupérée.";
+  }
+
+  const changesEl = document.getElementById("collection-changes");
+  changesEl.hidden = !meta.lastChanges;
+  if (meta.lastChanges) {
+    changesEl.textContent = `Derniers changements (${formatDate(meta.lastChangesAt)}) : ${formatChanges(meta.lastChanges)}.`;
+  }
+
+  // Cartes de decks montés que la collection ne couvre plus.
+  const uncoveredEl = document.getElementById("collection-uncovered");
+  uncoveredEl.hidden = uncovered.length === 0;
+  uncoveredEl.innerHTML =
+    `<strong>Ta collection ne couvre plus ${uncovered.length} carte(s) de decks montés :</strong><ul>` +
+    uncovered
+      .map((u) => `<li>${escapeHtml(u.name)} — manque ${u.missing} (dans : ${u.decks.map(escapeHtml).join(", ")})</li>`)
+      .join("") +
+    "</ul>";
+}
+
+document.getElementById("collection-auto").addEventListener("change", async (e) => {
+  await send("SET_COLLECTION_AUTO", { enabled: e.target.checked });
+  renderCollection();
+});
+
+document.getElementById("collection-fetch-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("collection-fetch-btn");
+  const status = document.getElementById("collection-status");
+  btn.disabled = true;
+  status.textContent = "Récupération…";
+  try {
+    const res = await send("COLLECTION_FETCH_NOW");
+    if (!res.ok) status.textContent = "";
+    else if (res.changes.length === 0) status.textContent = "Aucun changement.";
+    else status.textContent = `${res.changes.length} carte(s) modifiée(s), stock mis à jour.`;
+  } finally {
+    btn.disabled = false;
+    renderCollection();
+  }
+});
+
 // --- Synchronisation Google Drive ---
 // Le travail se fait dans le service worker ; le popup ne fait qu'afficher
 // l'état de la synchro, qu'il relit à chaque changement du stockage local.
@@ -370,11 +430,16 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
 // Un changement venant de Drive (ou d'un onglet Moxfield) met le popup à jour.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.moxfieldStockManagerState) refresh();
+  if (changes.moxfieldStockManagerState) {
+    refresh();
+    renderCollection(); // cartes non couvertes
+  }
   if (changes.moxfieldStockManagerSync) renderSync();
+  if (changes.moxfieldStockManagerCollection) renderCollection();
 });
 
 refresh();
+renderCollection();
 renderSync().then(() => {
   if (syncMeta.enabled) send("SYNC_NOW"); // récupère tout de suite les changements d'un autre PC
 });

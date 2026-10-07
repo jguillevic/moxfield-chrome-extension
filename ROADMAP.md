@@ -39,11 +39,14 @@ joue des proxies ou d'autres formats.
 - **Pastille de faisabilité** : afficher un pourcentage de cartes
   disponibles (ex. « 34 % ») plutôt que le nombre de cartes bloquantes ?
   Le « − » devant le nombre a été écarté.
-- **Tests manquants** : la synchro Google Drive, le popup, la fenêtre de
-  montage et l'intégration à la barre d'actions Moxfield n'ont pas de tests
-  automatisés.
+- **Tests manquants** : la synchro Google Drive, le popup (hors section
+  « Collection Moxfield »), la fenêtre de montage et l'intégration à la
+  barre d'actions Moxfield n'ont pas de tests automatisés.
 
 ## Livré
 
 - Faisabilité d'un deck non monté sur le bouton (pastille ✓ / nombre de
   cartes bloquantes), recalculée en direct — octobre 2026.
+- Récupération automatique de la collection Moxfield 30 s après chaque
+  modification sur le site, et toutes les heures,
+  même Moxfield fermé — octobre 2026.

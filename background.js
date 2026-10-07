@@ -7,6 +7,10 @@
 //     pageChanges : différences constatées sur la page Moxfield du deck par
 //     rapport au montage (absent = aucune, ou jamais constaté).
 
+// Modules partagés (chargés tels quels, cf. leur en-tête) :
+// createDeckChecks, createMoxfieldCollection, computeCollectionDiff.
+importScripts("deck-checks.js", "moxfield-collection.js");
+
 const STORAGE_KEY = "moxfieldStockManagerState";
 
 function normalizeName(name) {
@@ -89,23 +93,36 @@ function parseCollectionCSV(csvText) {
 }
 
 // --- Handlers ---
+
+// Stock correspondant à une collection : la collection, moins les cartes
+// des decks montés (qui en ont été retirées au montage).
+function stockFromCollection(collection, builtDecks) {
+  const stock = {};
+  for (const [key, c] of Object.entries(collection)) stock[key] = { ...c };
+  moveCardsInStock(
+    stock,
+    Object.values(builtDecks).flatMap((deck) => deck.cards),
+    -1
+  );
+  return stock;
+}
+
+// Inverse : quantités possédées (stock libre + cartes des decks montés).
+function collectionFromState(state) {
+  const collection = {};
+  for (const [key, c] of Object.entries(state.stock)) collection[key] = { ...c };
+  moveCardsInStock(
+    collection,
+    Object.values(state.builtDecks).flatMap((deck) => deck.cards),
+    +1
+  );
+  return collection;
+}
+
 async function handleImportCSV(csvText) {
   const parsed = parseCollectionCSV(csvText);
   const state = await getState();
-  const freshStock = parsed;
-  for (const deckId of Object.keys(state.builtDecks)) {
-    const deck = state.builtDecks[deckId];
-    for (const card of deck.cards) {
-      if (card.excludedFromStock) continue; // jamais décomptée au montage : ne pas la décompter ici non plus
-      const key = normalizeName(card.name);
-      if (freshStock[key]) {
-        freshStock[key].qty -= card.qty;
-      } else {
-        freshStock[key] = { name: card.name, qty: -card.qty };
-      }
-    }
-  }
-  state.stock = freshStock;
+  state.stock = stockFromCollection(parsed, state.builtDecks);
   await setState(state);
   const totalQty = Object.values(parsed).reduce((sum, c) => sum + c.qty, 0);
   return { ok: true, cardCount: Object.keys(parsed).length, totalQty };
@@ -559,8 +576,150 @@ async function handleResetStock() {
   return { ok: true };
 }
 
+// --- Récupération automatique de la collection Moxfield ---
+// Toutes les heures (et au démarrage du navigateur si la dernière date de
+// plus d'une heure), la collection est téléchargée depuis le compte Moxfield
+// connecté dans Chrome (cf. moxfield-collection.js) puis importée comme un
+// CSV : elle devient la référence du stock. Rien n'est écrit si elle n'a
+// pas changé — chaque écriture part sur Drive.
+// Le suivi (dernière récupération, derniers changements, erreur) est propre
+// à ce PC : il n'est pas synchronisé.
+const COLLECTION_META_KEY = "moxfieldStockManagerCollection";
+const COLLECTION_ALARM = "moxfield-collection";
+const COLLECTION_PERIOD_MINUTES = 60;
+// Marge : une récupération lancée entre deux alarmes (bouton, démarrage) ne
+// doit pas faire sauter la suivante pour quelques minutes.
+const COLLECTION_DUE_MS = (COLLECTION_PERIOD_MINUTES - 5) * 60 * 1000;
+
+const moxfieldCollection = createMoxfieldCollection({
+  fetch: (...args) => fetch(...args),
+  getCookies: () => chrome.cookies.getAll({ domain: "moxfield.com" }),
+});
+const { isBasicLand } = createDeckChecks(normalizeName);
+
+async function getCollectionMeta() {
+  const data = await chrome.storage.local.get(COLLECTION_META_KEY);
+  return {
+    enabled: true,
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    lastError: null, // { code, message }
+    lastChanges: null, // [{ name, from, to }] : derniers changements importés
+    lastChangesAt: null,
+    ...data[COLLECTION_META_KEY],
+  };
+}
+
+async function updateCollectionMeta(patch) {
+  const meta = { ...(await getCollectionMeta()), ...patch };
+  await chrome.storage.local.set({ [COLLECTION_META_KEY]: meta });
+  return meta;
+}
+
+// Cartes de decks montés que la collection ne couvre plus (stock libre
+// négatif), terrains de base exclus : ils ne font jamais qu'un
+// avertissement, et leur stock peut être négatif par choix.
+function findUncoveredCards(state) {
+  const decksByCard = new Map();
+  for (const deck of Object.values(state.builtDecks)) {
+    for (const card of deck.cards) {
+      if (card.excludedFromStock || isBasicLand(card.name)) continue;
+      const key = normalizeName(card.name);
+      if (!decksByCard.has(key)) decksByCard.set(key, []);
+      decksByCard.get(key).push(deck.name);
+    }
+  }
+  const uncovered = [];
+  for (const [key, decks] of decksByCard) {
+    const c = state.stock[key];
+    if (c && c.qty < 0) uncovered.push({ name: c.name, missing: -c.qty, decks });
+  }
+  return uncovered.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function fetchCollection() {
+  await updateCollectionMeta({ lastAttemptAt: Date.now() });
+  try {
+    const collection = parseCollectionCSV(await moxfieldCollection.downloadCollectionCSV());
+    const state = await getState();
+    const changes = computeCollectionDiff(collectionFromState(state), collection);
+    const patch = { lastSuccessAt: Date.now(), lastError: null };
+    if (changes.length > 0) {
+      state.stock = stockFromCollection(collection, state.builtDecks);
+      await setState(state);
+      Object.assign(patch, { lastChanges: changes, lastChangesAt: Date.now() });
+    }
+    await updateCollectionMeta(patch);
+    return { ok: true, changes };
+  } catch (e) {
+    const lastError = { code: e.code || "unknown", message: e.message || String(e) };
+    await updateCollectionMeta({ lastError });
+    return { ok: false, error: lastError.message, code: lastError.code };
+  }
+}
+
+// Les récupérations sont exécutées l'une après l'autre, jamais en parallèle
+// (le jeton de renouvellement change à chaque fois).
+let collectionQueue = Promise.resolve();
+function fetchCollectionNow() {
+  const run = collectionQueue.then(fetchCollection);
+  collectionQueue = run.catch(() => {});
+  return run;
+}
+
+async function fetchCollectionIfDue() {
+  const meta = await getCollectionMeta();
+  if (!meta.enabled) return;
+  const last = meta.lastAttemptAt || 0;
+  if (Date.now() - last >= COLLECTION_DUE_MS) await fetchCollectionNow();
+}
+
+function startCollectionAlarm() {
+  chrome.alarms.create(COLLECTION_ALARM, { periodInMinutes: COLLECTION_PERIOD_MINUTES });
+}
+
+// Collection modifiée sur Moxfield (ajout, changement de quantité,
+// suppression — sur la page collection ou ailleurs sur le site) : on
+// récupère la collection peu après, sans attendre l'heure. Observé
+// (octobre 2026) : POST /v1/collections (ajout), PUT /v1/collections/<id>
+// (modification) ; on retient tout appel qui n'est pas une lecture.
+// L'alarme est repoussée à chaque modification : la récupération a lieu
+// après une pause dans la saisie. Une alarme plutôt qu'un setTimeout : le
+// service worker peut être arrêté entre-temps. 30 s est aussi le délai
+// minimal d'une alarme.
+const COLLECTION_CHANGED_ALARM = "moxfield-collection-changed";
+const COLLECTION_SETTLE_MINUTES = 0.5;
+const COLLECTION_WRITE_URLS = ["https://api2.moxfield.com/*/collections*"];
+
+async function handleCollectionWrite(details) {
+  // tabId -1 : requête qui ne vient pas d'un onglet (ex. l'extension).
+  if (details.method === "GET" || details.tabId < 0 || details.statusCode >= 400) return;
+  if (!(await getCollectionMeta()).enabled) return;
+  chrome.alarms.create(COLLECTION_CHANGED_ALARM, { delayInMinutes: COLLECTION_SETTLE_MINUTES });
+}
+
+chrome.webRequest.onCompleted.addListener(handleCollectionWrite, { urls: COLLECTION_WRITE_URLS });
+
+async function handleGetCollectionStatus() {
+  return { ok: true, meta: await getCollectionMeta(), uncovered: findUncoveredCards(await getState()) };
+}
+
+async function handleSetCollectionAuto({ enabled }) {
+  const meta = await updateCollectionMeta({ enabled });
+  if (enabled) {
+    startCollectionAlarm();
+    fetchCollectionIfDue();
+  } else {
+    await chrome.alarms.clear(COLLECTION_ALARM);
+    await chrome.alarms.clear(COLLECTION_CHANGED_ALARM);
+  }
+  return { ok: true, meta };
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SYNC_ALARM) syncNow();
+  if (alarm.name === COLLECTION_ALARM) fetchCollectionIfDue();
+  if (alarm.name === COLLECTION_CHANGED_ALARM) fetchCollectionNow();
 });
 
 // Les alarmes ne survivent pas toujours à un redémarrage du navigateur.
@@ -569,10 +728,18 @@ chrome.runtime.onStartup.addListener(async () => {
     startSyncAlarm();
     syncNow();
   }
+  if ((await getCollectionMeta()).enabled) {
+    startCollectionAlarm();
+    fetchCollectionIfDue();
+  }
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
   if ((await getSyncMeta()).enabled) startSyncAlarm();
+  if ((await getCollectionMeta()).enabled) {
+    startCollectionAlarm();
+    fetchCollectionIfDue();
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -584,6 +751,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "IMPORT_CSV_TEXT":
           sendResponse(await handleImportCSV(msg.csvText));
+          break;
+        case "GET_COLLECTION_STATUS":
+          sendResponse(await handleGetCollectionStatus());
+          break;
+        case "COLLECTION_FETCH_NOW":
+          sendResponse(await fetchCollectionNow());
+          break;
+        case "SET_COLLECTION_AUTO":
+          sendResponse(await handleSetCollectionAuto(msg.payload));
           break;
         case "TOGGLE_DECK_BUILT":
           sendResponse(await handleToggleDeck(msg.payload));

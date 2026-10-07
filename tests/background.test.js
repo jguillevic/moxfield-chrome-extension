@@ -2,22 +2,33 @@
 //
 // background.js est chargé tel quel dans un contexte isolé, avec un faux
 // chrome.storage.local en mémoire ; on lui parle comme l'extension, par
-// messages. La synchro Google Drive n'est pas activée : aucun appel réseau.
+// messages. La synchro Google Drive n'est pas activée, et Moxfield est
+// simulé (fausse fonction fetch) : aucun appel réseau.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const SOURCE = fs.readFileSync(path.join(__dirname, "..", "background.js"), "utf8");
+const ROOT = path.join(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
 const STORAGE_KEY = "moxfieldStockManagerState";
+const COLLECTION_KEY = "moxfieldStockManagerCollection";
 
-function loadBackground(initialState) {
+// options.moxfieldCSV : collection renvoyée par le faux Moxfield (CSV), ou
+// une Error à lever ; sans elle, tout appel réseau fait échouer le test.
+// options.cookies : cookies de moxfield.com (session ouverte par défaut).
+function loadBackground(initialState, options = {}) {
   const storage = {};
   if (initialState) storage[STORAGE_KEY] = initialState;
   const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
   let onMessage = null;
-  const listener = () => ({ addListener() {} });
+  const alarmListeners = [];
+  const startupListeners = [];
+  const alarms = new Map(); // nom → options
+  const webRequestListeners = [];
+  const counts = { stateWrites: 0, fetches: 0 };
+  const listener = (list = []) => ({ addListener: (fn) => list.push(fn) });
   const chrome = {
     storage: {
       local: {
@@ -25,18 +36,42 @@ function loadBackground(initialState) {
           return key in storage ? { [key]: clone(storage[key]) } : {};
         },
         async set(items) {
-          for (const [k, v] of Object.entries(items)) storage[k] = clone(v);
+          for (const [k, v] of Object.entries(items)) {
+            if (k === STORAGE_KEY) counts.stateWrites++;
+            storage[k] = clone(v);
+          }
         },
       },
     },
     runtime: {
       onMessage: { addListener: (fn) => (onMessage = fn) },
-      onStartup: listener(),
+      onStartup: listener(startupListeners),
       onInstalled: listener(),
     },
-    alarms: { onAlarm: listener(), create() {}, clear: async () => {} },
+    alarms: {
+      onAlarm: listener(alarmListeners),
+      create: (name, info) => alarms.set(name, clone(info)),
+      clear: async (name) => alarms.delete(name),
+    },
+    webRequest: {
+      onCompleted: { addListener: (fn, filter) => webRequestListeners.push({ fn, filter: clone(filter) }) },
+    },
+    cookies: {
+      getAll: async () => options.cookies || [{ name: "refresh_token_XN1JV", value: "rt" }],
+    },
   };
-  vm.runInNewContext(SOURCE, { chrome, setTimeout, clearTimeout, console });
+  // Faux Moxfield : jetons puis CSV (cf. tests/moxfield-collection.test.js
+  // pour le détail des appels).
+  async function fetch(url) {
+    counts.fetches++;
+    if (options.moxfieldCSV === undefined) throw new Error(`appel réseau inattendu : ${url}`);
+    if (options.moxfieldCSV instanceof Error) throw options.moxfieldCSV;
+    const body = url.includes("/token/") ? JSON.stringify({ access_token: "jeton" }) : options.moxfieldCSV;
+    return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
+  }
+  const context = vm.createContext({ chrome, fetch, setTimeout, clearTimeout, console });
+  context.importScripts = (...files) => files.forEach((f) => vm.runInContext(read(f), context));
+  vm.runInContext(read("background.js"), context);
 
   // Comme Chrome, message et réponse sont sérialisés (ce qui ramène aussi
   // les objets du contexte isolé dans celui des tests, pour deepEqual).
@@ -49,6 +84,25 @@ function loadBackground(initialState) {
       return (await send({ type: "GET_STATE" })).state;
     },
     raw: () => storage[STORAGE_KEY],
+    counts,
+    alarms,
+    setCollectionMeta: (meta) => (storage[COLLECTION_KEY] = clone(meta)),
+    setMoxfieldCSV: (csv) => (options.moxfieldCSV = csv),
+    // Déclenche une alarme / le démarrage du navigateur et attend la fin des
+    // traitements lancés.
+    async fireAlarm(name) {
+      for (const fn of alarmListeners) fn({ name });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    },
+    webRequestFilters: () => webRequestListeners.map((l) => l.filter),
+    // Requête terminée, vue par chrome.webRequest (cf. handleCollectionWrite).
+    async requestCompleted(details) {
+      await Promise.all(webRequestListeners.map((l) => l.fn({ tabId: 7, statusCode: 200, ...details })));
+    },
+    async startup() {
+      await Promise.all(startupListeners.map((fn) => fn()));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    },
   };
 }
 
@@ -299,4 +353,194 @@ test("chaque modification marque l'état à synchroniser", async () => {
   const after = (await bg.send({ type: "GET_SYNC_STATUS" })).meta;
   assert.equal(after.dirty, true);
   assert.ok(after.localUpdatedAt > 0);
+});
+
+test("import CSV : résumé calculé sur la collection, pas sur le stock libre", async () => {
+  const bg = loadBackground({ stock: {}, builtDecks: {} });
+  await build(bg, "a", [{ name: "Rhystic Study", qty: 1 }]);
+  const res = await bg.send({ type: "IMPORT_CSV_TEXT", csvText: csv("2,0,Sol Ring,,,,,,,,,,") });
+  assert.deepEqual(res, { ok: true, cardCount: 1, totalQty: 2 });
+});
+
+// --- Récupération automatique de la collection Moxfield ---
+
+const COLLECTION_CSV = csv("3,0,Sol Ring,,,,,,,,,,", "1,0,Rhystic Study,,,,,,,,,,", "10,0,Island,,,,,,,,,,");
+
+async function collectionStatus(bg) {
+  return bg.send({ type: "GET_COLLECTION_STATUS" });
+}
+
+test("récupération : collection importée, decks montés réappliqués, changements retenus", async () => {
+  const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 2 } }, builtDecks: {} }, { moxfieldCSV: COLLECTION_CSV });
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  const res = await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.changes, [
+    { name: "Island", from: 0, to: 10 },
+    { name: "Rhystic Study", from: 0, to: 1 },
+    { name: "Sol Ring", from: 2, to: 3 },
+  ]);
+  assert.deepEqual(quantities(await bg.state()), { "sol ring": 2, "rhystic study": 1, island: 10 });
+
+  const { meta } = await collectionStatus(bg);
+  assert.equal(meta.enabled, true, "activée par défaut");
+  assert.equal(meta.lastError, null);
+  assert.equal(typeof meta.lastSuccessAt, "number");
+  assert.deepEqual(meta.lastChanges, res.changes);
+  assert.equal(typeof meta.lastChangesAt, "number");
+});
+
+test("récupération sans changement : aucune écriture du stock (rien n'est envoyé sur Drive)", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  const first = await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  const writes = bg.counts.stateWrites;
+  const second = await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.deepEqual(second, { ok: true, changes: [] });
+  assert.equal(bg.counts.stateWrites, writes);
+  const { meta } = await collectionStatus(bg);
+  assert.deepEqual(meta.lastChanges, first.changes, "derniers changements conservés");
+});
+
+test("récupération : un ajustement manuel est écrasé par la collection", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  await bg.send({ type: "MANUAL_ADJUST_STOCK", payload: { name: "Sol Ring", delta: 1 } });
+  const res = await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.deepEqual(res.changes, [{ name: "Sol Ring", from: 4, to: 3 }]);
+  assert.equal((await bg.state()).stock["sol ring"].qty, 3);
+});
+
+test("récupération en échec : erreur retenue, stock inchangé", async () => {
+  const before = { stock: { "sol ring": { name: "Sol Ring", qty: 2 } }, builtDecks: {} };
+  const bg = loadBackground(before, { moxfieldCSV: new TypeError("Failed to fetch") });
+  const res = await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, "network");
+  assert.deepEqual(await bg.state(), before);
+  const { meta } = await collectionStatus(bg);
+  assert.equal(meta.lastError.code, "network");
+  assert.match(meta.lastError.message, /injoignable/);
+  assert.equal(meta.lastSuccessAt, null);
+});
+
+test("récupération sans session Moxfield : pas connecté, aucun appel", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV, cookies: [] });
+  const res = await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.equal(res.code, "not-logged-in");
+  assert.equal(bg.counts.fetches, 0);
+});
+
+test("une récupération réussie efface l'erreur précédente", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: new TypeError("Failed to fetch") });
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  bg.setMoxfieldCSV(COLLECTION_CSV);
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.equal((await collectionStatus(bg)).meta.lastError, null);
+});
+
+test("cartes de decks montés que la collection ne couvre plus (terrains de base exclus)", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: csv("1,0,Sol Ring,,,,,,,,,,") });
+  await build(bg, "a", [
+    { name: "Sol Ring", qty: 1 },
+    { name: "Rhystic Study", qty: 1 },
+    { name: "Island", qty: 5 },
+    { name: "Arcane Signet", qty: 1, excludedFromStock: true },
+  ]);
+  await build(bg, "b", [{ name: "Rhystic Study", qty: 1 }]);
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  const { uncovered } = await collectionStatus(bg);
+  assert.deepEqual(uncovered, [{ name: "Rhystic Study", missing: 2, decks: ["Deck a", "Deck b"] }]);
+});
+
+test("alarme horaire : récupère si la dernière tentative date d'au moins 55 min", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  bg.setCollectionMeta({ lastAttemptAt: Date.now() - 56 * 60 * 1000 });
+  await bg.fireAlarm("moxfield-collection");
+  assert.equal(bg.counts.fetches, 3, "renouvellement, jeton d'export, CSV");
+  assert.equal((await bg.state()).stock["sol ring"].qty, 3);
+});
+
+test("alarme horaire : rien si une récupération vient d'avoir lieu", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  bg.setCollectionMeta({ lastAttemptAt: Date.now() - 10 * 60 * 1000 });
+  await bg.fireAlarm("moxfield-collection");
+  assert.equal(bg.counts.fetches, 0);
+});
+
+test("récupération automatique désactivée : l'alarme ne fait rien, le bouton marche", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  bg.alarms.set("moxfield-collection", {});
+  bg.alarms.set("moxfield-collection-changed", {});
+  const res = await bg.send({ type: "SET_COLLECTION_AUTO", payload: { enabled: false } });
+  assert.equal(res.meta.enabled, false);
+  assert.ok(!bg.alarms.has("moxfield-collection"), "alarme supprimée");
+  assert.ok(!bg.alarms.has("moxfield-collection-changed"), "récupération programmée annulée");
+  await bg.fireAlarm("moxfield-collection");
+  assert.equal(bg.counts.fetches, 0);
+  assert.equal((await bg.send({ type: "COLLECTION_FETCH_NOW" })).ok, true);
+});
+
+test("réactivation : alarme recréée et récupération immédiate si due", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  bg.setCollectionMeta({ enabled: false });
+  await bg.send({ type: "SET_COLLECTION_AUTO", payload: { enabled: true } });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.ok(bg.alarms.has("moxfield-collection"));
+  assert.equal(bg.counts.fetches, 3);
+});
+
+test("démarrage du navigateur : alarme recréée et récupération si due", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  await bg.startup();
+  assert.ok(bg.alarms.has("moxfield-collection"));
+  assert.equal(bg.counts.fetches, 3);
+});
+
+// --- Récupération après une modification de la collection sur Moxfield ---
+
+const ADD_CARD = { method: "POST", url: "https://api2.moxfield.com/v1/collections?setPrefPrinting=false" };
+const EDIT_CARD = { method: "PUT", url: "https://api2.moxfield.com/v1/collections/3GnQVA6?setPrefPrinting=false" };
+
+test("modification de la collection : observée sur les appels de collection de l'API", () => {
+  const bg = loadBackground();
+  assert.deepEqual(bg.webRequestFilters(), [{ urls: ["https://api2.moxfield.com/*/collections*"] }]);
+});
+
+test("ajout ou modification d'une carte : récupération programmée 30 s plus tard", async () => {
+  for (const request of [ADD_CARD, EDIT_CARD, { method: "DELETE", url: "https://api2.moxfield.com/v1/collections/3GnQVA6" }]) {
+    const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+    await bg.requestCompleted(request);
+    assert.deepEqual(bg.alarms.get("moxfield-collection-changed"), { delayInMinutes: 0.5 }, request.method);
+    assert.equal(bg.counts.fetches, 0, "pas de récupération immédiate");
+  }
+});
+
+test("à l'échéance : la collection est récupérée", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  await bg.requestCompleted(EDIT_CARD);
+  await bg.fireAlarm("moxfield-collection-changed");
+  assert.equal(bg.counts.fetches, 3);
+  assert.equal((await bg.state()).stock["sol ring"].qty, 3);
+});
+
+test("à l'échéance : récupérée même si une récupération horaire vient d'avoir lieu", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  bg.setCollectionMeta({ lastAttemptAt: Date.now() - 60 * 1000 });
+  await bg.fireAlarm("moxfield-collection-changed");
+  assert.equal(bg.counts.fetches, 3);
+});
+
+test("lectures, requêtes hors onglet et échecs : ignorés", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  await bg.requestCompleted({ method: "GET", url: "https://api2.moxfield.com/v1/collections/search" });
+  await bg.requestCompleted({ ...EDIT_CARD, tabId: -1 });
+  await bg.requestCompleted({ ...EDIT_CARD, statusCode: 400 });
+  assert.ok(!bg.alarms.has("moxfield-collection-changed"));
+});
+
+test("récupération automatique désactivée : modification ignorée", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  bg.setCollectionMeta({ enabled: false });
+  await bg.requestCompleted(ADD_CARD);
+  assert.ok(!bg.alarms.has("moxfield-collection-changed"));
 });
