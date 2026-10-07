@@ -84,6 +84,8 @@ function loadBackground(initialState, options = {}) {
       return (await send({ type: "GET_STATE" })).state;
     },
     raw: () => storage[STORAGE_KEY],
+    // Fonctions internes (synchro Drive, sans appel réseau).
+    context,
     counts,
     alarms,
     setCollectionMeta: (meta) => (storage[COLLECTION_KEY] = clone(meta)),
@@ -540,4 +542,123 @@ test("récupération automatique désactivée : modification ignorée", async ()
   bg.setCollectionMeta({ enabled: false });
   await bg.requestCompleted(ADD_CARD);
   assert.ok(!bg.alarms.has("moxfield-collection-changed"));
+});
+
+// --- Historique ---
+
+async function historyOf(bg) {
+  return (await bg.send({ type: "GET_HISTORY" })).entries;
+}
+
+const SOL_RING_STOCK = () => ({ stock: { "sol ring": { name: "Sol Ring", qty: 2 } }, builtDecks: {} });
+
+test("historique : l'état lu par les pages ne le contient pas", async () => {
+  const bg = loadBackground();
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  assert.deepEqual(Object.keys(await bg.state()), ["stock", "builtDecks"]);
+  assert.equal(bg.raw().history.length, 1);
+});
+
+test("historique : montage, mise à jour et démontage notés, le plus récent en premier", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  await bg.send({
+    type: "UPDATE_BUILT_DECK",
+    payload: { deckId: "a", deckName: "Deck a", url: "", cards: [{ name: "Sol Ring", qty: 1 }, { name: "Counterspell", qty: 1 }] },
+  });
+  await unbuild(bg, "a");
+  const entries = await historyOf(bg);
+  assert.deepEqual(entries.map((e) => e.title), [
+    "Deck « Deck a » démonté : 2 cartes rendues au stock",
+    "Montage de « Deck a » mis à jour : 1 carte modifiée",
+    "Deck « Deck a » monté : 1 carte retirée du stock libre",
+  ]);
+  assert.deepEqual(entries[1].changes, [{ name: "Counterspell", from: 0, to: 1 }]);
+  assert.ok(entries.every((e) => e.otherDevice === false && typeof e.at === "number"));
+});
+
+test("historique : récupération et import CSV notés seulement s'ils changent le stock", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  await bg.send({ type: "COLLECTION_FETCH_NOW" }); // rien de nouveau
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: COLLECTION_CSV }); // identique
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: csv("1,0,Sol Ring,,,,,,,,,,") });
+  const entries = await historyOf(bg);
+  assert.deepEqual(entries.map((e) => e.title), [
+    "Import CSV : 3 cartes modifiées",
+    "Collection Moxfield récupérée : 3 cartes modifiées",
+  ]);
+  assert.deepEqual(entries[0].changes, [
+    { name: "Island", from: 10, to: 0 },
+    { name: "Rhystic Study", from: 1, to: 0 },
+    { name: "Sol Ring", from: 3, to: 1 },
+  ]);
+});
+
+test("historique : réinitialisation notée, l'historique est conservé", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  await bg.send({ type: "RESET_STOCK" });
+  const entries = await historyOf(bg);
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].title, "Stock réinitialisé (1 deck démonté)");
+});
+
+test("historique : action venant d'un autre PC signalée", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  bg.raw().history[0].device = "autre-pc";
+  assert.equal((await historyOf(bg))[0].otherDevice, true);
+});
+
+
+// --- Historique et synchro Google Drive ---
+
+function driveDoc(state, updatedAt = 1) {
+  return { app: "moxfield-stock-manager", version: 1, updatedAt, state };
+}
+
+// Les objets créés dans le contexte isolé sont sérialisés pour deepEqual.
+const plain = (v) => JSON.parse(JSON.stringify(v));
+
+test("sauvegarde Drive sans historique (ancienne version) : acceptée", () => {
+  const bg = loadBackground();
+  const parsed = bg.context.parseDoc(driveDoc({ stock: {}, builtDecks: {} }));
+  assert.equal(parsed.state.history.length, 0);
+});
+
+test("sauvegarde Drive : entrées d'historique invalides écartées", () => {
+  const bg = loadBackground();
+  const parsed = bg.context.parseDoc(driveDoc({ stock: {}, builtDecks: {}, history: [{ id: "a", at: 1 }, { at: 2 }, "x", null] }));
+  assert.deepEqual(plain(parsed.state.history.map((e) => e.id)), ["a"]);
+});
+
+test("version Drive appliquée : l'historique de ce PC est conservé et reste à envoyer", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  const local = bg.raw().history[0];
+  const remote = bg.context.parseDoc(driveDoc({ stock: {}, builtDecks: {}, history: [{ id: "r1", at: 5, type: "drive-restore" }] }));
+  await bg.context.applyRemote(remote, { version: "7" });
+  assert.deepEqual(bg.raw().history.map((e) => e.id), [local.id, "r1"]);
+  const meta = (await bg.send({ type: "GET_SYNC_STATUS" })).meta;
+  assert.equal(meta.dirty, true, "l'entrée locale doit partir sur Drive");
+  assert.equal(meta.syncedVersion, "7");
+});
+
+test("version Drive appliquée sans rien de nouveau ici : rien à renvoyer", async () => {
+  const bg = loadBackground();
+  const remote = bg.context.parseDoc(driveDoc({ stock: {}, builtDecks: {}, history: [{ id: "r1", at: 5, type: "drive-restore" }] }));
+  await bg.context.applyRemote(remote, { version: "8" });
+  assert.equal((await bg.send({ type: "GET_SYNC_STATUS" })).meta.dirty, false);
+  assert.deepEqual(bg.raw().history.map((e) => e.id), ["r1"]);
+});
+
+test("version de ce PC envoyée sur Drive : l'historique de Drive y est ajouté", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  const remoteDoc = bg.context.parseDoc(driveDoc({ stock: {}, builtDecks: {}, history: [{ id: "r1", at: 5, type: "drive-restore" }] }));
+  await bg.context.mergeRemoteHistory(remoteDoc);
+  assert.equal(bg.raw().history.length, 2);
+  assert.ok(bg.raw().history.some((e) => e.id === "r1"));
+  assert.ok(bg.raw().builtDecks.a, "le reste de l'état de ce PC est inchangé");
 });

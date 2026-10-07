@@ -430,6 +430,24 @@ button:focus-visible,
   margin: 0;
 }
 
+/* Historique : date au-dessus du libellé, détail dépliable en dessous. */
+.list .history-entry {
+  align-items: flex-start;
+}
+
+.history-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.history-text ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+
 /* --- Synchronisation --- */
 
 .account {

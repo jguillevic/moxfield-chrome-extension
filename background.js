@@ -6,10 +6,13 @@
 //                   pageChanges?: [{name, from, to}], pageCheckedAt?: number } }
 //     pageChanges : différences constatées sur la page Moxfield du deck par
 //     rapport au montage (absent = aucune, ou jamais constaté).
+//   history     : [entrée] — historique des changements, le plus récent en
+//                 premier (cf. history.js). Synchronisé avec le reste.
 
 // Modules partagés (chargés tels quels, cf. leur en-tête) :
-// createDeckChecks, createMoxfieldCollection, computeCollectionDiff.
-importScripts("deck-checks.js", "moxfield-collection.js");
+// createDeckChecks, createMoxfieldCollection, computeCollectionDiff,
+// createHistory.
+importScripts("deck-checks.js", "moxfield-collection.js", "history.js");
 
 const STORAGE_KEY = "moxfieldStockManagerState";
 
@@ -17,7 +20,7 @@ function normalizeName(name) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-// Seuls stock et builtDecks sont conservés : une ancienne version stockait
+// Seuls stock, builtDecks et history sont conservés : une ancienne version stockait
 // aussi les réglages de synchro automatique (settings, lastAutoSync...),
 // fonctionnalité retirée car jamais fonctionnelle — ces clés sont ignorées
 // ici et disparaissent à la prochaine écriture de l'état.
@@ -27,6 +30,7 @@ async function getState() {
   return {
     stock: state.stock || {},
     builtDecks: state.builtDecks || {},
+    history: Array.isArray(state.history) ? state.history : [],
   };
 }
 
@@ -40,6 +44,26 @@ async function setState(state) {
 
 async function writeState(state) {
   await chrome.storage.local.set({ [STORAGE_KEY]: state });
+}
+
+// --- Historique ---
+// Chaque action qui change le stock ou les decks montés y est notée, avec
+// le PC d'origine : Chrome ne donne pas le nom de l'ordinateur, chaque PC
+// tire donc un identifiant au hasard, propre à ce PC (non synchronisé).
+const DEVICE_KEY = "moxfieldStockManagerDevice";
+const historyLog = createHistory(normalizeName);
+
+async function getDeviceId() {
+  const data = await chrome.storage.local.get(DEVICE_KEY);
+  if (data[DEVICE_KEY]) return data[DEVICE_KEY];
+  const id = historyLog.newId();
+  await chrome.storage.local.set({ [DEVICE_KEY]: id });
+  return id;
+}
+
+async function recordHistory(state, entry) {
+  const full = { id: historyLog.newId(), at: Date.now(), device: await getDeviceId(), ...entry };
+  state.history = historyLog.addEntry(state.history, full);
 }
 
 // --- Parsing CSV export Moxfield ---
@@ -122,7 +146,9 @@ function collectionFromState(state) {
 async function handleImportCSV(csvText) {
   const parsed = parseCollectionCSV(csvText);
   const state = await getState();
+  const changes = computeCollectionDiff(collectionFromState(state), parsed);
   state.stock = stockFromCollection(parsed, state.builtDecks);
+  if (changes.length > 0) await recordHistory(state, { type: "collection", source: "csv", changes });
   await setState(state);
   const totalQty = Object.values(parsed).reduce((sum, c) => sum + c.qty, 0);
   return { ok: true, cardCount: Object.keys(parsed).length, totalQty };
@@ -139,18 +165,30 @@ function moveCardsInStock(stock, cards, sign) {
   }
 }
 
+// Montage / démontage, notés dans l'historique.
+async function buildDeck(state, { deckId, deckName, url, cards }) {
+  const builtAt = Date.now();
+  moveCardsInStock(state.stock, cards, -1);
+  state.builtDecks[deckId] = { name: deckName, url, cards, builtAt };
+  await recordHistory(state, { type: "deck-built", deckId, deckName, url, builtAt, cardCount: historyLog.cardCount(cards) });
+}
+
+async function unbuildDeck(state, deckId) {
+  const deck = state.builtDecks[deckId];
+  moveCardsInStock(state.stock, deck.cards, +1);
+  delete state.builtDecks[deckId];
+  await recordHistory(state, { type: "deck-unbuilt", deckId, deckName: deck.name, url: deck.url, cards: deck.cards });
+}
+
 async function handleToggleDeck({ deckId, deckName, url, cards, built }) {
   const state = await getState();
 
   if (built) {
     if (state.builtDecks[deckId]) return { ok: true, alreadyBuilt: true };
-    moveCardsInStock(state.stock, cards, -1);
-    state.builtDecks[deckId] = { name: deckName, url, cards, builtAt: Date.now() };
+    await buildDeck(state, { deckId, deckName, url, cards });
   } else {
-    const deck = state.builtDecks[deckId];
-    if (!deck) return { ok: true, wasNotBuilt: true };
-    moveCardsInStock(state.stock, deck.cards, +1);
-    delete state.builtDecks[deckId];
+    if (!state.builtDecks[deckId]) return { ok: true, wasNotBuilt: true };
+    await unbuildDeck(state, deckId);
   }
 
   await setState(state);
@@ -160,16 +198,29 @@ async function handleToggleDeck({ deckId, deckName, url, cards, built }) {
 // Deck monté dont la liste a changé sur Moxfield : équivaut à le démonter
 // puis le remonter avec la nouvelle liste, en une seule écriture — seules
 // les cartes modifiées voient donc leur stock bouger.
-async function handleUpdateBuiltDeck({ deckId, deckName, url, cards }) {
-  const state = await getState();
+async function updateDeck(state, { deckId, deckName, url, cards }) {
   const deck = state.builtDecks[deckId];
-  if (!deck) throw new Error("Ce deck n'est plus marqué comme monté.");
   moveCardsInStock(state.stock, deck.cards, +1);
   moveCardsInStock(state.stock, cards, -1);
   const updated = { ...deck, name: deckName, url, cards, updatedAt: Date.now() };
   delete updated.pageChanges; // le montage correspond de nouveau à la page
   delete updated.pageCheckedAt;
   state.builtDecks[deckId] = updated;
+  await recordHistory(state, {
+    type: "deck-updated",
+    deckId,
+    deckName,
+    url,
+    changes: historyLog.cardsDiff(deck.cards, cards),
+    previousCards: deck.cards,
+    updatedAt: updated.updatedAt,
+  });
+}
+
+async function handleUpdateBuiltDeck({ deckId, deckName, url, cards }) {
+  const state = await getState();
+  if (!state.builtDecks[deckId]) throw new Error("Ce deck n'est plus marqué comme monté.");
+  await updateDeck(state, { deckId, deckName, url, cards });
   await setState(state);
   return { ok: true };
 }
@@ -288,7 +339,11 @@ function parseDoc(doc) {
       throw new Error("Sauvegarde corrompue : deck monté invalide.");
     }
   }
-  return { state: { stock, builtDecks }, updatedAt: doc.updatedAt || Date.parse(doc.exportedAt) || 0 };
+  // Historique absent des sauvegardes d'avant sa création ; entrées
+  // invalides écartées plutôt que de refuser toute la sauvegarde.
+  const rawHistory = Array.isArray(doc.state.history) ? doc.state.history : [];
+  const history = rawHistory.filter((e) => isPlainObject(e) && typeof e.id === "string" && Number.isFinite(e.at));
+  return { state: { stock, builtDecks, history }, updatedAt: doc.updatedAt || Date.parse(doc.exportedAt) || 0 };
 }
 
 async function getAuthToken(interactive) {
@@ -380,9 +435,27 @@ async function createSnapshot(doc, reason) {
   }
 }
 
+// L'historique local est fusionné à celui de Drive : une action faite sur ce
+// PC reste dans l'historique même quand la version de Drive l'emporte. S'il
+// apporte des entrées que Drive n'a pas, l'état reste à envoyer.
 async function applyRemote(parsed, remoteFile) {
-  await writeState(parsed.state);
-  await updateSyncMeta({ syncedVersion: remoteFile.version, dirty: false, localUpdatedAt: parsed.updatedAt });
+  const local = await getState();
+  const history = historyLog.mergeHistories(parsed.state.history, local.history);
+  const remoteIds = new Set(parsed.state.history.map((e) => e.id));
+  const extra = history.some((e) => !remoteIds.has(e.id));
+  await writeState({ ...parsed.state, history });
+  await updateSyncMeta({
+    syncedVersion: remoteFile.version,
+    dirty: extra,
+    localUpdatedAt: extra ? Date.now() : parsed.updatedAt,
+  });
+}
+
+// Inverse, quand la version de ce PC l'emporte sur celle de Drive.
+async function mergeRemoteHistory(remoteDoc) {
+  const state = await getState();
+  state.history = historyLog.mergeHistories(state.history, remoteDoc.state.history);
+  await writeState(state);
 }
 
 // Une modification locale peut arriver pendant l'envoi : on ne repasse
@@ -443,6 +516,7 @@ async function runSync() {
         await applyRemote(remoteDoc, remote);
       } else {
         await createSnapshot(makeDoc(remoteDoc.state, remoteDoc.updatedAt), "conflict");
+        await mergeRemoteHistory(remoteDoc);
         await pushLocal(remote.id);
       }
     }
@@ -558,13 +632,33 @@ async function handleDriveListSnapshots() {
 // et donc propagée aux autres PC.
 async function handleDriveRestoreSnapshot({ fileId }) {
   const { state } = await downloadDoc(fileId);
+  // L'historique récent est gardé : la version restaurée ne le remplace pas.
+  state.history = historyLog.mergeHistories(state.history, (await getState()).history);
+  await recordHistory(state, { type: "drive-restore" });
   await setState(state);
   return { ok: true, cardCount: Object.keys(state.stock).length, deckCount: Object.keys(state.builtDecks).length };
 }
 
 async function handleResetStock() {
-  await setState({ stock: {}, builtDecks: {} });
+  const { builtDecks, history } = await getState();
+  const state = { stock: {}, builtDecks: {}, history };
+  await recordHistory(state, { type: "reset", builtDecks });
+  await setState(state);
   return { ok: true };
+}
+
+// Historique pour le popup, avec les libellés calculés ici.
+async function handleGetHistory() {
+  const state = await getState();
+  const device = await getDeviceId();
+  const entries = state.history.map((e) => ({
+    id: e.id,
+    at: e.at,
+    otherDevice: e.device !== device,
+    title: historyLog.describe(e),
+    changes: e.changes || null,
+  }));
+  return { ok: true, entries };
 }
 
 // --- Récupération automatique de la collection Moxfield ---
@@ -637,6 +731,7 @@ async function fetchCollection() {
     const patch = { lastSuccessAt: Date.now(), lastError: null };
     if (changes.length > 0) {
       state.stock = stockFromCollection(collection, state.builtDecks);
+      await recordHistory(state, { type: "collection", source: "fetch", changes });
       await setState(state);
       Object.assign(patch, { lastChanges: changes, lastChangesAt: Date.now() });
     }
@@ -737,8 +832,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
       switch (msg.type) {
-        case "GET_STATE":
-          sendResponse({ ok: true, state: await getState() });
+        case "GET_STATE": {
+          // Sans l'historique : la page d'un deck lit l'état toutes les
+          // quelques secondes, l'historique est demandé à part.
+          const { stock, builtDecks } = await getState();
+          sendResponse({ ok: true, state: { stock, builtDecks } });
+          break;
+        }
+        case "GET_HISTORY":
+          sendResponse(await handleGetHistory());
           break;
         case "IMPORT_CSV_TEXT":
           sendResponse(await handleImportCSV(msg.csvText));

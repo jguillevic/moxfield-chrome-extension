@@ -249,6 +249,56 @@ document.getElementById("stock-filter").addEventListener("input", refresh);
 document.getElementById("stock-details").addEventListener("toggle", refresh);
 document.getElementById("stock-only-in-decks").addEventListener("change", refresh);
 
+// --- Historique ---
+// Libellés calculés par le service worker (cf. handleGetHistory). Construit
+// seulement section dépliée, comme le stock.
+function formatChangeLine(c) {
+  const delta = c.to - c.from;
+  return `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${c.name} (${c.from} → ${c.to})`;
+}
+
+async function renderHistory() {
+  if (!document.getElementById("history-details").open) return;
+  const list = document.getElementById("history-list");
+  const { entries } = await send("GET_HISTORY");
+  list.innerHTML = "";
+  if (entries.length === 0) {
+    list.innerHTML = '<p class="hint">Aucune action pour le moment.</p>';
+    return;
+  }
+  for (const e of entries) {
+    const row = document.createElement("div");
+    row.className = "deck-row history-entry";
+    const text = document.createElement("div");
+    text.className = "history-text";
+    const meta = document.createElement("span");
+    meta.className = "hint";
+    meta.textContent = formatDate(e.at) + (e.otherDevice ? " · sur un autre PC" : "");
+    const title = document.createElement("span");
+    title.className = "history-title";
+    title.textContent = e.title;
+    text.append(meta, title);
+    if (e.changes && e.changes.length > 0) {
+      const details = document.createElement("details");
+      details.className = "sub-details";
+      const summary = document.createElement("summary");
+      summary.textContent = "Détail";
+      const ul = document.createElement("ul");
+      for (const c of e.changes) {
+        const li = document.createElement("li");
+        li.textContent = formatChangeLine(c);
+        ul.appendChild(li);
+      }
+      details.append(summary, ul);
+      text.appendChild(details);
+    }
+    row.appendChild(text);
+    list.appendChild(row);
+  }
+}
+
+document.getElementById("history-details").addEventListener("toggle", renderHistory);
+
 // --- Récupération de la collection Moxfield ---
 // Faite par le service worker (toutes les heures, cf. background.js) ; le
 // popup affiche son état et permet de la lancer à la main.
@@ -439,6 +489,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.moxfieldStockManagerState) {
     refresh();
     renderCollection(); // cartes non couvertes
+    renderHistory();
   }
   if (changes.moxfieldStockManagerSync) renderSync();
   if (changes.moxfieldStockManagerCollection) renderCollection();

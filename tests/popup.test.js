@@ -47,6 +47,7 @@ function openPopup(responses) {
     $,
     sent,
     handlers,
+    win,
     close: () => win.close(),
     // Un autre composant (service worker) a écrit dans le stockage.
     storageChanged: (key) => storageListeners.forEach((fn) => fn({ [key]: {} }, "local")),
@@ -225,4 +226,87 @@ test("filtre : cherche dans tout le stock, au-delà des 200 premières", async (
   assert.equal(rows.length, 2);
   assert.match(rows[1].textContent, /Card 0450/);
   assert.equal(p.$("stock-table").querySelector("p.hint"), null);
+});
+
+// --- Section Historique ---
+
+const HISTORY = [
+  {
+    id: "h3",
+    at: new Date(2026, 9, 7, 15, 42).getTime(),
+    otherDevice: false,
+    title: "Deck « Zethi » démonté : 99 cartes rendues au stock",
+    changes: null,
+  },
+  {
+    id: "h2",
+    at: new Date(2026, 9, 7, 14, 0).getTime(),
+    otherDevice: true,
+    title: "Collection Moxfield récupérée : 2 cartes modifiées",
+    changes: [
+      { name: "Lotus Petal", from: 2, to: 3 },
+      { name: "Sol Ring", from: 3, to: 1 },
+    ],
+  },
+  {
+    id: "h1",
+    at: new Date(2026, 9, 6, 9, 0).getTime(),
+    otherDevice: false,
+    title: "Deck « Sidisi » monté : 100 cartes retirées du stock libre",
+    changes: null,
+  },
+];
+
+async function openHistory(p) {
+  const details = p.$("history-details");
+  details.open = true;
+  details.dispatchEvent(new details.ownerDocument.defaultView.Event("toggle"));
+  await settle();
+}
+
+test("historique replié : rien n'est demandé", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_HISTORY: { ok: true, entries: HISTORY } });
+  t.after(p.close);
+  await settle();
+  assert.ok(!p.sent.some((m) => m.type === "GET_HISTORY"));
+});
+
+test("historique : date, autre PC, libellé et détail, sans annulation", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_HISTORY: { ok: true, entries: HISTORY } });
+  t.after(p.close);
+  await settle();
+  await openHistory(p);
+  const rows = p.$("history-list").querySelectorAll(".history-entry");
+  assert.equal(rows.length, 3);
+
+  assert.match(rows[0].textContent, /07\/10\/2026 15:42/);
+  assert.match(rows[0].textContent, /Deck « Zethi » démonté/);
+
+  assert.match(rows[1].textContent, /14:00 · sur un autre PC/);
+  assert.deepEqual(
+    [...rows[1].querySelectorAll("li")].map((li) => li.textContent),
+    ["+1 Lotus Petal (2 → 3)", "−2 Sol Ring (3 → 1)"]
+  );
+  assert.equal(p.$("history-list").querySelectorAll("button").length, 0, "consultation seulement");
+});
+
+test("historique vide", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_HISTORY: { ok: true, entries: [] } });
+  t.after(p.close);
+  await settle();
+  await openHistory(p);
+  assert.equal(p.$("history-list").textContent, "Aucune action pour le moment.");
+});
+
+
+test("historique : mis à jour quand le stock change pendant que le popup est ouvert", async (t) => {
+  let entries = [];
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_HISTORY: () => ({ ok: true, entries }) });
+  t.after(p.close);
+  await settle();
+  await openHistory(p);
+  entries = [HISTORY[1]];
+  p.storageChanged("moxfieldStockManagerState");
+  await settle();
+  assert.match(p.$("history-list").textContent, /Collection Moxfield récupérée/);
 });

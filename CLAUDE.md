@@ -63,6 +63,8 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 - Les cartes de la zone « Considering » ne font pas partie du deck.
 - Les cartes `excludedFromStock` ne sont jamais décomptées ni rendues au
   stock.
+- Toute nouvelle action qui change le stock ou les decks montés est notée
+  dans l'historique (`recordHistory`, cf. `history.js`).
 
 ## Extension Chrome
 

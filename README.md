@@ -184,7 +184,23 @@ contenu du CSV. Même effet qu'une récupération automatique.
   entièrement le stock **et** démonte tous les decks marqués comme montés
   (une confirmation est demandée).
 
-### 4. Synchronisation Google Drive
+### 4. Historique
+
+Dans le popup, section **« Historique »** (repliée par défaut) : chaque
+action qui a changé le stock ou les decks montés, la plus récente en haut,
+avec sa date — et « sur un autre PC » quand elle vient d'un autre PC
+synchronisé (Chrome ne donne pas le nom de l'ordinateur) :
+
+- collection Moxfield récupérée ou CSV importé, quand ils changent le stock
+  (détail carte par carte : `+1 Lotus Petal (2 → 3)`) ;
+- deck monté, démonté, montage mis à jour (détail des cartes modifiées) ;
+- stock réinitialisé, version de l'historique Google Drive restaurée.
+
+L'historique se consulte seulement : il ne permet pas (encore) d'annuler
+une action. Il garde les 200 dernières actions et est synchronisé entre tes PC avec le reste (fusionné
+en cas de conflit : rien ne s'y perd).
+
+### 5. Synchronisation Google Drive
 
 - Dans le popup, section **Synchronisation Google Drive** : clique une fois
   sur **« Connecter Google Drive »** sur chaque PC et autorise l'accès. Ensuite
@@ -287,15 +303,18 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
 - `tests/background.test.js` : gestion du stock par le service worker
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
   CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
-  réinitialisation, récupération de la collection
+  réinitialisation, historique (y compris sa fusion lors de la synchro
+  Drive), récupération de la collection
   (import, alarme horaire, récupération après une modification de la
   collection sur Moxfield, erreurs, cartes non couvertes).
+- `tests/history.test.js` : historique (`history.js`) — ajout, limite de
+  200 entrées, fusion, différences de listes, libellés.
 - `tests/moxfield-collection.test.js` : dialogue avec Moxfield
   (`moxfield-collection.js`, réponses simulées) — appels et jetons, session
   absente ou expirée, refus, réseau coupé, changement de l'API.
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
-  de test avec un faux `chrome`) — section « Collection Moxfield »,
-  affichage du stock (tableau limité, filtre).
+  de test avec un faux `chrome`) — sections « Collection Moxfield » et
+  « Historique », affichage du stock (tableau limité, filtre).
 - `tests/content-deck.test.js` : bouton de la page d'un deck
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock

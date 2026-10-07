@@ -11,7 +11,7 @@ README).
 |---|---|---|---|
 | 1 | **Accepter une autre version** — monter malgré une édition différente, par carte ou pour toute la liste : la carte est décomptée normalement, l'avertissement devient informatif (comme pour les terrains de base). | Faible | Bloque des decks réels (27 cartes sur un deck testé), alors que le stock est suivi par nom : physiquement, on a bien la carte. |
 | 2 | **Faisabilité de tous mes decks** — lister ses decks Moxfield dans le popup avec, pour chacun, monté / montable / nombre de cartes bloquantes, via l'API (session déjà réutilisée pour la collection). Remplace l'idée « faisabilité mémorisée des decks consultés » et la pastille sur les listes de decks. | Moyen | Répond à « que puis-je monter ? » sans ouvrir chaque deck ; réutilise `computeDeckAvailability`. Appels de l'API des decks à capturer d'abord. |
-| 3 | **Journal des mouvements et annulation** — historique (« Deck X monté : −99 cartes », « collection récupérée : +3 ») et bouton pour annuler la dernière action. | Moyen | Une erreur ne se rattrape que via l'historique Drive, quotidien ; le popup ne garde que les derniers changements de collection. |
+| 3 | **Annuler depuis l'historique** — « Remonter » un deck démonté, « Démonter » un deck monté, « Revenir à la liste précédente » après une mise à jour, « Remonter les decks » après une réinitialisation ; mêmes contrôles de stock qu'au montage, une seule fois, et seulement si le deck est resté dans l'état produit. Les actions sur la collection restent non annulables (Moxfield fait référence). | Moyen | Rattraper une erreur sur les decks montés. Les entrées enregistrent déjà les données nécessaires. Écarté de la première version de l'historique. |
 | 4 | **Liste de cartes à sortir / ranger** — cases à cocher triées par couleur, type ou édition, au montage et au démontage. | Moyen | Sert à chaque montage physique. |
 | 5 | **Transfert entre decks** — prendre les cartes manquantes dans un deck monté et marquer celui-ci comme incomplet. | Moyen | Évite d'acheter une carte qui dort dans un autre deck ; la fenêtre indique déjà où elle est. |
 | 6 | **Détection des decks montés modifiés sans les ouvrir** — via l'API des decks, à chaque récupération. | Moyen | Désormais faisable (la session Moxfield est réutilisable en tâche de fond) ; se combine avec le n°2. |
@@ -54,3 +54,5 @@ joue des proxies ou d'autres formats.
   même Moxfield fermé — octobre 2026.
 - Ajustements manuels du stock retirés : la collection Moxfield est la
   seule source de vérité — octobre 2026.
+- Historique des actions (consultation), synchronisé entre les PC —
+  octobre 2026.
