@@ -76,6 +76,8 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 
 ## Documentation
 
+- Idées de fonctionnalités et questions ouvertes : `ROADMAP.md`. Une
+  fonctionnalité livrée passe dans sa section « Livré ».
 - Chaque fonctionnalité visible est décrite dans le README (section
   « Utilisation »), et ses limites dans « Limites connues ».
 - Nouveau fichier de tests : mettre à jour la section « Développement » du
