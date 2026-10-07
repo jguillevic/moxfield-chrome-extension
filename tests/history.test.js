@@ -79,3 +79,40 @@ test("describe : libellé de chaque type d'action", () => {
 });
 
 
+
+// --- Grosses collections : détail limité par entrée ---
+
+const manyChanges = (n) => Array.from({ length: n }, (_, i) => ({ name: `Card ${String(i).padStart(5, "0")}`, from: 0, to: 1 }));
+
+test("compactEntry : au-delà de 200 cartes, détail tronqué et nombre total conservé", () => {
+  const big = { id: "a", at: 1, type: "collection", source: "fetch", changes: manyChanges(30000) };
+  const compact = h.compactEntry(big);
+  assert.equal(h.MAX_CHANGES_PER_ENTRY, 200);
+  assert.equal(compact.changes.length, 200);
+  assert.equal(compact.changes[0].name, "Card 00000");
+  assert.equal(compact.changeCount, 30000);
+  assert.equal(h.changeCount(compact), 30000);
+  assert.equal(big.changes.length, 30000, "entrée d'origine non modifiée");
+});
+
+test("compactEntry : petite entrée, et entrée déjà compactée, inchangées", () => {
+  const small = { id: "a", at: 1, type: "collection", source: "fetch", changes: manyChanges(3) };
+  assert.equal(h.compactEntry(small), small);
+  const once = h.compactEntry({ ...small, changes: manyChanges(500) });
+  assert.deepEqual(h.compactEntry(once), once);
+  assert.equal(h.changeCount(once), 500);
+});
+
+test("describe : nombre total de cartes, pas seulement le détail gardé", () => {
+  const compact = h.compactEntry({ type: "collection", source: "fetch", changes: manyChanges(30000) });
+  assert.equal(h.describe(compact), "Collection Moxfield récupérée : 30000 cartes modifiées");
+});
+
+test("addEntry et mergeHistories : les anciennes grosses entrées sont compactées", () => {
+  const old = { id: "old", at: 1, type: "collection", source: "fetch", changes: manyChanges(5000) };
+  const [, compacted] = h.addEntry([old], entry("new", 2));
+  assert.equal(compacted.changes.length, 200);
+  assert.equal(compacted.changeCount, 5000);
+  const [merged] = h.mergeHistories([old], []);
+  assert.equal(merged.changes.length, 200);
+});

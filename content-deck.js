@@ -100,9 +100,21 @@
     return str.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  async function getStockMap() {
-    const res = await safeSendMessage({ type: "GET_STATE" });
-    return res.ok ? res.state.stock || {} : {};
+  // Stock des seules cartes utiles (cartes demandées, et celles du montage du
+  // deck deckId s'il est monté) et decks montés, null en cas d'échec. Pas
+  // l'état complet : une grosse collection pèse plusieurs Mo, et cette
+  // lecture a lieu toutes les quelques secondes (cf. GET_DECK_CONTEXT dans
+  // background.js). send : safeSendMessage, ou chrome.runtime.sendMessage
+  // pour les contrôles en fond (pas de toast si l'extension a été rechargée).
+  async function getDeckContext(cards, deckId = null, send = safeSendMessage) {
+    const names = cards.map((c) => c.name);
+    const res = await send({ type: "GET_DECK_CONTEXT", payload: { deckId, names } });
+    return res && res.ok ? { stock: res.stock || {}, builtDecks: res.builtDecks || {} } : null;
+  }
+
+  async function getStockMap(cards) {
+    const context = await getDeckContext(cards);
+    return context ? context.stock : {};
   }
 
   // Pour chaque carte (nom normalisé), les decks montés qui la contiennent —
@@ -112,11 +124,11 @@
   // stock, elles ne comptent donc pas comme "prises" par le deck.
   // excludeDeckId : deck à ignorer (celui qu'on met à jour, dont les cartes
   // lui reviennent).
-  async function getStockAndDeckUsage(excludeDeckId = null) {
-    const res = await safeSendMessage({ type: "GET_STATE" });
-    if (!res.ok) return { stockMap: {}, deckUsage: new Map(), builtDecks: {} };
+  async function getStockAndDeckUsage(cards, excludeDeckId = null) {
+    const context = await getDeckContext(cards, excludeDeckId);
+    if (!context) return { stockMap: {}, deckUsage: new Map(), builtDecks: {} };
     const deckUsage = new Map();
-    for (const [deckId, deck] of Object.entries(res.state.builtDecks || {})) {
+    for (const [deckId, deck] of Object.entries(context.builtDecks)) {
       if (deckId === excludeDeckId) continue;
       for (const card of deck.cards || []) {
         if (card.excludedFromStock) continue;
@@ -125,7 +137,7 @@
         deckUsage.get(key).push({ name: deck.name, qty: card.qty });
       }
     }
-    return { stockMap: res.state.stock || {}, deckUsage, builtDecks: res.state.builtDecks || {} };
+    return { stockMap: context.stock, deckUsage, builtDecks: context.builtDecks };
   }
 
   function renderShortageWarning(el, shortages, deckUsage = new Map()) {
@@ -292,12 +304,6 @@
   async function prepareDeckUpdate(overlay, deckId) {
     const changesEl = overlay.querySelector("#msm-deck-changes");
     changesEl.innerHTML = '<p class="msm-card-count">Vérification de la liste…</p>';
-    const { stockMap, deckUsage, builtDecks } = await getStockAndDeckUsage(deckId);
-    const deck = builtDecks[deckId];
-    if (!deck) {
-      changesEl.innerHTML = "";
-      return null;
-    }
     // Juste après un chargement ou une modification, Moxfield peut ne pas
     // avoir fini d'afficher la liste (images construites progressivement en
     // Visual Stacks) : on laisse quelques secondes avant de conclure.
@@ -305,6 +311,12 @@
     for (let waited = 0; !detection.reliable && waited < 3000; waited += 300) {
       await new Promise((resolve) => setTimeout(resolve, 300));
       detection = scrapeDeckListWithCheck();
+    }
+    const { stockMap, deckUsage, builtDecks } = await getStockAndDeckUsage(detection.cards, deckId);
+    const deck = builtDecks[deckId];
+    if (!deck) {
+      changesEl.innerHTML = "";
+      return null;
     }
     const pageCards = completeCardNames(detection.cards, Object.values(stockMap), deck.cards);
     if (!detection.reliable) {
@@ -439,9 +451,8 @@
   }
 
   async function getIsBuilt(deckId) {
-    const res = await safeSendMessage({ type: "GET_STATE" });
-    if (!res.ok) return false;
-    return Boolean(res.state.builtDecks[deckId]);
+    const context = await getDeckContext([], deckId);
+    return Boolean(context && context.builtDecks[deckId]);
   }
 
   // Dernier état connu du deck (monté ou non), gardé pour pouvoir redessiner
@@ -528,10 +539,10 @@
       unreliableSince = 0;
       // Pas safeSendMessage : après un rechargement de l'extension, ce
       // contrôle en fond afficherait son toast toutes les 3 secondes.
-      const res = await chrome.runtime.sendMessage({ type: "GET_STATE" });
-      if (!res || !res.ok || deckId !== currentDeckId) return;
-      const stockMap = res.state.stock || {};
-      const deck = res.state.builtDecks[deckId];
+      const context = await getDeckContext(detection.cards, deckId, (m) => chrome.runtime.sendMessage(m));
+      if (!context || deckId !== currentDeckId) return;
+      const stockMap = context.stock;
+      const deck = context.builtDecks[deckId];
       if (deck) {
         const scraped = completeCardNames(detection.cards, Object.values(stockMap), deck.cards);
         const changes = computeDeckDiff(deck.cards, scraped);
@@ -737,7 +748,7 @@
         const basicCards = cards.filter((c) => isBasicLand(c.name));
         const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
         // Une seule lecture de l'état, réutilisée pour toutes les zones.
-        const { stockMap, deckUsage } = await getStockAndDeckUsage();
+        const { stockMap, deckUsage } = await getStockAndDeckUsage(cards);
         // Même total que la pastille du bouton (cf. computeDeckAvailability).
         const summary = blockingSummary(computeDeckAvailability(cards, stockMap, lastWrongEditionNames));
         blockingSummaryEl.hidden = !summary;
@@ -752,7 +763,8 @@
       };
 
       // Scraping DOM de la page (méthode adaptée à la vue active).
-      const guessed = completeCardNames(scrapeCardsGuess(), Object.values(await getStockMap()));
+      const scrapedCards = scrapeCardsGuess();
+      const guessed = completeCardNames(scrapedCards, Object.values(await getStockMap(scrapedCards)));
       if (guessed.length > 0) {
         textarea.value = cardsToText(guessed);
         lastWrongEditionNames = buildWrongEditionSet(guessed);
@@ -781,7 +793,7 @@
         try {
           // Revérifié au clic : le stock a pu changer entre-temps (synchro
           // Drive, autre onglet).
-          const { stockMap, builtDecks } = await getStockAndDeckUsage(deckId);
+          const { stockMap, builtDecks } = await getStockAndDeckUsage(updatedCards, deckId);
           const deck = builtDecks[deckId];
           if (!deck) throw new Error("Ce deck n'est plus marqué comme monté.");
           if (evaluateDeckUpdate(computeDeckDiff(deck.cards, updatedCards), deck, stockMap, lastWrongEditionNames).blocked) {
@@ -819,7 +831,7 @@
           // insuffisant (zone 2) — sauf pour les terrains de base, jamais
           // bloquants (cf. isBasicLand). Recalculées ici au cas où le texte
           // a été modifié depuis le dernier passage de updateWarnings.
-          const stockMap = await getStockMap();
+          const stockMap = await getStockMap(cards);
           const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
           const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
           if (wrongEdition.length > 0) {

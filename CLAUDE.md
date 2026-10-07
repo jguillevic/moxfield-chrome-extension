@@ -70,6 +70,11 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 
 - Chaque écriture de l'état part sur Google Drive : n'écrire que si
   quelque chose change.
+- Penser aux grosses collections (référence : 50 000 lignes de CSV, 30 000
+  noms, ≈ 3 Mo d'état) : ne pas faire circuler l'état complet quand une
+  partie suffit (la page d'un deck passe par `GET_DECK_CONTEXT`, jamais
+  `GET_STATE`), et borner tout ce qui s'accumule (historique : 200 entrées,
+  200 cartes de détail par entrée).
 - Après un rechargement de l'extension, l'ancien content script reste actif
   mais déconnecté (« Extension context invalidated ») : intercepter
   l'erreur. Actions de l'utilisateur via `safeSendMessage` (toast

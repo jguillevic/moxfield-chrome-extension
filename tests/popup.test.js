@@ -310,3 +310,13 @@ test("historique : mis à jour quand le stock change pendant que le popup est ou
   await settle();
   assert.match(p.$("history-list").textContent, /Collection Moxfield récupérée/);
 });
+
+test("historique : détail tronqué signalé", async (t) => {
+  const entry = { ...HISTORY[1], changes: HISTORY[1].changes, changeCount: 30000 };
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_HISTORY: { ok: true, entries: [entry] } });
+  t.after(p.close);
+  await settle();
+  await openHistory(p);
+  const items = [...p.$("history-list").querySelectorAll("li")].map((li) => li.textContent);
+  assert.deepEqual(items, ["+1 Lotus Petal (2 → 3)", "−2 Sol Ring (3 → 1)", "… et 29998 autre(s)"]);
+});

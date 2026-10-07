@@ -647,6 +647,25 @@ async function handleResetStock() {
   return { ok: true };
 }
 
+// Stock des seules cartes utiles à une page de deck (cartes de la page et,
+// pour un deck monté, celles du montage), avec les decks montés. Une grosse
+// collection pèse plusieurs Mo (30 000 noms ≈ 3 Mo) : la page la consulte
+// toutes les quelques secondes, elle ne doit pas la recevoir en entier. Une
+// carte double face n'est parfois connue de la page que par sa face avant
+// (vue Text) : les entrées dont la face avant correspond sont jointes (cf.
+// completeCardNames dans deck-scraper.js).
+async function handleGetDeckContext({ deckId, names }) {
+  const state = await getState();
+  const wanted = new Set((names || []).map(normalizeName));
+  const deck = deckId ? state.builtDecks[deckId] : null;
+  if (deck) for (const c of deck.cards) wanted.add(normalizeName(c.name));
+  const stock = {};
+  for (const [key, c] of Object.entries(state.stock)) {
+    if (wanted.has(key) || (key.includes(" // ") && wanted.has(key.split(" // ")[0]))) stock[key] = c;
+  }
+  return { ok: true, stock, builtDecks: state.builtDecks };
+}
+
 // Historique pour le popup, avec les libellés calculés ici.
 async function handleGetHistory() {
   const state = await getState();
@@ -657,6 +676,7 @@ async function handleGetHistory() {
     otherDevice: e.device !== device,
     title: historyLog.describe(e),
     changes: e.changes || null,
+    changeCount: e.changes ? historyLog.changeCount(e) : null,
   }));
   return { ok: true, entries };
 }
@@ -839,6 +859,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, state: { stock, builtDecks } });
           break;
         }
+        case "GET_DECK_CONTEXT":
+          sendResponse(await handleGetDeckContext(msg.payload || {}));
+          break;
         case "GET_HISTORY":
           sendResponse(await handleGetHistory());
           break;

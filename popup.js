@@ -289,6 +289,12 @@ async function renderHistory() {
         li.textContent = formatChangeLine(c);
         ul.appendChild(li);
       }
+      // Détail tronqué à l'enregistrement (cf. compactEntry dans history.js).
+      if (e.changeCount > e.changes.length) {
+        const more = document.createElement("li");
+        more.textContent = `… et ${e.changeCount - e.changes.length} autre(s)`;
+        ul.appendChild(more);
+      }
       details.append(summary, ul);
       text.appendChild(details);
     }

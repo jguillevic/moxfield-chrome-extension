@@ -41,6 +41,9 @@ joue des proxies ou d'autres formats.
 - **Suppression d'une carte de la collection** : non vérifiée en réel —
   déclenche-t-elle la récupération 30 s après (comme l'ajout et la
   modification) ? Sinon, capturer l'appel et l'ajouter à la détection.
+- **Synchro Drive des grosses collections** : chaque modification renvoie
+  tout l'état (quelques Mo à 50 000 cartes). Compresser le fichier (gzip,
+  intégré au navigateur) ou séparer l'historique, après mesure.
 - **Tests manquants** : la synchro Google Drive, le popup (hors section
   « Collection Moxfield »), la fenêtre de montage et l'intégration à la
   barre d'actions Moxfield n'ont pas de tests automatisés.
@@ -56,3 +59,6 @@ joue des proxies ou d'autres formats.
   seule source de vérité — octobre 2026.
 - Historique des actions (consultation), synchronisé entre les PC —
   octobre 2026.
+- Tenue aux grosses collections (50 000 cartes) : stockage illimité,
+  détail de l'historique borné, page de deck limitée au stock de ses
+  cartes — octobre 2026.

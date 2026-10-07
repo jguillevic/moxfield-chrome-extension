@@ -56,11 +56,28 @@ function openDeckPage(state) {
     },
     button: () => win.document.querySelector(".msm-floating-btn, .msm-bar-btn"),
     close: () => win.close(),
+    sent: [],
   };
+  // Comme le service worker (GET_DECK_CONTEXT) : seulement le stock des
+  // cartes demandées (face avant d'une double face comprise) et de celles
+  // du montage, pour que la page soit testée avec ce qu'elle reçoit vraiment.
+  function deckContext({ deckId, names }) {
+    const wanted = new Set(names.map((n) => n.toLowerCase()));
+    const deck = deckId && page.state.builtDecks[deckId];
+    if (deck) deck.cards.forEach((c) => wanted.add(c.name.toLowerCase()));
+    const stock = {};
+    for (const [key, c] of Object.entries(page.state.stock)) {
+      if (wanted.has(key) || wanted.has(key.split(" // ")[0])) stock[key] = c;
+    }
+    return { ok: true, stock, builtDecks: page.state.builtDecks };
+  }
   win.chrome = {
     runtime: {
-      sendMessage: async (msg) =>
-        msg.type === "GET_STATE" ? JSON.parse(JSON.stringify({ ok: true, state: page.state })) : { ok: true },
+      sendMessage: async (msg) => {
+        page.sent.push(JSON.parse(JSON.stringify(msg)));
+        if (msg.type === "GET_DECK_CONTEXT") return JSON.parse(JSON.stringify(deckContext(msg.payload)));
+        return { ok: true };
+      },
       getURL: (p) => `chrome-extension://test/${p}`,
     },
     storage: { onChanged: { addListener: (fn) => storageListeners.push(fn) } },
@@ -140,4 +157,17 @@ test("liste brièvement incohérente : la faisabilité reste affichée", async (
   copy.remove();
   await new Promise((resolve) => setTimeout(resolve, 800));
   assert.match(buttonText(page), /3\/4 dispo/);
+});
+
+test("la page ne demande que le stock des cartes du deck, jamais l'état complet", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
+  assert.ok(!page.sent.some((m) => m.type === "GET_STATE"), "état complet demandé");
+  const request = page.sent.filter((m) => m.type === "GET_DECK_CONTEXT").pop();
+  assert.deepEqual(
+    [...request.payload.names].sort(),
+    ["Birds of Paradise", "Golgari Thug", "Revitalizing Repast", "Sidisi, Brood Tyrant", "Swamp"]
+  );
+  assert.equal(request.payload.deckId, "abc123");
 });

@@ -5,10 +5,11 @@
 // la liste des entrées (state.history, la plus récente en premier).
 //
 // Entrées : { id, at, device, type, ...détail } —
-//   collection     { source: "fetch" | "csv", changes: [{name, from, to}] }
+//   collection     { source: "fetch" | "csv", changes: [{name, from, to}], changeCount? }
 //   deck-built     { deckId, deckName, url, builtAt, cardCount }
 //   deck-unbuilt   { deckId, deckName, url, cards }
-//   deck-updated   { deckId, deckName, url, changes, previousCards, updatedAt }
+//   deck-updated   { deckId, deckName, url, changes, changeCount?, previousCards, updatedAt }
+// changeCount : nombre total quand le détail est tronqué (cf. compactEntry).
 //   reset          { builtDecks }
 //   drive-restore  {}
 // Pour l'instant, l'historique se consulte seulement. Les entrées gardent
@@ -24,8 +25,30 @@ function createHistory(normalizeName) {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  // Détail gardé par entrée : le premier import d'une grosse collection
+  // change des dizaines de milliers de cartes (≈ 2 Mo pour 30 000 noms), ce
+  // qui finirait par saturer le stockage de Chrome et alourdirait chaque
+  // envoi sur Drive. Au-delà, seul le nombre total est conservé.
+  const MAX_CHANGES_PER_ENTRY = 200;
+
+  function compactEntry(entry) {
+    if (!Array.isArray(entry.changes) || entry.changes.length <= MAX_CHANGES_PER_ENTRY) return entry;
+    return {
+      ...entry,
+      changes: entry.changes.slice(0, MAX_CHANGES_PER_ENTRY),
+      changeCount: entry.changeCount || entry.changes.length,
+    };
+  }
+
+  // Nombre total de cartes modifiées, détail tronqué compris.
+  function changeCount(entry) {
+    return entry.changeCount || entry.changes.length;
+  }
+
+  // Les entrées déjà enregistrées sont compactées au passage (historiques
+  // d'avant la limite).
   function addEntry(history, entry) {
-    return [entry, ...(history || [])].slice(0, MAX_ENTRIES);
+    return [entry, ...(history || [])].slice(0, MAX_ENTRIES).map(compactEntry);
   }
 
   // Union de deux historiques (synchro Drive : rien ne doit se perdre, même
@@ -35,7 +58,7 @@ function createHistory(normalizeName) {
     for (const e of [...(a || []), ...(b || [])]) {
       if (!byId.has(e.id)) byId.set(e.id, e);
     }
-    return [...byId.values()].sort((x, y) => y.at - x.at).slice(0, MAX_ENTRIES);
+    return [...byId.values()].sort((x, y) => y.at - x.at).slice(0, MAX_ENTRIES).map(compactEntry);
   }
 
   // Différences de quantités entre deux listes de cartes, par nom (cumulées
@@ -74,7 +97,7 @@ function createHistory(normalizeName) {
     switch (entry.type) {
       case "collection": {
         const source = entry.source === "csv" ? "Import CSV" : "Collection Moxfield récupérée";
-        return `${source} : ${plural(entry.changes.length, "carte")} modifiée${s(entry.changes.length)}`;
+        return `${source} : ${plural(changeCount(entry), "carte")} modifiée${s(changeCount(entry))}`;
       }
       case "deck-built":
         return `Deck « ${entry.deckName} » monté : ${plural(entry.cardCount, "carte")} retirée${s(entry.cardCount)} du stock libre`;
@@ -83,7 +106,7 @@ function createHistory(normalizeName) {
         return `Deck « ${entry.deckName} » démonté : ${plural(n, "carte")} rendue${s(n)} au stock`;
       }
       case "deck-updated":
-        return `Montage de « ${entry.deckName} » mis à jour : ${plural(entry.changes.length, "carte")} modifiée${s(entry.changes.length)}`;
+        return `Montage de « ${entry.deckName} » mis à jour : ${plural(changeCount(entry), "carte")} modifiée${s(changeCount(entry))}`;
       case "reset": {
         const n = Object.keys(entry.builtDecks).length;
         return `Stock réinitialisé (${plural(n, "deck")} démonté${s(n)})`;
@@ -95,7 +118,7 @@ function createHistory(normalizeName) {
     }
   }
 
-  return { MAX_ENTRIES, newId, addEntry, mergeHistories, cardsDiff, cardCount, describe };
+  return { MAX_ENTRIES, MAX_CHANGES_PER_ENTRY, newId, addEntry, mergeHistories, compactEntry, changeCount, cardsDiff, cardCount, describe };
 }
 
 if (typeof module !== "undefined") module.exports = { createHistory };

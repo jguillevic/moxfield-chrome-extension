@@ -228,7 +228,8 @@ avec sa date — et « sur un autre PC » quand elle vient d'un autre PC
 synchronisé (Chrome ne donne pas le nom de l'ordinateur) :
 
 - collection Moxfield récupérée ou CSV importé, quand ils changent le stock
-  (détail carte par carte : `+1 Lotus Petal (2 → 3)`) ;
+  (détail carte par carte : `+1 Lotus Petal (2 → 3)`, limité aux 200
+  premières cartes — au-delà, seul le nombre total est indiqué) ;
 - deck monté, démonté, montage mis à jour (détail des cartes modifiées) ;
 - stock réinitialisé, version de l'historique Google Drive restaurée.
 
@@ -296,6 +297,13 @@ en cas de conflit : rien ne s'y perd).
   avec un message dans le popup, et l'import manuel du CSV reste
   disponible. Elle nécessite d'être connecté à Moxfield dans ce profil
   Chrome.
+- Grosses collections : l'extension a été vérifiée avec une collection de
+  50 000 lignes (30 000 cartes différentes) — import en moins d'une seconde,
+  état stocké d'environ 3 Mo (permission `unlimitedStorage` : pas de
+  plafond de 10 Mo), détail de l'historique limité à 200 cartes par action,
+  et la page d'un deck ne reçoit que le stock de ses propres cartes. Chaque
+  modification renvoie en revanche tout l'état sur Google Drive (quelques Mo
+  avec une telle collection).
 - Les données sont stockées localement dans le navigateur
   (`chrome.storage.local`) ; sans la synchro Google Drive, rien ne se
   partage entre appareils.
@@ -341,11 +349,13 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
   CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
   réinitialisation, historique (y compris sa fusion lors de la synchro
-  Drive), récupération de la collection
+  Drive), récupération de la collection, stock envoyé à la page d'un deck,
+  collection de 50 000 cartes
   (import, alarme horaire, récupération après une modification de la
   collection sur Moxfield, erreurs, cartes non couvertes).
 - `tests/history.test.js` : historique (`history.js`) — ajout, limite de
-  200 entrées, fusion, différences de listes, libellés.
+  200 entrées, détail limité à 200 cartes par entrée, fusion, différences
+  de listes, libellés.
 - `tests/moxfield-collection.test.js` : dialogue avec Moxfield
   (`moxfield-collection.js`, réponses simulées) — appels et jetons, session
   absente ou expirée, refus, réseau coupé, changement de l'API.

@@ -662,3 +662,68 @@ test("version de ce PC envoyée sur Drive : l'historique de Drive y est ajouté"
   assert.ok(bg.raw().history.some((e) => e.id === "r1"));
   assert.ok(bg.raw().builtDecks.a, "le reste de l'état de ce PC est inchangé");
 });
+
+// --- Grosses collections ---
+
+test("permission de stockage illimité (une grosse collection dépasse 10 Mo avec ses données)", () => {
+  const manifest = JSON.parse(read("manifest.json"));
+  assert.ok(manifest.permissions.includes("unlimitedStorage"));
+});
+
+test("page de deck : seulement le stock de ses cartes et de son montage, decks montés compris", async () => {
+  const bg = loadBackground({
+    stock: {
+      "sol ring": { name: "Sol Ring", qty: 1 },
+      "revitalizing repast // old-growth grove": { name: "Revitalizing Repast // Old-Growth Grove", qty: 1 },
+      counterspell: { name: "Counterspell", qty: 2 },
+      "rhystic study": { name: "Rhystic Study", qty: 1 },
+      island: { name: "Island", qty: 10 },
+    },
+    builtDecks: {},
+  });
+  await build(bg, "a", [{ name: "Counterspell", qty: 1 }]);
+  const res = await bg.send({
+    type: "GET_DECK_CONTEXT",
+    // Face avant seule (vue Text), et casse différente.
+    payload: { deckId: "a", names: ["SOL RING", "Revitalizing Repast", "Inconnue"] },
+  });
+  assert.equal(res.ok, true);
+  assert.deepEqual(Object.keys(res.stock).sort(), ["counterspell", "revitalizing repast // old-growth grove", "sol ring"]);
+  assert.deepEqual(Object.keys(res.builtDecks), ["a"]);
+});
+
+test("page de deck : sans deck ni carte, aucun stock envoyé", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  const res = await bg.send({ type: "GET_DECK_CONTEXT", payload: { deckId: "inconnu", names: [] } });
+  assert.deepEqual(res, { ok: true, stock: {}, builtDecks: {} });
+});
+
+test("collection de 50 000 cartes : import, historique et page de deck restent légers", async () => {
+  const rows = [];
+  for (let i = 0; i < 50000; i++) rows.push(`${1 + (i % 3)},0,"Card Name Number ${i % 30000} of the Multiverse",sld,,,,,,,,,`);
+  const bg = loadBackground();
+  const start = Date.now();
+  const res = await bg.send({ type: "IMPORT_CSV_TEXT", csvText: csv(...rows) });
+  assert.equal(res.cardCount, 30000);
+  assert.ok(Date.now() - start < 5000, `import en ${Date.now() - start} ms`);
+
+  const deckCards = Array.from({ length: 99 }, (_, i) => ({ name: `Card Name Number ${i} of the Multiverse`, qty: 1 }));
+  await build(bg, "a", deckCards);
+
+  // Historique : le premier import (30 000 cartes) ne garde que 200 lignes de détail.
+  const stored = bg.raw();
+  const importEntry = stored.history.find((e) => e.type === "collection");
+  assert.equal(importEntry.changes.length, 200);
+  assert.equal(importEntry.changeCount, 30000);
+  const historySize = JSON.stringify(stored.history).length;
+  assert.ok(historySize < 100 * 1024, `historique : ${historySize} octets`);
+  const [listed] = (await historyOf(bg)).filter((e) => e.title.startsWith("Import CSV"));
+  assert.equal(listed.title, "Import CSV : 30000 cartes modifiées");
+  assert.equal(listed.changeCount, 30000);
+
+  // Page de deck : le stock de ses 99 cartes, pas les 30 000.
+  const context = await bg.send({ type: "GET_DECK_CONTEXT", payload: { deckId: "a", names: deckCards.map((c) => c.name) } });
+  assert.equal(Object.keys(context.stock).length, 99);
+  const contextSize = JSON.stringify(context).length;
+  assert.ok(contextSize < 50 * 1024, `réponse à la page : ${contextSize} octets`);
+});
