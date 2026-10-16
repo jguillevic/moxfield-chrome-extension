@@ -14,6 +14,10 @@ const ROOT = path.join(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
 const STORAGE_KEY = "moxfieldStockManagerState";
 const COLLECTION_KEY = "moxfieldStockManagerCollection";
+const SYNC_KEY = "moxfieldStockManagerSync";
+const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+const CHROME = { userAgent: UA, userAgentData: { brands: [{ brand: "Google Chrome", version: "141" }], platform: "Windows" } };
+const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", version: "141" }], platform: "Linux" }, brave: {} };
 
 // options.moxfieldCSV : collection renvoyée par le faux Moxfield (CSV), ou
 // une Error à lever ; sans elle, tout appel réseau fait échouer le test.
@@ -23,6 +27,10 @@ const COLLECTION_KEY = "moxfieldStockManagerCollection";
 // rapports reçus par le faux Sentry sont dans sentry (événements).
 // options.authError : erreur levée par chrome.identity.getAuthToken
 // (ex. Brave, qui ne l'implémente pas).
+// options.navigator : navigateur (Google Chrome par défaut ; cf. BRAVE).
+// options.webAuth : fausse fenêtre de connexion Google, (details) => URL de
+// redirection ; par défaut un jeton pour le compte google.email.
+// Sans options.drive, un Drive vide (aucun fichier) accepte tous les envois.
 function loadBackground(initialState, options = {}) {
   const storage = {};
   if (initialState) storage[STORAGE_KEY] = initialState;
@@ -34,6 +42,10 @@ function loadBackground(initialState, options = {}) {
   const webRequestListeners = [];
   const counts = { stateWrites: 0, fetches: 0 };
   const sentry = [];
+  const session = {};
+  // Compte Google du profil Chrome et de la fenêtre de connexion ;
+  // modifiable en cours de test (changement de compte).
+  const google = { email: "moi@gmail.com", profileId: "118294207213255860701", launches: [], driveCalls: [] };
   const listener = (list = []) => ({ addListener: (fn) => list.push(fn) });
   const chrome = {
     storage: {
@@ -48,12 +60,18 @@ function loadBackground(initialState, options = {}) {
           }
         },
       },
+      session: {
+        get: async (key) => (key in session ? { [key]: clone(session[key]) } : {}),
+        set: async (items) => Object.assign(session, clone(items)),
+        remove: async (key) => delete session[key],
+      },
     },
     runtime: {
       onMessage: { addListener: (fn) => (onMessage = fn) },
       onStartup: listener(startupListeners),
       onInstalled: listener(),
       getManifest: () => ({ version: "0.2.0" }),
+      getPlatformInfo: async () => ({ os: "win" }),
     },
     alarms: {
       onAlarm: listener(alarmListeners),
@@ -72,12 +90,27 @@ function loadBackground(initialState, options = {}) {
         return { token: "jeton-google" };
       },
       removeCachedAuthToken: async () => {},
+      getProfileUserInfo: async () => ({ id: google.profileId, email: google.email }),
+      getRedirectURL: () => "https://pkifconeiolgllnjbnbenadbohcihopf.chromiumapp.org/",
+      launchWebAuthFlow: async (details) => {
+        google.launches.push(clone(details));
+        const webAuth = google.webAuth || options.webAuth;
+        if (webAuth) return webAuth(details);
+        return `https://pkifconeiolgllnjbnbenadbohcihopf.chromiumapp.org/#access_token=web-${google.launches.length}&expires_in=3599`;
+      },
     },
   };
+  // Drive vide qui accepte tout ; adresse du compte connecté.
+  function defaultDrive(url, init = {}) {
+    google.driveCalls.push({ url, method: init.method || "GET" });
+    if (url.includes("/about")) return new Response(JSON.stringify({ user: { emailAddress: google.email } }));
+    if (url.includes("/drive/v3/files?")) return new Response(JSON.stringify({ files: [] }));
+    return new Response(JSON.stringify({ id: "f1", version: "1" }));
+  }
   // Faux Moxfield : jetons puis CSV (cf. tests/moxfield-collection.test.js
   // pour le détail des appels).
   async function fetch(url, init) {
-    if (url.includes("googleapis.com")) return options.drive(url, init);
+    if (url.includes("googleapis.com")) return (options.drive || defaultDrive)(url, init);
     if (url.includes("sentry.io")) {
       sentry.push(JSON.parse(init.body.split("\n")[2]));
       return { ok: true };
@@ -88,8 +121,9 @@ function loadBackground(initialState, options = {}) {
     const body = url.includes("/token/") ? JSON.stringify({ access_token: "jeton" }) : options.moxfieldCSV;
     return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
   }
+  const navigator = options.navigator || CHROME;
   const context = vm.createContext({
-    chrome, fetch, setTimeout, clearTimeout, console,
+    chrome, fetch, setTimeout, clearTimeout, setInterval, clearInterval, console, navigator, URL, URLSearchParams,
     Blob, Response, FormData, TextDecoder, CompressionStream, DecompressionStream,
   });
   context.importScripts = (...files) => files.forEach((f) => vm.runInContext(read(f), context));
@@ -114,6 +148,10 @@ function loadBackground(initialState, options = {}) {
     context,
     counts,
     sentry,
+    google,
+    session,
+    syncMeta: () => clone(storage[SYNC_KEY]),
+    setSyncMeta: (meta) => (storage[SYNC_KEY] = clone(meta)),
     alarms,
     setCollectionMeta: (meta) => (storage[COLLECTION_KEY] = clone(meta)),
     setMoxfieldCSV: (csv) => (options.moxfieldCSV = csv),
@@ -910,4 +948,143 @@ test("récupération de la collection : seules les erreurs anormales sont rappor
   assert.equal(changed.sentry.length, 1);
   assert.equal(changed.sentry[0].tags.where, "moxfield-collection");
   assert.deepEqual(changed.sentry[0].extra, { code: "api-changed" });
+});
+
+// --- Synchro Drive hors Google Chrome (fenêtre de connexion) ---
+
+const TOKEN_KEY = "moxfieldStockManagerGoogleToken";
+const authParams = (launch) => Object.fromEntries(new URL(launch.url).searchParams);
+
+async function connectedOnBrave(options = {}) {
+  const bg = loadBackground(undefined, { navigator: BRAVE, ...options });
+  const res = await bg.send({ type: "DRIVE_CONNECT" });
+  assert.equal(res.ok, true, res.error);
+  return bg;
+}
+
+test("Brave : connexion par la fenêtre Google, compte lu sur Drive", async () => {
+  const bg = await connectedOnBrave();
+  const meta = bg.syncMeta();
+  assert.equal(meta.authMethod, "web");
+  assert.equal(meta.enabled, true);
+  assert.equal(meta.accountEmail, "moi@gmail.com");
+  assert.equal(meta.accountId, null, "pas d'identifiant de profil Chrome");
+  assert.equal(meta.lastError, null);
+  assert.equal(bg.google.launches.length, 1, "une seule fenêtre pour toute la connexion");
+  assert.equal(bg.google.launches[0].interactive, true);
+  assert.equal(authParams(bg.google.launches[0]).client_id, "494997360432-b2572mk99tjvd882i4695b83d71d1oka.apps.googleusercontent.com");
+  assert.equal(authParams(bg.google.launches[0]).prompt, "select_account");
+});
+
+test("Google Chrome : connexion par le compte du profil, sans fenêtre", async () => {
+  const bg = loadBackground();
+  assert.equal((await bg.send({ type: "DRIVE_CONNECT" })).ok, true);
+  const meta = bg.syncMeta();
+  assert.equal(meta.authMethod, "chrome");
+  assert.equal(meta.accountId, "118294207213255860701");
+  assert.equal(bg.google.launches.length, 0);
+});
+
+test("Chrome connecté avant la fenêtre de connexion (sans méthode notée) : rien ne change", async () => {
+  const bg = loadBackground(undefined, { navigator: BRAVE });
+  bg.setSyncMeta({ enabled: true, accountId: "118294207213255860701", accountEmail: "moi@gmail.com", syncedVersion: "1" });
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.equal(res.meta.lastError, null);
+  assert.equal(bg.google.launches.length, 0);
+});
+
+test("synchro en fond, navigateur redémarré : jeton renouvelé sans fenêtre, pour le même compte", async () => {
+  const bg = await connectedOnBrave();
+  delete bg.session[TOKEN_KEY]; // mémoire de session vidée au redémarrage
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.equal(res.meta.lastError, null);
+  const silent = bg.google.launches[1];
+  assert.equal(silent.interactive, false);
+  assert.equal(authParams(silent).prompt, "none");
+  assert.equal(authParams(silent).login_hint, "moi@gmail.com");
+});
+
+test("renouvellement impossible : « Reconnecter » proposé, sans rapport d'erreur", async () => {
+  const bg = await connectedOnBrave({ sentryDsn: SENTRY_DSN });
+  delete bg.session[TOKEN_KEY];
+  // Session Google fermée dans le navigateur : Google répond sans jeton.
+  bg.google.webAuth = () => "https://pkifconeiolgllnjbnbenadbohcihopf.chromiumapp.org/#error=interaction_required";
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.match(res.meta.lastError, /Reconnecter/);
+  assert.ok(bg.google.launches.every((l) => l === bg.google.launches[0] || !l.interactive), "aucune fenêtre ouverte en fond");
+  await waitReports();
+  assert.equal(bg.sentry.length, 0);
+});
+
+test("reconnexion avec un autre compte Google : synchro en pause, choix demandé", async () => {
+  const bg = await connectedOnBrave();
+  delete bg.session[TOKEN_KEY];
+  bg.google.email = "autre@gmail.com";
+  await bg.send({ type: "DRIVE_CONNECT" });
+  const meta = bg.syncMeta();
+  assert.deepEqual(meta.accountMismatch, { email: "autre@gmail.com" });
+  assert.equal(meta.accountEmail, "moi@gmail.com");
+});
+
+test("même compte, adresse écrite autrement : pas de changement de compte", async () => {
+  const bg = await connectedOnBrave();
+  delete bg.session[TOKEN_KEY];
+  bg.google.email = "Moi@Gmail.com";
+  await bg.send({ type: "DRIVE_CONNECT" });
+  assert.equal(bg.syncMeta().accountMismatch, null);
+});
+
+test("jeton refusé par Drive (401) : redemandé en silence, synchro réussie", async () => {
+  let refused = false;
+  const bg = await connectedOnBrave({
+    drive: (url, init = {}) => {
+      if (url.includes("/about")) return new Response(JSON.stringify({ user: { emailAddress: "moi@gmail.com" } }));
+      if (url.includes("/drive/v3/files?") && !refused && init.headers.Authorization === "Bearer web-1") {
+        refused = true;
+        return new Response("révoqué", { status: 401 });
+      }
+      if (url.includes("/drive/v3/files?")) return new Response(JSON.stringify({ files: [] }));
+      return new Response(JSON.stringify({ id: "f1", version: "1" }));
+    },
+  });
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.equal(refused, true);
+  assert.equal(res.meta.lastError, null);
+  assert.equal(bg.google.launches.at(-1).interactive, false, "nouveau jeton sans fenêtre");
+});
+
+test("Brave : déconnexion, jeton révoqué et méthode oubliée", async () => {
+  const bg = await connectedOnBrave();
+  await bg.send({ type: "DRIVE_DISCONNECT" });
+  assert.ok(bg.google.driveCalls.some((c) => c.url.startsWith("https://oauth2.googleapis.com/revoke")));
+  assert.equal(bg.session[TOKEN_KEY], undefined);
+  const meta = bg.syncMeta();
+  assert.equal(meta.enabled, false);
+  assert.equal(meta.authMethod, null);
+});
+
+test("fenêtre fermée par l'utilisateur : refus affiché, sans rapport d'erreur", async () => {
+  const bg = loadBackground(undefined, {
+    navigator: BRAVE,
+    sentryDsn: SENTRY_DSN,
+    webAuth: () => { throw new Error("The user did not approve access."); },
+  });
+  const res = await bg.send({ type: "DRIVE_CONNECT" });
+  assert.equal(res.error, "Connexion à Google refusée ou annulée.");
+  await waitReports();
+  assert.equal(bg.sentry.length, 0);
+});
+
+test("Brave, fenêtre bloquée : réglage à activer indiqué, erreur rapportée", async () => {
+  const bg = loadBackground(undefined, {
+    navigator: BRAVE,
+    sentryDsn: SENTRY_DSN,
+    webAuth: () => { throw new Error("Authorization page could not be loaded."); },
+  });
+  const res = await bg.send({ type: "DRIVE_CONNECT" });
+  assert.match(res.error, /brave:\/\/settings\/extensions/);
+  await waitReports();
+  assert.equal(bg.sentry.length, 1);
+  assert.equal(bg.sentry[0].tags.browser, "Brave 141");
+  assert.equal(bg.sentry[0].extra.cause, "Error: Authorization page could not be loaded.");
 });

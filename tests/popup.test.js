@@ -368,3 +368,24 @@ test("erreur non interceptée du popup : rapportée", async (t) => {
   assert.equal(report.where, "popup");
   assert.deepEqual([report.error.type, report.error.message], ["TypeError", "boum"]);
 });
+
+// --- Compte Google de la synchro ---
+
+test("synchro : compte du profil sous Chrome, compte choisi à la connexion ailleurs", async (t) => {
+  for (const [authMethod, hint, help] of [
+    [null, "Compte du profil Chrome", /profil Chrome/],
+    ["chrome", "Compte du profil Chrome", /profil Chrome/],
+    ["web", "Compte choisi à la connexion", /Déconnecter, puis Connecter/],
+  ]) {
+    const popup = openPopup({
+      GET_COLLECTION_STATUS: collectionStatus({ enabled: false }),
+      GET_SYNC_STATUS: { ok: true, meta: { enabled: true, authMethod, accountEmail: "moi@gmail.com", lastSyncAt: 1 } },
+      SYNC_NOW: { ok: true, meta: { enabled: true } },
+    });
+    t.after(popup.close);
+    await settle();
+    assert.equal(popup.$("sync-account").textContent, "moi@gmail.com");
+    assert.equal(popup.$("sync-account-hint").textContent, hint);
+    assert.match(popup.$("sync-account-box").title, help);
+  }
+});

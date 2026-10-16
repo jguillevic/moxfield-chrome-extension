@@ -64,3 +64,5 @@ joue des proxies ou d'autres formats.
   cartes, fichiers Google Drive compressés — octobre 2026.
 - Rapports d'erreurs anonymes de toutes les installations, envoyés sur
   Sentry (désactivables) — octobre 2026.
+- Synchro Google Drive dans tous les navigateurs Chromium (Brave, Edge,
+  Opera…), par la fenêtre de connexion Google — octobre 2026.

@@ -11,8 +11,8 @@
 
 // Modules partagés (chargés tels quels, cf. leur en-tête) :
 // createDeckChecks, createMoxfieldCollection, computeCollectionDiff,
-// createHistory, createErrorReports.
-importScripts("deck-checks.js", "moxfield-collection.js", "history.js", "error-reports.js");
+// createHistory, createErrorReports, createGoogleWebAuth, chooseAuthMethod.
+importScripts("deck-checks.js", "moxfield-collection.js", "history.js", "error-reports.js", "google-auth.js");
 
 const STORAGE_KEY = "moxfieldStockManagerState";
 
@@ -93,7 +93,7 @@ async function updateErrorReportsMeta(patch) {
 let errorReportQueue = Promise.resolve();
 function reportError(where, error, extra) {
   const run = errorReportQueue.then(async () => {
-    if (!errorReports.configured) return false;
+    if (!errorReports.configured || (error && error.expected)) return false;
     const meta = await getErrorReportsMeta();
     if (!meta.enabled) return false;
     const report = {
@@ -358,6 +358,9 @@ async function getSyncMeta() {
     accountId: null,
     accountEmail: null,
     accountMismatch: null,
+    // "chrome" (compte du profil, getAuthToken) ou "web" (fenêtre de
+    // connexion, cf. google-auth.js) ; absent avant octobre 2026 : chrome.
+    authMethod: null,
     ...data[SYNC_META_KEY],
   };
 }
@@ -415,30 +418,62 @@ function parseDoc(doc) {
   return { state: { stock, builtDecks, history }, updatedAt: doc.updatedAt || Date.parse(doc.exportedAt) || 0 };
 }
 
+// Identifiant OAuth « Application Web » de la fenêtre de connexion (cf.
+// google-auth.js) ; celui de getAuthToken est dans le manifest (oauth2).
+const GOOGLE_WEB_CLIENT_ID = "494997360432-b2572mk99tjvd882i4695b83d71d1oka.apps.googleusercontent.com";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+const browserNavigator = typeof navigator !== "undefined" ? navigator : null;
+const googleWebAuth = createGoogleWebAuth({
+  identity: chrome.identity,
+  session: chrome.storage.session,
+  runtime: chrome.runtime,
+  fetch: (...args) => fetch(...args),
+  clientId: GOOGLE_WEB_CLIENT_ID,
+  scope: DRIVE_SCOPE,
+  isBrave: Boolean(browserNavigator && browserNavigator.brave),
+});
+
+function authMethodOf(meta) {
+  return meta.authMethod || "chrome";
+}
+
+// interactive : seulement sur un clic de l'utilisateur (fenêtre Google
+// possible), jamais depuis une synchro en fond.
 async function getAuthToken(interactive) {
+  const meta = await getSyncMeta();
+  if (authMethodOf(meta) === "web") {
+    return (await googleWebAuth.getToken({ interactive, loginHint: meta.accountEmail })).token;
+  }
   let token;
   try {
     ({ token } = await chrome.identity.getAuthToken({ interactive }));
   } catch (e) {
-    throw new Error(interactive
+    // Jeton à renouveler : situation normale, pas une erreur à rapporter.
+    throw Object.assign(new Error(interactive
       ? "Connexion à Google refusée ou annulée."
-      : "Connexion Google à renouveler : clique sur « Reconnecter ».", { cause: e });
+      : "Connexion Google à renouveler : clique sur « Reconnecter ».", { cause: e }), { expected: !interactive });
   }
   if (!token) throw new Error("Connexion à Google refusée ou annulée.");
   return token;
 }
 
+async function invalidateAuthToken(token) {
+  if (authMethodOf(await getSyncMeta()) === "web") await googleWebAuth.invalidate();
+  else await chrome.identity.removeCachedAuthToken({ token });
+}
+
 // Un token en cache peut avoir expiré ou été révoqué : sur un 401, on
-// l'invalide et on réessaie une fois avec un token neuf.
+// l'invalide et on réessaie une fois avec un token neuf, demandé en
+// silence (pas de seconde fenêtre Google pendant une connexion).
 async function driveFetch(url, options = {}, interactive = false) {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const token = await getAuthToken(interactive);
+    const token = await getAuthToken(interactive && attempt === 0);
     const res = await fetch(url, {
       ...options,
       headers: { ...options.headers, Authorization: `Bearer ${token}` },
     });
     if (res.status === 401 && attempt === 0) {
-      await chrome.identity.removeCachedAuthToken({ token });
+      await invalidateAuthToken(token);
       continue;
     }
     if (!res.ok) {
@@ -565,31 +600,48 @@ async function maybeDailySnapshot() {
 }
 
 // Le compte Google utilisé est celui du profil Chrome (getAuthToken sans
-// compte explicite). S'il change, le fichier Drive n'est plus le même : on
-// met la synchro en pause (accountMismatch) au lieu d'écraser le stock local
-// avec celui d'un autre compte, et le popup demande quoi faire.
-async function getProfileAccount() {
+// compte explicite), ou celui choisi dans la fenêtre de connexion. S'il
+// change, le fichier Drive n'est plus le même : on met la synchro en pause
+// (accountMismatch) au lieu d'écraser le stock local avec celui d'un autre
+// compte, et le popup demande quoi faire.
+async function getCurrentAccount(meta) {
+  if (authMethodOf(meta) === "web") {
+    const email = await googleWebAuth.currentEmail();
+    return email ? { id: null, email } : null;
+  }
   const { id, email } = await chrome.identity.getProfileUserInfo({ accountStatus: "ANY" });
   return id ? { id, email } : null;
 }
 
+// Même compte : même identifiant de profil Chrome, ou même adresse. Pas de
+// comparaison d'identifiants d'une méthode à l'autre : pour un même compte,
+// celui du profil Chrome et celui de Drive diffèrent (constaté en vrai).
+function isSameAccount(account, meta) {
+  if (!meta.accountId && !meta.accountEmail) return true;
+  if (account.id && meta.accountId && account.id === meta.accountId) return true;
+  return Boolean(account.email && meta.accountEmail && account.email.toLowerCase() === meta.accountEmail.toLowerCase());
+}
+
 async function currentAccountPatch() {
-  const account = await getProfileAccount();
+  const account = await getCurrentAccount(await getSyncMeta());
   return account ? { accountId: account.id, accountEmail: account.email, accountMismatch: null } : {};
 }
 
 async function runSync() {
   let meta = await getSyncMeta();
   if (!meta.enabled || meta.pendingChoice) return meta;
-  const account = await getProfileAccount();
-  if (account && meta.accountId && account.id !== meta.accountId) {
-    if (meta.accountMismatch?.email === account.email) return meta;
-    return updateSyncMeta({ accountMismatch: { email: account.email } });
-  }
-  if (account && (meta.accountMismatch || meta.accountId !== account.id || meta.accountEmail !== account.email)) {
-    meta = await updateSyncMeta({ accountId: account.id, accountEmail: account.email, accountMismatch: null });
-  }
   try {
+    // Fenêtre de connexion : compte du dernier jeton obtenu (inconnu après un
+    // redémarrage du navigateur, le temps du premier renouvellement, qui
+    // reprend de toute façon le même compte).
+    const account = await getCurrentAccount(meta);
+    if (account && !isSameAccount(account, meta)) {
+      if (meta.accountMismatch?.email === account.email) return meta;
+      return updateSyncMeta({ accountMismatch: { email: account.email } });
+    }
+    if (account && (meta.accountMismatch || meta.accountId !== account.id || meta.accountEmail !== account.email)) {
+      meta = await updateSyncMeta({ accountId: account.id, accountEmail: account.email, accountMismatch: null });
+    }
     const remote = await findStateFile();
     if (!remote) {
       await pushLocal(null);
@@ -638,6 +690,9 @@ function isLocalEmpty(state) {
 // lui demande lequel garder (pendingChoice). Déjà connecté : simple
 // reconnexion après expiration du token.
 async function handleDriveConnect() {
+  // Méthode choisie une fois pour toutes à la connexion : sous Chrome, un
+  // refus de l'utilisateur ne doit pas ouvrir ensuite la fenêtre Google.
+  if (!(await getSyncMeta()).enabled) await updateSyncMeta({ authMethod: chooseAuthMethod(browserNavigator) });
   await getAuthToken(true);
   const meta = await getSyncMeta();
   if (meta.enabled && !meta.pendingChoice) {
@@ -686,13 +741,18 @@ async function handleDriveResolveChoice({ keep }) {
 // Les données restent sur ce PC et sur Drive ; seule la synchro s'arrête.
 async function handleDriveDisconnect() {
   await chrome.alarms.clear(SYNC_ALARM);
-  try {
-    const { token } = await chrome.identity.getAuthToken({ interactive: false });
-    if (token) await chrome.identity.removeCachedAuthToken({ token });
-  } catch (e) {
-    // déjà déconnecté de Google : rien à nettoyer
+  if (authMethodOf(await getSyncMeta()) === "web") {
+    await googleWebAuth.signOut();
+  } else {
+    try {
+      const { token } = await chrome.identity.getAuthToken({ interactive: false });
+      if (token) await chrome.identity.removeCachedAuthToken({ token });
+    } catch (e) {
+      // déjà déconnecté de Google : rien à nettoyer
+    }
   }
   const meta = await updateSyncMeta({
+    authMethod: null,
     enabled: false,
     pendingChoice: null,
     syncedVersion: null,

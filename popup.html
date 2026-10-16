@@ -65,7 +65,7 @@
   <section class="card">
     <h2>Collection Moxfield</h2>
     <p class="hint">
-      Récupérée depuis ton compte Moxfield (il suffit d'y être connecté dans Chrome), même Moxfield fermé.
+      Récupérée depuis ton compte Moxfield (il suffit d'y être connecté dans ce navigateur), même Moxfield fermé.
       Elle est la référence du stock : pour corriger une quantité, modifie ta collection sur Moxfield.
     </p>
     <label class="check-row">
@@ -129,7 +129,7 @@
 
     <div id="sync-account-changed" hidden>
       <div class="notice error">
-        Le compte Google de Chrome a changé : <strong id="sync-old-account"></strong> →
+        Le compte Google a changé : <strong id="sync-old-account"></strong> →
         <strong id="sync-new-account"></strong>. Synchronisation en pause.
       </div>
       <div class="actions stacked">
@@ -137,16 +137,16 @@
         <button id="sync-account-keep-remote-btn">Récupérer le stock du nouveau compte</button>
       </div>
       <p class="hint">
-        La version remplacée reste dans l'historique. Revenir à l'ancien compte dans Chrome fait reprendre la synchro.
+        La version remplacée reste dans l'historique. Revenir à l'ancien compte fait reprendre la synchro.
       </p>
     </div>
 
     <div id="sync-on" hidden>
-      <div class="account" title="Pour changer de compte, change celui du profil Chrome : l'extension te demandera quoi faire.">
+      <div class="account" id="sync-account-box">
         <span class="avatar" id="sync-avatar">?</span>
         <div class="account-text">
           <span class="account-email" id="sync-account"></span>
-          <span class="hint">Compte du profil Chrome</span>
+          <span class="hint" id="sync-account-hint"></span>
         </div>
       </div>
       <p id="sync-state"></p>

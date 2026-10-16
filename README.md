@@ -8,7 +8,8 @@ carte par carte, selon la decklist. Démonte-le pour réincrémenter.
 
 1. Clone le dépôt (`git clone https://github.com/jguillevic/moxfield-chrome-extension.git`)
    ou décompresse ce dossier quelque part sur ton disque.
-2. Ouvre `chrome://extensions`.
+2. Ouvre la page des extensions : `chrome://extensions` (Chrome),
+   `brave://extensions` (Brave), `edge://extensions` (Edge)…
 3. Active le **Mode développeur** (en haut à droite).
 4. Clique **Charger l'extension non empaquetée** et sélectionne ce dossier.
 
@@ -21,9 +22,10 @@ dans le cookie de session). Chacun récupère donc sa propre collection, sans
 saisir d'identifiant ni de mot de passe.
 
 **Synchronisation Google Drive : crée ta propre application Google
-Cloud.** Le `manifest.json` du dépôt pointe vers l'application Google Cloud
-de l'auteur (`oauth2.client_id`), réservée à son usage : remplace-la par la
-tienne avant de connecter Drive. Sans synchro, tout le reste fonctionne (les
+Cloud.** Le dépôt pointe vers l'application Google Cloud de l'auteur
+(`oauth2.client_id` dans `manifest.json` pour Google Chrome,
+`GOOGLE_WEB_CLIENT_ID` dans `background.js` pour les autres navigateurs),
+réservée à son usage : remplace-la par la tienne avant de connecter Drive. Sans synchro, tout le reste fonctionne (les
 données restent sur ce PC).
 
 1. Sur [console.cloud.google.com](https://console.cloud.google.com), crée un
@@ -47,6 +49,15 @@ données restent sur ce PC).
    **« Extension Chrome »**, avec cet identifiant d'extension.
 6. Remplace la valeur de `oauth2.client_id` dans `manifest.json` par
    l'identifiant client obtenu, puis recharge l'extension.
+7. Pour les navigateurs autres que Google Chrome (Brave, Edge, Opera…),
+   crée un second **identifiant client OAuth**, de type **« Application
+   Web »**, avec pour **URI de redirection autorisé**
+   `https://<identifiant de l'extension>.chromiumapp.org/` (le `/` final
+   compte ; `chrome.identity.getRedirectURL()` dans la console du service
+   worker l'affiche). Remplace la valeur de `GOOGLE_WEB_CLIENT_ID` dans
+   `background.js` par l'identifiant client obtenu (le code secret ne sert
+   pas). Google peut mettre quelques minutes à prendre en compte un nouvel
+   URI de redirection (erreur `redirect_uri_mismatch` en attendant).
 
 ## Utilisation
 
@@ -266,7 +277,17 @@ en cas de conflit : rien ne s'y perd).
 - Si la connexion Google expire, le popup affiche un avertissement et un
   bouton **« Reconnecter »**. Si le popup se ferme pendant l'autorisation
   Google, rouvre-le.
-- **Compte utilisé** : celui connecté au profil Chrome, affiché dans le
+- **Autres navigateurs que Google Chrome** (Brave, Edge, Opera…) : ils
+  n'ont pas de compte Google de profil utilisable par une extension. Une
+  fenêtre de connexion Google s'ouvre au clic sur « Connecter Google
+  Drive » : choisis ton compte et autorise l'accès. Ensuite, la connexion
+  est renouvelée toute seule toutes les heures, sans fenêtre, tant que tu
+  restes connecté à Google dans le navigateur ; sinon, le bouton
+  « Reconnecter » apparaît. Pour changer de compte : « Déconnecter », puis
+  « Connecter Google Drive » avec l'autre compte. **Sous Brave**, si la
+  fenêtre ne s'ouvre pas ou échoue, active « Autoriser la connexion Google
+  pour les extensions » dans `brave://settings/extensions`.
+- **Compte utilisé** (Google Chrome) : celui connecté au profil Chrome, affiché dans le
   popup (« Compte : ... »). Un seul compte par profil Chrome ; pour gérer
   plusieurs stocks, utilise un profil Chrome par personne. Pour changer de
   compte, change celui du profil Chrome : la synchro se met en pause et le
@@ -275,8 +296,8 @@ en cas de conflit : rien ne s'y perd).
   reprendre la synchro normalement.
 - Nécessite ta propre application Google Cloud (cf. « Installer
   l'extension pour son propre compte ») : en mode « Test », seuls les comptes
-  ajoutés comme utilisateurs de test peuvent se connecter. Nécessite Google
-  Chrome connecté à un compte Google.
+  ajoutés comme utilisateurs de test peuvent se connecter. Sous Google
+  Chrome, nécessite un profil connecté à un compte Google.
 
 ### 6. Rapports d'erreurs
 
@@ -398,6 +419,13 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   déclenchement est testé dans `tests/background.test.js` (erreurs
   d'action, de connexion Google, de la collection, case décochée),
   `tests/content-deck.test.js` et `tests/popup.test.js`.
+- `tests/google-auth.test.js` : connexion Google hors Google Chrome
+  (`google-auth.js`, fenêtre de connexion simulée) — choix de la méthode
+  selon le navigateur (Brave compris), choix du compte, renouvellement
+  silencieux pour le même compte, jamais de fenêtre en fond, fenêtre
+  fermée, réglage Brave, une seule fenêtre pour des demandes simultanées,
+  maintien en vie du service worker, jeton refusé, déconnexion. Son
+  branchement dans la synchro est testé dans `tests/background.test.js`.
 - `tests/content-deck.test.js` : bouton de la page d'un deck
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock

@@ -397,6 +397,13 @@ async function renderSync() {
     document.getElementById("sync-choice-date").textContent = `modifiées le ${formatDate(m.pendingChoice.remoteUpdatedAt)}`;
   }
   document.getElementById("sync-avatar").textContent = (m.accountEmail || "?").charAt(0);
+  // Hors Google Chrome, le compte est celui choisi dans la fenêtre de
+  // connexion Google (cf. google-auth.js), pas celui du profil.
+  const web = m.authMethod === "web";
+  document.getElementById("sync-account-hint").textContent = web ? "Compte choisi à la connexion" : "Compte du profil Chrome";
+  document.getElementById("sync-account-box").title = web
+    ? "Pour changer de compte : Déconnecter, puis Connecter Google Drive avec l'autre compte."
+    : "Pour changer de compte, change celui du profil Chrome : l'extension te demandera quoi faire.";
 
   const state = document.getElementById("sync-state");
   let pill;
