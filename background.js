@@ -834,7 +834,7 @@ async function handleGetHistory() {
 // --- Récupération automatique de la collection Moxfield ---
 // Toutes les heures (et au démarrage du navigateur si la dernière date de
 // plus d'une heure), la collection est téléchargée depuis le compte Moxfield
-// connecté dans Chrome (cf. moxfield-collection.js) puis importée comme un
+// connecté dans le navigateur (cf. moxfield-collection.js) puis importée comme un
 // CSV : elle devient la référence du stock. Rien n'est écrit si elle n'a
 // pas changé — chaque écriture part sur Drive.
 // Le suivi (dernière récupération, derniers changements, erreur) est propre
@@ -960,6 +960,26 @@ async function handleCollectionWrite(details) {
 }
 
 chrome.webRequest.onCompleted.addListener(handleCollectionWrite, { urls: COLLECTION_WRITE_URLS });
+
+// Récupération en échec faute de session Moxfield : relancée dès que
+// l'utilisateur se connecte (le site pose alors le cookie
+// refresh_token_<userId>, cf. moxfield-collection.js), sans attendre
+// l'heure ni un clic sur « Récupérer maintenant ». Le site pose ses cookies
+// en plusieurs fois : une seule relance à la fois.
+let loginRetryRunning = false;
+async function handleMoxfieldCookie({ cookie, removed }) {
+  if (removed || !/^refresh_token_.+$/.test(cookie.name) || !/(^|\.)moxfield\.com$/.test(cookie.domain)) return;
+  if (loginRetryRunning) return;
+  loginRetryRunning = true; // avant toute attente : les cookies arrivent ensemble
+  try {
+    const meta = await getCollectionMeta();
+    if (meta.lastError && meta.lastError.code === "not-logged-in") await fetchCollectionNow();
+  } finally {
+    loginRetryRunning = false;
+  }
+}
+
+chrome.cookies.onChanged.addListener(handleMoxfieldCookie);
 
 async function handleGetCollectionStatus() {
   return { ok: true, meta: await getCollectionMeta(), uncovered: findUncoveredCards(await getState()) };

@@ -331,6 +331,10 @@ async function renderCollection() {
     state.textContent = lastSuccess || "Pas encore récupérée.";
   }
 
+  // Pas de session Moxfield : lien vers la connexion. La récupération se
+  // relance d'elle-même une fois connecté (cf. handleMoxfieldCookie).
+  document.getElementById("collection-login-link").hidden = !(meta.lastError && meta.lastError.code === "not-logged-in");
+
   const changesEl = document.getElementById("collection-changes");
   changesEl.hidden = !meta.lastChanges;
   if (meta.lastChanges) {

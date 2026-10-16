@@ -23,7 +23,7 @@ const MOXFIELD_COLLECTION_CSV_URL =
   "https://api.moxfield.com/v1/collections/download?sortColumn=cardName&sortDirection=ascending&pricingProvider=cardmarket";
 
 // Erreur de récupération, avec un code pour l'interface : "not-logged-in"
-// (pas de session Moxfield dans Chrome), "blocked" (refus, ex. protection
+// (pas de session Moxfield dans le navigateur), "blocked" (refus, ex. protection
 // anti-robot), "api-changed" (réponse inattendue : Moxfield a changé ses
 // appels), "network" (Moxfield injoignable).
 class MoxfieldError extends Error {
@@ -56,7 +56,7 @@ function createMoxfieldCollection({ fetch, getCookies }) {
     }
     if (res.ok) return res;
     if (step === "refresh" && (res.status === 400 || res.status === 401)) {
-      throw new MoxfieldError("not-logged-in", "Session Moxfield expirée : reconnecte-toi sur moxfield.com dans Chrome.");
+      throw new MoxfieldError("not-logged-in", "Session Moxfield expirée : reconnecte-toi sur moxfield.com dans ce navigateur.");
     }
     if (res.status === 403 || res.status === 429) {
       throw new MoxfieldError("blocked", `Moxfield a refusé la récupération (code ${res.status}). Réessaie plus tard, ou utilise l'import CSV.`);
@@ -85,7 +85,7 @@ function createMoxfieldCollection({ fetch, getCookies }) {
   async function downloadCollectionCSV() {
     const userId = await findUserId();
     if (!userId) {
-      throw new MoxfieldError("not-logged-in", "Pas de session Moxfield : connecte-toi sur moxfield.com dans Chrome.");
+      throw new MoxfieldError("not-logged-in", "Pas de session Moxfield : connecte-toi sur moxfield.com dans ce navigateur.");
     }
     const refresh = await request("refresh", `${MOXFIELD_API2}/refresh`, {
       method: "POST",

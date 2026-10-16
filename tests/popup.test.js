@@ -97,7 +97,7 @@ test("erreur affichée avec la date de la dernière réussite", async (t) => {
   const p = openPopup({
     GET_COLLECTION_STATUS: collectionStatus({
       lastSuccessAt: new Date(2026, 9, 7, 9, 0).getTime(),
-      lastError: { code: "not-logged-in", message: "Session Moxfield expirée : reconnecte-toi sur moxfield.com dans Chrome." },
+      lastError: { code: "not-logged-in", message: "Session Moxfield expirée : reconnecte-toi sur moxfield.com dans ce navigateur." },
     }),
   });
   t.after(p.close);
@@ -387,5 +387,23 @@ test("synchro : compte du profil sous Chrome, compte choisi à la connexion aill
     assert.equal(popup.$("sync-account").textContent, "moi@gmail.com");
     assert.equal(popup.$("sync-account-hint").textContent, hint);
     assert.match(popup.$("sync-account-box").title, help);
+  }
+});
+
+// --- Connexion à Moxfield ---
+
+test("pas de session Moxfield : lien vers la connexion, absent pour les autres erreurs", async (t) => {
+  for (const [lastError, shown] of [
+    [{ code: "not-logged-in", message: "Pas de session Moxfield : connecte-toi sur moxfield.com dans ce navigateur." }, true],
+    [{ code: "blocked", message: "Moxfield a refusé la récupération (code 429)." }, false],
+    [null, false],
+  ]) {
+    const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({ lastError }) });
+    t.after(p.close);
+    await settle();
+    const link = p.$("collection-login-link");
+    assert.equal(link.hidden, !shown, lastError ? lastError.code : "sans erreur");
+    assert.equal(link.href, "https://moxfield.com/account/signin");
+    assert.equal(link.target, "_blank");
   }
 });

@@ -63,7 +63,7 @@ données restent sur ce PC).
 
 ### 1. Récupérer ta collection (initialiser le stock)
 
-**Automatiquement** : il suffit d'être connecté à Moxfield dans Chrome.
+**Automatiquement** : il suffit d'être connecté à Moxfield dans le navigateur.
 L'extension récupère ta collection depuis ton compte, puis l'importe :
 
 - **30 secondes après une modification de ta collection sur Moxfield**
@@ -85,12 +85,15 @@ Dans le popup, section **« Collection Moxfield »** :
   (`+1 Rhystic Study, −2 Sol Ring`) et, en rouge, la raison d'un échec
   (session Moxfield expirée, Moxfield injoignable ou ayant changé son
   fonctionnement...) ;
+- sans session Moxfield, un lien **« Se connecter à Moxfield »** : une fois
+  connecté sur le site, la collection est récupérée aussitôt, sans avoir à
+  revenir cliquer sur « Récupérer maintenant » ;
 - une alerte si ta collection **ne couvre plus des cartes de decks montés**
   (carte retirée de la collection alors qu'elle est dans un deck monté),
   avec les decks concernés — terrains de base exclus.
 
 L'extension ne connaît ni ne stocke ton mot de passe : elle réutilise la
-session Moxfield ouverte dans Chrome, comme le site lui-même (même jeton de
+session Moxfield ouverte dans le navigateur, comme le site lui-même (même jeton de
 connexion, renouvelé de la même façon — tu restes connecté). Si tu te
 déconnectes de Moxfield, la récupération s'arrête jusqu'à ta prochaine
 connexion.
@@ -400,8 +403,8 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   réinitialisation, historique (y compris sa fusion lors de la synchro
   Drive), fichiers Drive compressés (et lecture des anciens), récupération
   de la collection (import, alarme horaire, récupération après une
-  modification de la collection sur Moxfield, erreurs, cartes non
-  couvertes), stock envoyé à la page d'un deck, collection de 50 000
+  modification de la collection sur Moxfield, relance dès la connexion à
+  Moxfield, erreurs, cartes non couvertes), stock envoyé à la page d'un deck, collection de 50 000
   cartes.
 - `tests/history.test.js` : historique (`history.js`) — ajout, limite de
   200 entrées, détail limité à 200 cartes par entrée, fusion, différences
@@ -411,7 +414,8 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   absente ou expirée, refus, réseau coupé, changement de l'API.
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
   de test avec un faux `chrome`) — sections « Collection Moxfield » et
-  « Historique » et « Rapports d'erreurs », affichage du stock (tableau
+  « Historique » et « Rapports d'erreurs » (lien de connexion à Moxfield
+  compris), affichage du stock (tableau
   limité, filtre), erreurs rapportées.
 - `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
   — DSN, masquage des jetons et adresses mail, limitation des envois,

@@ -66,3 +66,5 @@ joue des proxies ou d'autres formats.
   Sentry (désactivables) — octobre 2026.
 - Synchro Google Drive dans tous les navigateurs Chromium (Brave, Edge,
   Opera…), par la fenêtre de connexion Google — octobre 2026.
+- Lien « Se connecter à Moxfield » sans session, et récupération de la
+  collection dès la connexion — octobre 2026.

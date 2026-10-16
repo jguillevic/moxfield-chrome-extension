@@ -40,6 +40,7 @@ function loadBackground(initialState, options = {}) {
   const startupListeners = [];
   const alarms = new Map(); // nom → options
   const webRequestListeners = [];
+  const cookieListeners = [];
   const counts = { stateWrites: 0, fetches: 0 };
   const sentry = [];
   const session = {};
@@ -83,6 +84,7 @@ function loadBackground(initialState, options = {}) {
     },
     cookies: {
       getAll: async () => options.cookies || [{ name: "refresh_token_ABC12", value: "rt" }],
+      onChanged: listener(cookieListeners),
     },
     identity: {
       getAuthToken: async () => {
@@ -166,6 +168,11 @@ function loadBackground(initialState, options = {}) {
     async requestCompleted(details) {
       await Promise.all(webRequestListeners.map((l) => l.fn({ tabId: 7, statusCode: 200, ...details })));
     },
+    // Cookie de moxfield.com posé ou retiré (connexion sur le site).
+    async cookieChanged(change) {
+      await Promise.all(cookieListeners.map((fn) => fn(clone(change))));
+    },
+    setCookies: (cookies) => (options.cookies = cookies),
     async startup() {
       await Promise.all(startupListeners.map((fn) => fn()));
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1087,4 +1094,49 @@ test("Brave, fenêtre bloquée : réglage à activer indiqué, erreur rapportée
   assert.equal(bg.sentry.length, 1);
   assert.equal(bg.sentry[0].tags.browser, "Brave 141");
   assert.equal(bg.sentry[0].extra.cause, "Error: Authorization page could not be loaded.");
+});
+
+// --- Connexion à Moxfield après une récupération sans session ---
+
+const SESSION_COOKIE = { name: "refresh_token_ABC12", value: "rt", domain: "api2.moxfield.com" };
+
+test("connexion sur Moxfield après « pas de session » : collection récupérée aussitôt", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV, cookies: [] });
+  assert.equal((await bg.send({ type: "COLLECTION_FETCH_NOW" })).code, "not-logged-in");
+  bg.setCookies([SESSION_COOKIE]);
+  await bg.cookieChanged({ cookie: SESSION_COOKIE, removed: false, cause: "explicit" });
+  const status = await bg.send({ type: "GET_COLLECTION_STATUS" });
+  assert.equal(status.meta.lastError, null);
+  assert.ok(status.meta.lastSuccessAt);
+  assert.equal(quantities(await bg.state())["sol ring"], 3);
+});
+
+test("cookies posés ensemble à la connexion : une seule récupération", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV, cookies: [] });
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  bg.setCookies([SESSION_COOKIE]);
+  const other = { ...SESSION_COOKIE, domain: ".moxfield.com" };
+  await Promise.all([
+    bg.cookieChanged({ cookie: SESSION_COOKIE, removed: false }),
+    bg.cookieChanged({ cookie: other, removed: false }),
+    bg.cookieChanged({ cookie: SESSION_COOKIE, removed: false }),
+  ]);
+  assert.equal(bg.counts.fetches, 3, "jeton, jeton d'export, CSV : une seule fois");
+});
+
+test("cookies sans rapport avec une connexion : rien n'est relancé", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV, cookies: [] });
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  bg.setCookies([SESSION_COOKIE]);
+  await bg.cookieChanged({ cookie: SESSION_COOKIE, removed: true }); // déconnexion
+  await bg.cookieChanged({ cookie: { name: "_ga", value: "x", domain: ".moxfield.com" }, removed: false });
+  await bg.cookieChanged({ cookie: { ...SESSION_COOKIE, domain: "moxfield.com.example.org" }, removed: false });
+  await bg.cookieChanged({ cookie: { ...SESSION_COOKIE, domain: "fakemoxfieldxcom" }, removed: false });
+  assert.equal(bg.counts.fetches, 0);
+});
+
+test("cookie de session renouvelé sans erreur précédente : pas de récupération en plus", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  await bg.cookieChanged({ cookie: SESSION_COOKIE, removed: false });
+  assert.equal(bg.counts.fetches, 0);
 });

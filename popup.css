@@ -276,6 +276,14 @@ button,
   transition: background 0.12s, border-color 0.12s;
 }
 
+a.button {
+  text-decoration: none;
+}
+
+a.button[hidden] {
+  display: none;
+}
+
 button:hover,
 .button:hover {
   border-color: var(--text-muted);
