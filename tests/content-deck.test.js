@@ -57,6 +57,8 @@ function openDeckPage(state) {
     button: () => win.document.querySelector(".msm-floating-btn, .msm-bar-btn"),
     close: () => win.close(),
     sent: [],
+    // Réponse imposée à un message (ex. erreur levée), sinon comportement normal.
+    handle: null,
   };
   // Comme le service worker (GET_DECK_CONTEXT) : seulement le stock des
   // cartes demandées (face avant d'une double face comprise) et de celles
@@ -75,6 +77,10 @@ function openDeckPage(state) {
     runtime: {
       sendMessage: async (msg) => {
         page.sent.push(JSON.parse(JSON.stringify(msg)));
+        if (page.handle) {
+          const res = await page.handle(msg);
+          if (res !== undefined) return res;
+        }
         if (msg.type === "GET_DECK_CONTEXT") return JSON.parse(JSON.stringify(deckContext(msg.payload)));
         return { ok: true };
       },
@@ -170,4 +176,42 @@ test("la page ne demande que le stock des cartes du deck, jamais l'état complet
     ["Birds of Paradise", "Golgari Thug", "Revitalizing Repast", "Sidisi, Brood Tyrant", "Swamp"]
   );
   assert.equal(request.payload.deckId, "abc123");
+});
+
+// --- Rapports d'erreurs ---
+
+const reportsOf = (page) => page.sent.filter((m) => m.type === "REPORT_ERROR").map((m) => m.payload);
+
+test("erreur pendant le contrôle de la page : rapportée, sauf extension rechargée", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
+  page.handle = (msg) => {
+    if (msg.type === "GET_DECK_CONTEXT") throw new Error("Extension context invalidated.");
+  };
+  page.setStock(FULL_STOCK);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(reportsOf(page), [], "extension rechargée : rien à rapporter");
+
+  page.handle = (msg) => {
+    if (msg.type === "GET_DECK_CONTEXT") throw new TypeError("stock is undefined");
+  };
+  page.setStock(FULL_STOCK);
+  await waitFor(() => reportsOf(page).length > 0, 2000, "erreur rapportée");
+  const [report] = reportsOf(page);
+  assert.equal(report.where, "deck-page:check");
+  assert.equal(report.error.type, "TypeError");
+  assert.equal(report.error.message, "stock is undefined");
+});
+
+test("erreur non interceptée : rapportée si elle vient de l'extension, pas du site", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  const { win } = page;
+  const fire = (filename, message) =>
+    win.dispatchEvent(new win.ErrorEvent("error", { error: new win.Error(message), message, filename }));
+  fire("https://www.moxfield.com/static/main.js", "erreur du site");
+  fire("chrome-extension://test/content-deck.js", "erreur de l'extension");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(reportsOf(page).map((r) => [r.where, r.error.message]), [["deck-page", "erreur de l'extension"]]);
 });

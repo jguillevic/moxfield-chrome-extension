@@ -320,3 +320,51 @@ test("historique : détail tronqué signalé", async (t) => {
   const items = [...p.$("history-list").querySelectorAll("li")].map((li) => li.textContent);
   assert.deepEqual(items, ["+1 Lotus Petal (2 → 3)", "−2 Sol Ring (3 → 1)", "… et 29998 autre(s)"]);
 });
+
+// --- Rapports d'erreurs ---
+
+test("rapports d'erreurs : case cochée par défaut, décochable", async (t) => {
+  let enabled = true;
+  const popup = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({ enabled: false }),
+    GET_ERROR_REPORTS: () => ({ ok: true, enabled, configured: true }),
+    SET_ERROR_REPORTS: (msg) => ((enabled = msg.payload.enabled), { ok: true, enabled, configured: true }),
+  });
+  t.after(popup.close);
+  await settle();
+  assert.ok(!popup.sent.some((m) => m.type === "GET_ERROR_REPORTS"), "section repliée : rien demandé");
+  popup.$("error-reports-details").open = true;
+  popup.$("error-reports-details").dispatchEvent(new popup.win.Event("toggle"));
+  await settle();
+  const checkbox = popup.$("error-reports-enabled");
+  assert.equal(checkbox.checked, true);
+  assert.equal(checkbox.disabled, false);
+  checkbox.checked = false;
+  checkbox.dispatchEvent(new popup.win.Event("change"));
+  await settle();
+  assert.deepEqual(popup.sent.find((m) => m.type === "SET_ERROR_REPORTS").payload, { enabled: false });
+  assert.equal(checkbox.checked, false);
+});
+
+test("rapports d'erreurs : version sans service configuré, case grisée", async (t) => {
+  const popup = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({ enabled: false }), GET_ERROR_REPORTS: { ok: true, enabled: true, configured: false } });
+  t.after(popup.close);
+  popup.$("error-reports-details").open = true;
+  popup.$("error-reports-details").dispatchEvent(new popup.win.Event("toggle"));
+  await settle();
+  assert.equal(popup.$("error-reports-enabled").disabled, true);
+  assert.match(popup.$("error-reports-state").textContent, /rien n'est envoyé/);
+});
+
+test("erreur non interceptée du popup : rapportée", async (t) => {
+  const popup = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({ enabled: false }),});
+  t.after(popup.close);
+  const { win } = popup;
+  win.dispatchEvent(new win.ErrorEvent("error", { error: new win.TypeError("boum"), message: "boum" }));
+  await settle();
+  const report = popup.sent.find((m) => m.type === "REPORT_ERROR").payload;
+  assert.equal(report.where, "popup");
+  assert.deepEqual([report.error.type, report.error.message], ["TypeError", "boum"]);
+});

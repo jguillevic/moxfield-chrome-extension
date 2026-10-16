@@ -2,6 +2,15 @@ function send(type, payload) {
   return chrome.runtime.sendMessage({ type, payload });
 }
 
+// Erreurs du popup qui échappent à tout try/catch : rapport anonyme envoyé
+// par le service worker (cf. reportError dans background.js).
+function reportError(e) {
+  const error = { message: (e && e.message) || String(e), stack: e && e.stack, type: (e && e.name) || "Error" };
+  send("REPORT_ERROR", { where: "popup", error }).catch(() => {});
+}
+window.addEventListener("error", (event) => reportError(event.error || event.message));
+window.addEventListener("unhandledrejection", (event) => reportError(event.reason));
+
 async function loadState() {
   const res = await send("GET_STATE");
   return res.state;
@@ -487,6 +496,26 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
     await send("RESET_STOCK");
     refresh();
   }
+});
+
+// --- Rapports d'erreurs (cf. reportError dans background.js) ---
+async function renderErrorReports() {
+  const { enabled, configured } = await send("GET_ERROR_REPORTS");
+  const checkbox = document.getElementById("error-reports-enabled");
+  checkbox.checked = enabled;
+  checkbox.disabled = !configured;
+  document.getElementById("error-reports-state").textContent = configured
+    ? ""
+    : "Aucun service de rapports configuré dans cette version : rien n'est envoyé.";
+}
+
+document.getElementById("error-reports-details").addEventListener("toggle", (e) => {
+  if (e.target.open) renderErrorReports();
+});
+
+document.getElementById("error-reports-enabled").addEventListener("change", async (e) => {
+  await send("SET_ERROR_REPORTS", { enabled: e.target.checked });
+  renderErrorReports();
 });
 
 // Un changement venant de Drive (ou d'un onglet Moxfield) met le popup à jour.

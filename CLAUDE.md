@@ -81,6 +81,11 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
   explicite) ; contrôles en fond silencieux.
 - Ne redessiner un élément de la page que si son contenu change (sinon
   l'infobulle ouverte disparaît).
+- Erreur inattendue (bug, réponse anormale) : la rapporter
+  (`reportError` dans le service worker, message `REPORT_ERROR` depuis une
+  page). Jamais l'état, les decks ni l'adresse mail dans un rapport ; pas
+  de rapport pour une situation normale (pas connecté à Moxfield, réseau
+  coupé) ni pour un refus expliqué à l'utilisateur.
 - Styles injectés : variables CSS posées sur nos seuls éléments racines
   (`.msm-*`), variantes sombres via `prefers-color-scheme`.
 - Toute icône tierce est créditée dans le README (section « Crédits »).

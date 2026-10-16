@@ -278,6 +278,29 @@ en cas de conflit : rien ne s'y perd).
   ajoutés comme utilisateurs de test peuvent se connecter. Nécessite Google
   Chrome connecté à un compte Google.
 
+### 6. Rapports d'erreurs
+
+- Quand l'extension rencontre une erreur inattendue (bug, page Moxfield qui
+  a changé, connexion Google impossible…), un **rapport anonyme** est envoyé
+  au développeur sur [Sentry](https://sentry.io), pour qu'il voie les
+  erreurs de toutes les installations et puisse les corriger.
+- Contenu d'un rapport : le message et la pile d'appels de l'erreur,
+  l'endroit où elle s'est produite, la version de l'extension, le
+  navigateur (Brave reconnu) et le système, et un identifiant tiré au
+  hasard propre au PC. **Jamais** ton stock, tes decks ni ton adresse mail ;
+  les jetons de connexion et adresses mail qui apparaîtraient dans un
+  message sont masqués.
+- Ne sont pas envoyées les situations normales (pas connecté à Moxfield,
+  réseau coupé) ni les refus expliqués à l'écran (stock insuffisant…).
+- Une même erreur part au plus une fois par heure, et 20 rapports au plus
+  par jour et par PC.
+- Actif par défaut ; pour le couper : popup, section **Rapports d'erreurs**,
+  décocher la case.
+- Pour le mainteneur : les rapports arrivent dans le projet Sentry dont la
+  DSN est renseignée dans `SENTRY_DSN` (`background.js`). Sans DSN, rien
+  n'est envoyé (la case est grisée). La DSN n'est pas un secret : elle ne
+  permet que d'envoyer des rapports, pas de les lire.
+
 ## Limites connues
 
 - Le scraping repose sur des repères structurels de la page, pas sur une
@@ -367,11 +390,19 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   absente ou expirée, refus, réseau coupé, changement de l'API.
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
   de test avec un faux `chrome`) — sections « Collection Moxfield » et
-  « Historique », affichage du stock (tableau limité, filtre).
+  « Historique » et « Rapports d'erreurs », affichage du stock (tableau
+  limité, filtre), erreurs rapportées.
+- `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
+  — DSN, masquage des jetons et adresses mail, limitation des envois,
+  navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur
+  déclenchement est testé dans `tests/background.test.js` (erreurs
+  d'action, de connexion Google, de la collection, case décochée),
+  `tests/content-deck.test.js` et `tests/popup.test.js`.
 - `tests/content-deck.test.js` : bouton de la page d'un deck
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock
-  change, tolérance à une liste brièvement incohérente.
+  change, tolérance à une liste brièvement incohérente, erreurs
+  rapportées (contrôle de la page, erreurs de l'extension mais pas du site).
 
 Non couverts : la synchro Google Drive, le reste du popup, la fenêtre de
 montage et l'intégration à la barre d'actions de Moxfield.

@@ -13,7 +13,8 @@
     "https://www.moxfield.com/*",
     "https://moxfield.com/*",
     "https://api.moxfield.com/*",
-    "https://api2.moxfield.com/*"
+    "https://api2.moxfield.com/*",
+    "https://*.sentry.io/*"
   ],
   "icons": {
     "16": "icons/icon16.png",

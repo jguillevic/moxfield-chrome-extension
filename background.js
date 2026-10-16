@@ -11,8 +11,8 @@
 
 // Modules partagés (chargés tels quels, cf. leur en-tête) :
 // createDeckChecks, createMoxfieldCollection, computeCollectionDiff,
-// createHistory.
-importScripts("deck-checks.js", "moxfield-collection.js", "history.js");
+// createHistory, createErrorReports.
+importScripts("deck-checks.js", "moxfield-collection.js", "history.js", "error-reports.js");
 
 const STORAGE_KEY = "moxfieldStockManagerState";
 
@@ -64,6 +64,75 @@ async function getDeviceId() {
 async function recordHistory(state, entry) {
   const full = { id: historyLog.newId(), at: Date.now(), device: await getDeviceId(), ...entry };
   state.history = historyLog.addEntry(state.history, full);
+}
+
+// --- Rapports d'erreurs (Sentry, cf. error-reports.js) ---
+// DSN du projet Sentry qui reçoit les erreurs de toutes les installations
+// (vide : aucun envoi). Pas un secret, elle ne permet que d'envoyer.
+const SENTRY_DSN = "https://40773adedc23e5995ac79439fb0f356e@o4512265832103936.ingest.de.sentry.io/4512265848225872";
+// { enabled: false } si l'utilisateur a coupé l'envoi (actif par défaut),
+// log : limitation du nombre d'envois (cf. allow).
+const ERROR_REPORTS_KEY = "moxfieldStockManagerErrorReports";
+const errorReports = createErrorReports({ dsn: SENTRY_DSN, fetch: (...args) => fetch(...args) });
+
+async function getErrorReportsMeta() {
+  const data = await chrome.storage.local.get(ERROR_REPORTS_KEY);
+  return { enabled: true, ...data[ERROR_REPORTS_KEY] };
+}
+
+async function updateErrorReportsMeta(patch) {
+  const meta = { ...(await getErrorReportsMeta()), ...patch };
+  await chrome.storage.local.set({ [ERROR_REPORTS_KEY]: meta });
+  return meta;
+}
+
+// Erreur inattendue : envoyée si l'envoi est actif et pas trop fréquente.
+// where : endroit (ex. "message:TOGGLE_DECK_BUILT", "drive-sync") ;
+// error : Error, ou { message, stack, type } venant d'une page. Ne lève
+// jamais. Les envois passent l'un après l'autre (journal de limitation).
+let errorReportQueue = Promise.resolve();
+function reportError(where, error, extra) {
+  const run = errorReportQueue.then(async () => {
+    if (!errorReports.configured) return false;
+    const meta = await getErrorReportsMeta();
+    if (!meta.enabled) return false;
+    const report = {
+      where,
+      message: (error && error.message) || String(error),
+      stack: error && error.stack,
+      type: (error && (error.type || error.name)) || "Error",
+      extra,
+    };
+    const { allowed, log } = errorReports.allow(meta.log, report);
+    await updateErrorReportsMeta({ log });
+    if (!allowed) return false;
+    const event = errorReports.buildEvent(report, {
+      release: chrome.runtime.getManifest().version,
+      installId: await getDeviceId(),
+      nav: typeof navigator !== "undefined" ? navigator : null,
+    });
+    const sent = await errorReports.send(event);
+    if (sent) await updateErrorReportsMeta({ lastSentAt: Date.now() });
+    return sent;
+  });
+  errorReportQueue = run.catch(() => {});
+  return run.catch(() => false);
+}
+
+// Erreurs qui échappent à tout try/catch du service worker.
+if (typeof self !== "undefined" && self.addEventListener) {
+  self.addEventListener("error", (event) => reportError("service-worker", event.error || event.message));
+  self.addEventListener("unhandledrejection", (event) => reportError("service-worker", event.reason));
+}
+
+// Erreur d'origine (cause), utile au diagnostic mais pas affichée.
+function causeOf(e) {
+  return e && e.cause ? { cause: `${e.cause.name || "Error"}: ${e.cause.message || e.cause}` } : undefined;
+}
+
+async function handleSetErrorReports({ enabled }) {
+  const meta = await updateErrorReportsMeta({ enabled: Boolean(enabled) });
+  return { ok: true, enabled: meta.enabled, configured: errorReports.configured };
 }
 
 // --- Parsing CSV export Moxfield ---
@@ -353,7 +422,7 @@ async function getAuthToken(interactive) {
   } catch (e) {
     throw new Error(interactive
       ? "Connexion à Google refusée ou annulée."
-      : "Connexion Google à renouveler : clique sur « Reconnecter ».");
+      : "Connexion Google à renouveler : clique sur « Reconnecter ».", { cause: e });
   }
   if (!token) throw new Error("Connexion à Google refusée ou annulée.");
   return token;
@@ -543,6 +612,7 @@ async function runSync() {
     await maybeDailySnapshot();
     return await updateSyncMeta({ lastSyncAt: Date.now(), lastError: null });
   } catch (e) {
+    reportError("drive-sync", e, causeOf(e));
     return await updateSyncMeta({ lastError: e.message || String(e) });
   }
 }
@@ -762,6 +832,8 @@ function findUncoveredCards(state) {
   return uncovered.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const EXPECTED_COLLECTION_ERRORS = ["not-logged-in", "network"];
+
 async function fetchCollection() {
   await updateCollectionMeta({ lastAttemptAt: Date.now() });
   try {
@@ -779,6 +851,9 @@ async function fetchCollection() {
     return { ok: true, changes };
   } catch (e) {
     const lastError = { code: e.code || "unknown", message: e.message || String(e) };
+    // Pas connecté à Moxfield, réseau coupé : situations normales, pas des
+    // erreurs de l'extension.
+    if (!EXPECTED_COLLECTION_ERRORS.includes(lastError.code)) reportError("moxfield-collection", e, { code: lastError.code });
     await updateCollectionMeta({ lastError });
     return { ok: false, error: lastError.message, code: lastError.code };
   }
@@ -930,10 +1005,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         case "RESET_STOCK":
           sendResponse(await handleResetStock());
           break;
+        case "REPORT_ERROR": {
+          const { where, error } = msg.payload || {};
+          sendResponse({ ok: true, sent: await reportError(where || "page", error || {}) });
+          break;
+        }
+        case "GET_ERROR_REPORTS":
+          sendResponse({ ok: true, enabled: (await getErrorReportsMeta()).enabled, configured: errorReports.configured });
+          break;
+        case "SET_ERROR_REPORTS":
+          sendResponse(await handleSetErrorReports(msg.payload || {}));
+          break;
         default:
           sendResponse({ ok: false, error: "Type de message inconnu: " + msg.type });
       }
     } catch (e) {
+      reportError(`message:${msg.type}`, e, causeOf(e));
       sendResponse({ ok: false, error: e.message || String(e) });
     }
   })();

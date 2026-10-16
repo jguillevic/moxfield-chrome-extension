@@ -164,6 +164,23 @@
     <span id="sync-status" class="status"></span>
   </section>
 
+  <section class="card">
+    <details id="error-reports-details">
+      <summary><h2>Rapports d'erreurs</h2></summary>
+      <div class="card-body">
+        <p class="hint">
+          Quand l'extension rencontre une erreur, un rapport anonyme est envoyé au développeur pour la corriger :
+          message de l'erreur, version de l'extension, navigateur et système. Jamais ton stock, tes decks ni ton adresse mail.
+        </p>
+        <label class="check-row">
+          <input type="checkbox" id="error-reports-enabled" />
+          Envoyer les rapports d'erreurs
+        </label>
+        <p id="error-reports-state" class="hint"></p>
+      </div>
+    </details>
+  </section>
+
   <section class="card danger-zone">
     <details>
       <summary><h2>Zone de danger</h2></summary>

@@ -19,6 +19,10 @@ const COLLECTION_KEY = "moxfieldStockManagerCollection";
 // une Error à lever ; sans elle, tout appel réseau fait échouer le test.
 // options.cookies : cookies de moxfield.com (session ouverte par défaut).
 // options.drive : fausse API Google Drive, (url, options) => réponse.
+// options.sentryDsn : DSN des rapports d'erreurs (aucun envoi sinon) ; les
+// rapports reçus par le faux Sentry sont dans sentry (événements).
+// options.authError : erreur levée par chrome.identity.getAuthToken
+// (ex. Brave, qui ne l'implémente pas).
 function loadBackground(initialState, options = {}) {
   const storage = {};
   if (initialState) storage[STORAGE_KEY] = initialState;
@@ -29,6 +33,7 @@ function loadBackground(initialState, options = {}) {
   const alarms = new Map(); // nom → options
   const webRequestListeners = [];
   const counts = { stateWrites: 0, fetches: 0 };
+  const sentry = [];
   const listener = (list = []) => ({ addListener: (fn) => list.push(fn) });
   const chrome = {
     storage: {
@@ -48,6 +53,7 @@ function loadBackground(initialState, options = {}) {
       onMessage: { addListener: (fn) => (onMessage = fn) },
       onStartup: listener(startupListeners),
       onInstalled: listener(),
+      getManifest: () => ({ version: "0.2.0" }),
     },
     alarms: {
       onAlarm: listener(alarmListeners),
@@ -60,12 +66,22 @@ function loadBackground(initialState, options = {}) {
     cookies: {
       getAll: async () => options.cookies || [{ name: "refresh_token_ABC12", value: "rt" }],
     },
-    identity: { getAuthToken: async () => ({ token: "jeton-google" }), removeCachedAuthToken: async () => {} },
+    identity: {
+      getAuthToken: async () => {
+        if (options.authError) throw options.authError;
+        return { token: "jeton-google" };
+      },
+      removeCachedAuthToken: async () => {},
+    },
   };
   // Faux Moxfield : jetons puis CSV (cf. tests/moxfield-collection.test.js
   // pour le détail des appels).
   async function fetch(url, init) {
     if (url.includes("googleapis.com")) return options.drive(url, init);
+    if (url.includes("sentry.io")) {
+      sentry.push(JSON.parse(init.body.split("\n")[2]));
+      return { ok: true };
+    }
     counts.fetches++;
     if (options.moxfieldCSV === undefined) throw new Error(`appel réseau inattendu : ${url}`);
     if (options.moxfieldCSV instanceof Error) throw options.moxfieldCSV;
@@ -77,7 +93,11 @@ function loadBackground(initialState, options = {}) {
     Blob, Response, FormData, TextDecoder, CompressionStream, DecompressionStream,
   });
   context.importScripts = (...files) => files.forEach((f) => vm.runInContext(read(f), context));
-  vm.runInContext(read("background.js"), context);
+  const source = read("background.js");
+  // DSN remplacée : aucun test n'envoie de rapport au vrai projet Sentry.
+  const dsnLine = /const SENTRY_DSN = "[^"]*";/;
+  if (!dsnLine.test(source)) throw new Error("SENTRY_DSN introuvable dans background.js");
+  vm.runInContext(source.replace(dsnLine, `const SENTRY_DSN = "${options.sentryDsn || ""}";`), context);
 
   // Comme Chrome, message et réponse sont sérialisés (ce qui ramène aussi
   // les objets du contexte isolé dans celui des tests, pour deepEqual).
@@ -93,6 +113,7 @@ function loadBackground(initialState, options = {}) {
     // Fonctions internes (synchro Drive, sans appel réseau).
     context,
     counts,
+    sentry,
     alarms,
     setCollectionMeta: (meta) => (storage[COLLECTION_KEY] = clone(meta)),
     setMoxfieldCSV: (csv) => (options.moxfieldCSV = csv),
@@ -808,4 +829,85 @@ test("Drive : lecture d'un fichier compressé comme d'un ancien fichier JSON", a
     assert.deepEqual(plain(parsed.state.stock), DOC.state.stock);
     assert.equal(parsed.updatedAt, 5);
   }
+});
+
+// --- Rapports d'erreurs (Sentry) ---
+
+const SENTRY_DSN = "https://abc123@o42.ingest.de.sentry.io/777";
+const waitReports = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+test("erreur inattendue d'une action : rapportée, avec l'action en cause", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  const res = await bg.send({ type: "TOGGLE_DECK_BUILT" }); // sans payload : bug simulé
+  assert.equal(res.ok, false);
+  await waitReports();
+  assert.equal(bg.sentry.length, 1);
+  const [event] = bg.sentry;
+  assert.equal(event.tags.where, "message:TOGGLE_DECK_BUILT");
+  assert.equal(event.exception.values[0].type, "TypeError");
+  assert.equal(event.release, "moxfield-stock-manager@0.2.0");
+  assert.match(event.user.id, /\w/);
+  // Rien d'autre que l'erreur et son contexte (jamais l'état).
+  assert.deepEqual(Object.keys(event).sort(), ["event_id", "exception", "extra", "level", "platform", "release", "tags", "timestamp", "user"]);
+});
+
+test("même erreur répétée : un seul rapport", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  for (let i = 0; i < 3; i++) await bg.send({ type: "TOGGLE_DECK_BUILT" });
+  await waitReports();
+  assert.equal(bg.sentry.length, 1);
+});
+
+test("rapports coupés par l'utilisateur, ou pas de DSN : rien ne part", async () => {
+  const off = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  const res = await off.send({ type: "SET_ERROR_REPORTS", payload: { enabled: false } });
+  assert.deepEqual(res, { ok: true, enabled: false, configured: true });
+  await off.send({ type: "TOGGLE_DECK_BUILT" });
+  await waitReports();
+  assert.equal(off.sentry.length, 0);
+  assert.deepEqual(await off.send({ type: "GET_ERROR_REPORTS" }), { ok: true, enabled: false, configured: true });
+
+  const noDsn = loadBackground();
+  assert.deepEqual(await noDsn.send({ type: "GET_ERROR_REPORTS" }), { ok: true, enabled: true, configured: false });
+  await noDsn.send({ type: "TOGGLE_DECK_BUILT" });
+  await waitReports();
+  assert.equal(noDsn.sentry.length, 0);
+});
+
+test("erreur d'une page (deck, popup) : rapportée par le service worker", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  const error = { message: "x is null", stack: "TypeError: x is null\n    at f (chrome-extension://id/content-deck.js:10:5)", type: "TypeError" };
+  const res = await bg.send({ type: "REPORT_ERROR", payload: { where: "deck-page:check", error } });
+  assert.deepEqual(res, { ok: true, sent: true });
+  const [event] = bg.sentry;
+  assert.equal(event.tags.where, "deck-page:check");
+  assert.equal(event.exception.values[0].value, "x is null");
+  assert.equal(event.exception.values[0].stacktrace.frames[0].filename, "content-deck.js");
+});
+
+test("connexion Google impossible (ex. Brave) : rapportée avec l'erreur d'origine", async () => {
+  const bg = loadBackground(undefined, {
+    sentryDsn: SENTRY_DSN,
+    authError: new Error("This API is not supported on this browser"),
+  });
+  const res = await bg.send({ type: "DRIVE_CONNECT" });
+  assert.equal(res.error, "Connexion à Google refusée ou annulée.");
+  await waitReports();
+  const [event] = bg.sentry;
+  assert.equal(event.tags.where, "message:DRIVE_CONNECT");
+  assert.equal(event.extra.cause, "Error: This API is not supported on this browser");
+});
+
+test("récupération de la collection : seules les erreurs anormales sont rapportées", async () => {
+  const loggedOut = loadBackground(undefined, { sentryDsn: SENTRY_DSN, moxfieldCSV: "", cookies: [] });
+  assert.equal((await loggedOut.send({ type: "COLLECTION_FETCH_NOW" })).code, "not-logged-in");
+  await waitReports();
+  assert.equal(loggedOut.sentry.length, 0, "pas connecté à Moxfield : situation normale");
+
+  const changed = loadBackground(undefined, { sentryDsn: SENTRY_DSN, moxfieldCSV: "<html>maintenance</html>" });
+  assert.equal((await changed.send({ type: "COLLECTION_FETCH_NOW" })).code, "api-changed");
+  await waitReports();
+  assert.equal(changed.sentry.length, 1);
+  assert.equal(changed.sentry[0].tags.where, "moxfield-collection");
+  assert.deepEqual(changed.sentry[0].extra, { code: "api-changed" });
 });

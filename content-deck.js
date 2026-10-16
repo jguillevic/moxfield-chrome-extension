@@ -438,6 +438,45 @@
     return Boolean(err && /Extension context invalidated/i.test(err.message || ""));
   }
 
+  // Erreur inattendue (bug de l'extension, page Moxfield qui a changé) :
+  // rapport anonyme envoyé par le service worker (cf. reportError dans
+  // background.js). Silencieux si l'extension a été rechargée entre-temps.
+  function reportError(where, e) {
+    if (isContextInvalidatedError(e)) return;
+    try {
+      const error = { message: (e && e.message) || String(e), stack: e && e.stack, type: (e && e.name) || "Error" };
+      chrome.runtime.sendMessage({ type: "REPORT_ERROR", payload: { where, error } }).catch(() => {});
+    } catch (err) {
+      // contexte d'extension invalidé
+    }
+  }
+
+  // Refus du service worker (stock insuffisant…) : message pour
+  // l'utilisateur, pas un bug — déjà rapporté par le service worker s'il
+  // s'agissait d'une erreur inattendue.
+  function refusal(res) {
+    return Object.assign(new Error(res.error || "Erreur inconnue"), { expected: true });
+  }
+
+  // Erreurs de nos scripts qui échappent à tout try/catch. Les erreurs du
+  // site lui-même arrivent aussi ici : on ne garde que celles dont la pile
+  // passe par l'extension.
+  function isOwnError(e, filename) {
+    let base = "chrome-extension://";
+    try {
+      base = chrome.runtime.getURL("");
+    } catch (err) {
+      // contexte d'extension invalidé : on garde le préfixe générique
+    }
+    return String(filename || "").startsWith(base) || String((e && e.stack) || "").includes(base);
+  }
+  window.addEventListener("error", (event) => {
+    if (isOwnError(event.error, event.filename)) reportError("deck-page", event.error || event.message);
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    if (isOwnError(event.reason)) reportError("deck-page", event.reason);
+  });
+
   async function safeSendMessage(message) {
     try {
       return await chrome.runtime.sendMessage(message);
@@ -566,7 +605,10 @@
         }
       }
     } catch (e) {
-      // contexte d'extension invalidé : l'utilisateur sera prévenu à son prochain clic
+      // Contexte d'extension invalidé : l'utilisateur sera prévenu à son
+      // prochain clic. Autre erreur : lecture de la page qui échoue (Moxfield
+      // a pu changer), rapportée.
+      reportError("deck-page:check", e);
     } finally {
       statusCheckRunning = false;
       if (statusCheckPending) {
@@ -803,12 +845,13 @@
           const payload = { deckId, deckName: getDeckName(), url: window.location.href, cards: updatedCards };
           const res = await safeSendMessage({ type: "UPDATE_BUILT_DECK", payload });
           if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
-          if (!res.ok) throw new Error(res.error || "Erreur inconnue");
+          if (!res.ok) throw refusal(res);
           overlay.remove();
           btnOutdated = false;
           await refreshButtonState(deckId);
           toast("Montage mis à jour, stock ajusté pour les cartes modifiées.");
         } catch (e) {
+          if (!e.expected) reportError("deck-page:update", e);
           toast("Erreur : " + e.message, true);
         }
       });
@@ -848,11 +891,12 @@
         }
         const res = await safeSendMessage({ type: "TOGGLE_DECK_BUILT", payload });
         if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
-        if (!res.ok) throw new Error(res.error || "Erreur inconnue");
+        if (!res.ok) throw refusal(res);
         overlay.remove();
         await refreshButtonState(deckId);
         toast(isBuilt ? "Deck démonté, stock réincrémenté." : "Deck marqué comme monté, stock décrémenté.");
       } catch (e) {
+        if (!e.expected) reportError("deck-page:toggle", e);
         toast("Erreur : " + e.message, true);
       }
     });

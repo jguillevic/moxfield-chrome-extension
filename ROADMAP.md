@@ -62,3 +62,5 @@ joue des proxies ou d'autres formats.
 - Tenue aux grosses collections (50 000 cartes) : stockage illimité,
   détail de l'historique borné, page de deck limitée au stock de ses
   cartes, fichiers Google Drive compressés — octobre 2026.
+- Rapports d'erreurs anonymes de toutes les installations, envoyés sur
+  Sentry (désactivables) — octobre 2026.
