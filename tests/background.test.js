@@ -136,7 +136,15 @@ function loadBackground(initialState, options = {}) {
   // DSN remplacée : aucun test n'envoie de rapport au vrai projet Sentry.
   const dsnLine = /const SENTRY_DSN = "[^"]*";/;
   if (!dsnLine.test(source)) throw new Error("SENTRY_DSN introuvable dans background.js");
-  vm.runInContext(source.replace(dsnLine, `const SENTRY_DSN = "${options.sentryDsn || ""}";`), context);
+  // Délais avant de réessayer une requête Drive : sans attente dans les tests.
+  const retryLine = /const DRIVE_RETRY_DELAYS_MS = \[[^\]]*\];/;
+  if (!retryLine.test(source)) throw new Error("DRIVE_RETRY_DELAYS_MS introuvable dans background.js");
+  vm.runInContext(
+    source
+      .replace(dsnLine, `const SENTRY_DSN = "${options.sentryDsn || ""}";`)
+      .replace(retryLine, "const DRIVE_RETRY_DELAYS_MS = [0, 0];"),
+    context
+  );
 
   // Comme Chrome, message et réponse sont sérialisés (ce qui ramène aussi
   // les objets du contexte isolé dans celui des tests, pour deepEqual).
@@ -1061,6 +1069,75 @@ test("jeton refusé par Drive (401) : redemandé en silence, synchro réussie", 
   assert.equal(refused, true);
   assert.equal(res.meta.lastError, null);
   assert.equal(bg.google.launches.at(-1).interactive, false, "nouveau jeton sans fenêtre");
+});
+
+// Drive connecté, puis réponses imposées par failure(url, init) : une
+// Response, ou undefined pour le comportement normal (Drive vide).
+async function driveFailing(failure) {
+  const calls = [];
+  let failing = false;
+  const bg = await connectedOnBrave({
+    sentryDsn: SENTRY_DSN,
+    drive: (url, init = {}) => {
+      if (url.includes("/about")) return new Response(JSON.stringify({ user: { emailAddress: "moi@gmail.com" } }));
+      if (failing) {
+        calls.push({ url, method: init.method || "GET" });
+        const res = failure(url, init, calls.length);
+        if (res) return res;
+      }
+      if (url.includes("/drive/v3/files?")) return new Response(JSON.stringify({ files: [] }));
+      return new Response(JSON.stringify({ id: "f1", version: "1" }));
+    },
+  });
+  failing = true;
+  return { bg, calls };
+}
+
+const TRANSIENT_503 = () =>
+  new Response(JSON.stringify({ error: { code: 503, message: "Transient failure." } }), { status: 503 });
+
+test("Drive répond 503 une fois (cf. Sentry JAVASCRIPT-2) : réessayé, synchro réussie sans rapport", async () => {
+  const { bg, calls } = await driveFailing((url, init, n) => (n === 1 ? TRANSIENT_503() : undefined));
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.equal(res.meta.lastError, null);
+  assert.ok(calls[0].url === calls[1].url, "même requête réessayée");
+  await waitReports();
+  assert.equal(bg.sentry.length, 0);
+});
+
+test("Drive indisponible plus longtemps : erreur expliquée, sans rapport", async () => {
+  const { bg, calls } = await driveFailing((url) => (url.includes("/drive/v3/files?") ? TRANSIENT_503() : undefined));
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.equal(res.meta.lastError, "Google Drive est momentanément indisponible (503) : réessaie dans quelques minutes.");
+  assert.equal(calls.length, 3, "deux nouveaux essais, pas plus");
+  await waitReports();
+  assert.equal(bg.sentry.length, 0);
+});
+
+test("Drive : création de fichier jamais réessayée (elle a pu aboutir malgré le 503)", async () => {
+  const { bg, calls } = await driveFailing((url, init) => (init.method === "POST" ? TRANSIENT_503() : undefined));
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.match(res.meta.lastError, /momentanément indisponible/);
+  assert.equal(calls.filter((c) => c.method === "POST").length, 1);
+});
+
+test("Drive injoignable (réseau coupé) : erreur expliquée, sans rapport", async () => {
+  const { bg } = await driveFailing(() => {
+    throw new TypeError("Failed to fetch");
+  });
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.equal(res.meta.lastError, "Google Drive injoignable : vérifie ta connexion.");
+  await waitReports();
+  assert.equal(bg.sentry.length, 0);
+});
+
+test("Drive refuse la requête (403) : erreur rapportée", async () => {
+  const { bg } = await driveFailing(() => new Response("interdit", { status: 403 }));
+  const res = await bg.send({ type: "SYNC_NOW" });
+  assert.match(res.meta.lastError, /^Google Drive a répondu 403/);
+  await waitReports();
+  assert.equal(bg.sentry.length, 1);
+  assert.equal(bg.sentry[0].tags.where, "drive-sync");
 });
 
 test("Brave : déconnexion, jeton révoqué et méthode oubliée", async () => {

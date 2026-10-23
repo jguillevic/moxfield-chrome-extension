@@ -184,7 +184,7 @@ test("la page ne demande que le stock des cartes du deck, jamais l'état complet
 
 const reportsOf = (page) => page.sent.filter((m) => m.type === "REPORT_ERROR").map((m) => m.payload);
 
-test("erreur pendant le contrôle de la page : rapportée, sauf extension rechargée", async (t) => {
+test("erreur pendant le contrôle de la page : rapportée, sauf extension rechargée ou service worker injoignable", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
   await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
@@ -194,6 +194,20 @@ test("erreur pendant le contrôle de la page : rapportée, sauf extension rechar
   page.setStock(FULL_STOCK);
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.deepEqual(reportsOf(page), [], "extension rechargée : rien à rapporter");
+
+  // Service worker momentanément injoignable (cf. rapports Sentry
+  // JAVASCRIPT-3 et JAVASCRIPT-4) : le contrôle suivant réessaie.
+  for (const message of [
+    "A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received",
+    "Could not establish connection. Receiving end does not exist.",
+  ]) {
+    page.handle = (msg) => {
+      if (msg.type === "GET_DECK_CONTEXT") throw new Error(message);
+    };
+    page.setStock(FULL_STOCK);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  assert.deepEqual(reportsOf(page), [], "service worker injoignable : rien à rapporter");
 
   page.handle = (msg) => {
     if (msg.type === "GET_DECK_CONTEXT") throw new TypeError("stock is undefined");

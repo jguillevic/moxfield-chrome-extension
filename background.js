@@ -466,19 +466,44 @@ async function invalidateAuthToken(token) {
   else await chrome.identity.removeCachedAuthToken({ token });
 }
 
+// Google Drive répond parfois 503 « Transient failure » (constaté dans les
+// rapports d'erreurs), ou 429 quand on va trop vite : la requête est
+// réessayée après ces délais. Jamais une création (POST) : après un 503, le
+// fichier a pu être créé quand même, la réessayer risquerait de le doubler.
+const DRIVE_RETRY_DELAYS_MS = [1000, 4000];
+
 // Un token en cache peut avoir expiré ou été révoqué : sur un 401, on
 // l'invalide et on réessaie une fois avec un token neuf, demandé en
 // silence (pas de seconde fenêtre Google pendant une connexion).
+// Drive indisponible ou réseau coupé : situation normale, pas de rapport
+// d'erreur (expected) ; la synchro suivante réessaie.
 async function driveFetch(url, options = {}, interactive = false) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const token = await getAuthToken(interactive && attempt === 0);
-    const res = await fetch(url, {
-      ...options,
-      headers: { ...options.headers, Authorization: `Bearer ${token}` },
-    });
-    if (res.status === 401 && attempt === 0) {
+  const delays = options.method === "POST" ? [] : DRIVE_RETRY_DELAYS_MS;
+  let tokenRenewed = false;
+  let retries = 0;
+  for (;;) {
+    const token = await getAuthToken(interactive && !tokenRenewed && retries === 0);
+    let res;
+    try {
+      res = await fetch(url, {
+        ...options,
+        headers: { ...options.headers, Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      throw Object.assign(new Error(i18n.t("driveUnreachable"), { cause: e }), { expected: true });
+    }
+    if (res.status === 401 && !tokenRenewed) {
+      tokenRenewed = true;
       await invalidateAuthToken(token);
       continue;
+    }
+    const unavailable = res.status === 429 || res.status >= 500;
+    if (unavailable && retries < delays.length) {
+      await new Promise((resolve) => setTimeout(resolve, delays[retries++]));
+      continue;
+    }
+    if (unavailable) {
+      throw Object.assign(new Error(i18n.t("driveUnavailable", res.status)), { expected: true });
     }
     if (!res.ok) {
       const body = await res.text();

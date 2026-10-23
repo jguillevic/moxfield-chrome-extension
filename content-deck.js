@@ -433,6 +433,15 @@
     return Boolean(err && /Extension context invalidated/i.test(err.message || ""));
   }
 
+  // Service worker momentanément injoignable (arrêté par Chrome pendant la
+  // requête, en train de redémarrer) : « message channel closed before a
+  // response was received » ou « Receiving end does not exist », constatés
+  // dans les rapports d'erreurs. Le contrôle en fond suivant (3 secondes plus
+  // tard) le réveille : rien à rapporter.
+  function isServiceWorkerUnreachableError(err) {
+    return Boolean(err && /message channel closed|Receiving end does not exist/i.test(err.message || ""));
+  }
+
   // Erreur inattendue (bug de l'extension, page Moxfield qui a changé) :
   // rapport anonyme envoyé par le service worker (cf. reportError dans
   // background.js). Silencieux si l'extension a été rechargée entre-temps.
@@ -601,9 +610,10 @@
       }
     } catch (e) {
       // Contexte d'extension invalidé : l'utilisateur sera prévenu à son
-      // prochain clic. Autre erreur : lecture de la page qui échoue (Moxfield
-      // a pu changer), rapportée.
-      reportError("deck-page:check", e);
+      // prochain clic. Service worker injoignable : le prochain contrôle
+      // réessaie. Autre erreur : lecture de la page qui échoue (Moxfield a pu
+      // changer), rapportée.
+      if (!isServiceWorkerUnreachableError(e)) reportError("deck-page:check", e);
     } finally {
       statusCheckRunning = false;
       if (statusCheckPending) {

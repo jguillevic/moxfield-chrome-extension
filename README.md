@@ -283,6 +283,10 @@ en cas de conflit : rien ne s'y perd).
   peut être restauré ; la version restaurée est aussi appliquée aux autres PC.
 - Le bouton **Réinitialiser** de la zone de danger vide aussi le stock des
   autres PC quand la synchro est active.
+- Google Drive momentanément indisponible (erreur 503, trop de requêtes) :
+  la requête est réessayée deux fois en quelques secondes, puis la synchro
+  suivante reprend. Le popup affiche « momentanément indisponible » ou
+  « Google Drive injoignable » (réseau coupé) en attendant.
 - Si la connexion Google expire, le popup affiche un avertissement et un
   bouton **« Reconnecter »**. Si le popup se ferme pendant l'autorisation
   Google, rouvre-le.
@@ -321,7 +325,9 @@ en cas de conflit : rien ne s'y perd).
   les jetons de connexion et adresses mail qui apparaîtraient dans un
   message sont masqués.
 - Ne sont pas envoyées les situations normales (pas connecté à Moxfield,
-  réseau coupé) ni les refus expliqués à l'écran (stock insuffisant…).
+  réseau coupé, Google Drive momentanément indisponible, service worker de
+  l'extension qui redémarre pendant le contrôle d'une page de deck) ni les
+  refus expliqués à l'écran (stock insuffisant…).
 - Une même erreur part au plus une fois par heure, et 20 rapports au plus
   par jour et par PC.
 - Actif par défaut ; pour le couper : popup, section **Rapports d'erreurs**,
@@ -448,7 +454,8 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   — DSN, masquage des jetons et adresses mail, limitation des envois,
   navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur
   déclenchement est testé dans `tests/background.test.js` (erreurs
-  d'action, de connexion Google, de la collection, case décochée),
+  d'action, de connexion Google, de la collection, Drive indisponible ou
+  injoignable non rapporté, case décochée),
   `tests/content-deck.test.js` et `tests/popup.test.js`.
 - `tests/google-auth.test.js` : connexion Google hors Google Chrome
   (`google-auth.js`, fenêtre de connexion simulée) — choix de la méthode
@@ -461,8 +468,9 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock
   change, tolérance à une liste brièvement incohérente, erreurs
-  rapportées (contrôle de la page, erreurs de l'extension mais pas du site),
-  bouton et fenêtre de montage en anglais.
+  rapportées (contrôle de la page, sauf extension rechargée ou service
+  worker injoignable ; erreurs de l'extension mais pas du site), bouton et
+  fenêtre de montage en anglais.
 - `tests/i18n.test.js` : traductions (`i18n.js`, `_locales/`) — mêmes
   clés et mêmes valeurs insérées dans chaque langue, pas de « $ » que Chrome
   refuserait, pluriels complets, nom et description du manifest, toute clé

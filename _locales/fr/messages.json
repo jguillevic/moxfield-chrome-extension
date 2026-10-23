@@ -497,6 +497,12 @@
   "driveHttpError": {
     "message": "Google Drive a répondu $1 : $2"
   },
+  "driveUnreachable": {
+    "message": "Google Drive injoignable : vérifie ta connexion."
+  },
+  "driveUnavailable": {
+    "message": "Google Drive est momentanément indisponible ($1) : réessaie dans quelques minutes."
+  },
   "unknownMessageType": {
     "message": "Type de message inconnu : $1"
   },
