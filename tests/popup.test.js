@@ -1,8 +1,7 @@
 // Tests du popup (popup.html + popup.js) : npm test
 //
 // Le popup est chargé dans une page jsdom avec un faux `chrome` qui répond
-// aux messages comme le service worker. Seule la section « Collection
-// Moxfield » est couverte pour l'instant.
+// aux messages comme le service worker.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -226,6 +225,43 @@ test("filtre : cherche dans tout le stock, au-delà des 200 premières", async (
   assert.equal(rows.length, 2);
   assert.match(rows[1].textContent, /Card 0450/);
   assert.equal(p.$("stock-table").querySelector("p.hint"), null);
+});
+
+// --- Chiffres clés ---
+
+// Stock libre : 1 Sol Ring + 10 Forest. Deux decks montés contiennent un
+// Sol Ring, dont un monté avec une ancienne version (excludedFromStock) :
+// jamais retiré du stock, il ne doit pas gonfler le total possédé.
+const MOUNTED_STATE = {
+  stock: {
+    "sol ring": { name: "Sol Ring", qty: 1 },
+    forest: { name: "Forest", qty: 10 },
+  },
+  builtDecks: {
+    a: { name: "Zethi", url: "https://moxfield.com/decks/a", cards: [{ name: "Sol Ring", qty: 1 }] },
+    b: { name: "Sidisi", url: "https://moxfield.com/decks/b", cards: [{ name: "Sol Ring", qty: 1, excludedFromStock: true }] },
+  },
+};
+
+test("chiffres clés : exemplaires possédés = libres + dans des decks montés", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: MOUNTED_STATE }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("stock-total").textContent, "11");
+  assert.equal(p.$("stock-in-decks").textContent, "1");
+  assert.equal(p.$("stock-owned").textContent, "12");
+  assert.equal(p.$("stock-count").textContent, "2");
+});
+
+test("total possédé d'une carte : même calcul que le chiffre clé", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: MOUNTED_STATE }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  await openStock(p);
+  const row = Array.from(p.$("stock-table").querySelectorAll("tr.has-decks")).find((tr) => /Sol Ring/.test(tr.textContent));
+  row.dispatchEvent(new p.win.Event("click"));
+  await settle();
+  assert.match(p.$("stock-table").querySelector("tr.deck-usage").textContent, /Total possédé : 2/);
 });
 
 // --- Section Historique ---

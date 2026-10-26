@@ -111,6 +111,13 @@ function buildDeckUsage(builtDecks) {
   return usage;
 }
 
+// Total possédé = libre + dans des decks montés. Affiché pour une carte
+// (détail d'une ligne) et pour tout le stock (chiffres clés) : un seul
+// calcul, pour que les deux ne puissent pas diverger.
+function ownedQty(freeQty, inDecksQty) {
+  return freeQty + inDecksQty;
+}
+
 // Lignes dépliées (détail des decks), conservées entre deux rafraîchissements.
 const expandedCards = new Set();
 
@@ -134,8 +141,10 @@ function renderStock(state, filter, onlyInDecks) {
   }
 
   const inDecksTotal = Array.from(usage.values()).reduce((sum, u) => sum + u.total, 0);
+  const freeTotal = Object.values(state.stock).reduce((sum, c) => sum + c.qty, 0);
+  document.getElementById("stock-owned").textContent = ownedQty(freeTotal, inDecksTotal);
   document.getElementById("stock-count").textContent = Object.keys(state.stock).length;
-  document.getElementById("stock-total").textContent = Object.values(state.stock).reduce((sum, c) => sum + c.qty, 0);
+  document.getElementById("stock-total").textContent = freeTotal;
   document.getElementById("stock-in-decks").textContent = inDecksTotal;
 
   if (!document.getElementById("stock-details").open) {
@@ -180,7 +189,7 @@ function renderStock(state, filter, onlyInDecks) {
       const detail = document.createElement("tr");
       detail.className = "deck-usage";
       detail.innerHTML =
-        `<td colspan="3">Total possédé : ${card.qty + u.total}<ul>` +
+        `<td colspan="3">Total possédé : ${ownedQty(card.qty, u.total)}<ul>` +
         u.decks
           .map((d) => `<li><a href="${escapeHtml(d.url)}" target="_blank">${escapeHtml(d.name)}</a> ×${d.qty}</li>`)
           .join("") +

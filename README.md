@@ -215,6 +215,9 @@ contenu du CSV. Même effet qu'une récupération automatique.
 ### 3. Consulter le stock
 
 - Ouvre le popup de l'extension (icône dans la barre d'outils).
+- En haut, les chiffres clés : **exemplaires possédés** (libres + dans des
+  decks montés), **exemplaires libres**, exemplaires **dans des decks**
+  montés et nombre de **cartes différentes** en stock.
 - Tu y vois les decks actuellement montés (avec un bouton pour démonter
   chacun) et le stock complet.
 - La section **Stock** est repliée par défaut : clique sur son titre pour
@@ -415,8 +418,9 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
   de test avec un faux `chrome`) — sections « Collection Moxfield » et
   « Historique » et « Rapports d'erreurs » (lien de connexion à Moxfield
-  compris), affichage du stock (tableau
-  limité, filtre), erreurs rapportées.
+  compris), chiffres clés (exemplaires possédés, libres, dans des decks),
+  affichage du stock (tableau limité, filtre, total possédé d'une carte),
+  erreurs rapportées.
 - `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
   — DSN, masquage des jetons et adresses mail, limitation des envois,
   navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur
