@@ -2,9 +2,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createHistory } = require("../history.js");
+const { loadI18n } = require("./helpers");
 
 const normalizeName = (name) => name.trim().toLowerCase().replace(/\s+/g, " ");
-const h = createHistory(normalizeName);
+const h = createHistory(normalizeName, loadI18n());
 
 const entry = (id, at, extra = {}) => ({ id, at, device: "pc1", type: "drive-restore", ...extra });
 

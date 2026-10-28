@@ -12,12 +12,15 @@
 // changeCount : nombre total quand le détail est tronqué (cf. compactEntry).
 //   reset          { builtDecks }
 //   drive-restore  {}
+// Les libellés sont calculés à l'affichage (describe), dans la langue du
+// moment : les entrées n'enregistrent que des données.
 // Pour l'instant, l'historique se consulte seulement. Les entrées gardent
 // de quoi annuler plus tard une action sur les decks montés (liste du deck
 // démonté, liste avant mise à jour, decks avant réinitialisation, dates de
 // montage et de mise à jour) — cf. ROADMAP.md.
 
-function createHistory(normalizeName) {
+// i18n : textes traduits (cf. i18n.js).
+function createHistory(normalizeName, { tn, t }) {
   // Six à sept semaines d'usage normal (une trentaine d'actions par semaine).
   const MAX_ENTRIES = 200;
 
@@ -88,31 +91,21 @@ function createHistory(normalizeName) {
     return cards.reduce((n, c) => n + c.qty, 0);
   }
 
-  // En français, 0 et 1 s'accordent au singulier.
-  const s = (n) => (n > 1 ? "s" : "");
-  const plural = (n, word) => `${n} ${word}${s(n)}`;
-
   // Libellé d'une entrée, pour le popup.
   function describe(entry) {
     switch (entry.type) {
-      case "collection": {
-        const source = entry.source === "csv" ? "Import CSV" : "Collection Moxfield récupérée";
-        return `${source} : ${plural(changeCount(entry), "carte")} modifiée${s(changeCount(entry))}`;
-      }
+      case "collection":
+        return tn(entry.source === "csv" ? "historyCsvImport" : "historyCollectionFetched", changeCount(entry));
       case "deck-built":
-        return `Deck « ${entry.deckName} » monté : ${plural(entry.cardCount, "carte")} retirée${s(entry.cardCount)} du stock libre`;
-      case "deck-unbuilt": {
-        const n = cardCount(entry.cards);
-        return `Deck « ${entry.deckName} » démonté : ${plural(n, "carte")} rendue${s(n)} au stock`;
-      }
+        return tn("historyDeckBuilt", entry.cardCount, entry.deckName);
+      case "deck-unbuilt":
+        return tn("historyDeckUnbuilt", cardCount(entry.cards), entry.deckName);
       case "deck-updated":
-        return `Montage de « ${entry.deckName} » mis à jour : ${plural(changeCount(entry), "carte")} modifiée${s(changeCount(entry))}`;
-      case "reset": {
-        const n = Object.keys(entry.builtDecks).length;
-        return `Stock réinitialisé (${plural(n, "deck")} démonté${s(n)})`;
-      }
+        return tn("historyDeckUpdated", changeCount(entry), entry.deckName);
+      case "reset":
+        return tn("historyReset", Object.keys(entry.builtDecks).length);
       case "drive-restore":
-        return "Version de l'historique Google Drive restaurée";
+        return t("historyDriveRestore");
       default:
         return entry.type;
     }

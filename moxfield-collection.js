@@ -33,8 +33,9 @@ class MoxfieldError extends Error {
   }
 }
 
-// getCookies : renvoie les cookies de moxfield.com ({name, value}).
-function createMoxfieldCollection({ fetch, getCookies }) {
+// getCookies : renvoie les cookies de moxfield.com ({name, value}) ;
+// i18n : textes traduits (cf. i18n.js).
+function createMoxfieldCollection({ fetch, getCookies, i18n: { t } }) {
   // Le userId attendu par le renouvellement est le suffixe du cookie
   // "refresh_token_<userId>". Avec plusieurs comptes déjà utilisés dans ce
   // navigateur, on retient celui dont le jeton est le jeton courant (cookie
@@ -52,23 +53,20 @@ function createMoxfieldCollection({ fetch, getCookies }) {
     try {
       res = await fetch(url, options);
     } catch (e) {
-      throw new MoxfieldError("network", "Moxfield est injoignable (réseau).");
+      throw new MoxfieldError("network", t("moxfieldNetwork"));
     }
     if (res.ok) return res;
     if (step === "refresh" && (res.status === 400 || res.status === 401)) {
-      throw new MoxfieldError("not-logged-in", "Session Moxfield expirée : reconnecte-toi sur moxfield.com dans ce navigateur.");
+      throw new MoxfieldError("not-logged-in", t("moxfieldSessionExpired"));
     }
     if (res.status === 403 || res.status === 429) {
-      throw new MoxfieldError("blocked", `Moxfield a refusé la récupération (code ${res.status}). Réessaie plus tard, ou utilise l'import CSV.`);
+      throw new MoxfieldError("blocked", t("moxfieldBlocked", res.status));
     }
-    throw unexpected(step, `code ${res.status}`);
+    throw unexpected(step, t("moxfieldStatusCode", res.status));
   }
 
   function unexpected(step, detail) {
-    return new MoxfieldError(
-      "api-changed",
-      `Réponse inattendue de Moxfield (étape « ${step} », ${detail}) : son fonctionnement a peut-être changé. Utilise l'import CSV en attendant.`
-    );
+    return new MoxfieldError("api-changed", t("moxfieldUnexpected", step, detail));
   }
 
   async function readToken(step, res) {
@@ -76,16 +74,16 @@ function createMoxfieldCollection({ fetch, getCookies }) {
     try {
       body = await res.json();
     } catch (e) {
-      throw unexpected(step, "réponse illisible");
+      throw unexpected(step, t("moxfieldUnreadable"));
     }
-    if (!body || typeof body.access_token !== "string" || !body.access_token) throw unexpected(step, "jeton absent");
+    if (!body || typeof body.access_token !== "string" || !body.access_token) throw unexpected(step, t("moxfieldNoToken"));
     return body.access_token;
   }
 
   async function downloadCollectionCSV() {
     const userId = await findUserId();
     if (!userId) {
-      throw new MoxfieldError("not-logged-in", "Pas de session Moxfield : connecte-toi sur moxfield.com dans ce navigateur.");
+      throw new MoxfieldError("not-logged-in", t("moxfieldNoSession"));
     }
     const refresh = await request("refresh", `${MOXFIELD_API2}/refresh`, {
       method: "POST",
@@ -103,7 +101,7 @@ function createMoxfieldCollection({ fetch, getCookies }) {
     const csv = await request("csv", `${MOXFIELD_COLLECTION_CSV_URL}&access_token=${encodeURIComponent(exportToken)}`, {});
     const text = await csv.text();
     const header = text.split("\n", 1)[0].toLowerCase();
-    if (!/\bcount\b/.test(header) || !/\bname\b/.test(header)) throw unexpected("csv", "pas un CSV de collection");
+    if (!/\bcount\b/.test(header) || !/\bname\b/.test(header)) throw unexpected("csv", t("moxfieldNotCollectionCsv"));
     return text;
   }
 

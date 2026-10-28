@@ -8,10 +8,10 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
-const { FIXTURES_DIR, simulateLayout } = require("./helpers");
+const { FIXTURES_DIR, simulateLayout, fakeGetMessage } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
-const SCRIPTS = ["deck-scraper.js", "deck-checks.js", "content-deck.js"].map((f) =>
+const SCRIPTS = ["i18n.js", "deck-scraper.js", "deck-checks.js", "content-deck.js"].map((f) =>
   fs.readFileSync(path.join(ROOT, f), "utf8")
 );
 const STATE_KEY = "moxfieldStockManagerState";
@@ -33,7 +33,8 @@ const FULL_STOCK = stockOf({
   Swamp: 3,
 });
 
-function openDeckPage(state) {
+// lang : langue du navigateur (français par défaut).
+function openDeckPage(state, lang = "fr") {
   const html = fs.readFileSync(path.join(FIXTURES_DIR, "text.html"), "utf8");
   const dom = new JSDOM(html, { url: "https://www.moxfield.com/decks/abc123", runScripts: "outside-only" });
   const win = dom.window;
@@ -74,6 +75,7 @@ function openDeckPage(state) {
     return { ok: true, stock, builtDecks: page.state.builtDecks };
   }
   win.chrome = {
+    i18n: { getMessage: fakeGetMessage(lang) },
     runtime: {
       sendMessage: async (msg) => {
         page.sent.push(JSON.parse(JSON.stringify(msg)));
@@ -214,4 +216,20 @@ test("erreur non interceptée : rapportée si elle vient de l'extension, pas du 
   fire("chrome-extension://test/content-deck.js", "erreur de l'extension");
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.deepEqual(reportsOf(page).map((r) => [r.where, r.error.message]), [["deck-page", "erreur de l'extension"]]);
+});
+
+test("navigateur en anglais : bouton et fenêtre de montage en anglais", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "en");
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("available"), 2000, "faisabilité affichée");
+  assert.equal(buttonText(page), "🧰 Mark as physically built · 3/4 available");
+  assert.match(buttonTitle(page), /^1 card blocks the build: 1 in another printing/);
+  assert.match(buttonTitle(page), /different printing: Birds of Paradise/);
+
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-card-count") && doc.querySelector("#msm-card-count").textContent, 2000, "fenêtre ouverte");
+  assert.equal(doc.querySelector("#msm-modal-title").textContent, "Mark this deck as physically built");
+  assert.equal(doc.querySelector("#msm-confirm").textContent, "Confirm the build");
+  assert.equal(doc.querySelector("#msm-card-count").textContent, "7 cards in total (5 distinct names)");
 });

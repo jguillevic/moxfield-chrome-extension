@@ -5,7 +5,8 @@
 // (tests/). Aucun accès à la page ni à l'extension : uniquement des calculs
 // sur des listes de cartes et le stock.
 
-function createDeckChecks(normalizeName) {
+// i18n : textes traduits (cf. i18n.js).
+function createDeckChecks(normalizeName, { t, tn }) {
   // Terrains de base : en pratique tu en as (presque) toujours assez, et
   // l'édition n'a jamais d'importance pour eux. On ne bloque donc jamais le
   // montage à cause d'un terrain de base (ni "version différente", ni
@@ -141,12 +142,10 @@ function createDeckChecks(normalizeName) {
   // null si rien ne bloque.
   function blockingSummary(a) {
     if (a.blocking === 0) return null;
-    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
     const reasons = [];
-    if (a.missingCount > 0) reasons.push(`${plural(a.missingCount, "manquante")} en stock`);
-    if (a.wrongEditionCount > 0) reasons.push(`${a.wrongEditionCount} dans une autre version`);
-    const verb = a.blocking === 1 ? "bloque" : "bloquent";
-    return `${plural(a.blocking, "carte")} ${verb} le montage : ${reasons.join(", ")}`;
+    if (a.missingCount > 0) reasons.push(tn("blockingMissing", a.missingCount));
+    if (a.wrongEditionCount > 0) reasons.push(tn("blockingWrongEdition", a.wrongEditionCount));
+    return tn("blockingSummary", a.blocking, reasons.join(", "));
   }
 
   // Détail de la faisabilité, affiché au survol du bouton.
@@ -154,12 +153,12 @@ function createDeckChecks(normalizeName) {
     const MAX_NAMES = 8;
     const list = (items) =>
       items.slice(0, MAX_NAMES).join(", ") + (items.length > MAX_NAMES ? `, … (+${items.length - MAX_NAMES})` : "");
-    const disponibles = `${a.available}/${a.total} cartes disponibles en stock libre, hors terrains de base`;
-    const parts = [a.blocking === 0 ? `montable : ${disponibles}` : `${blockingSummary(a)} (${disponibles})`];
-    if (a.shortages.length > 0) parts.push("manque " + list(a.shortages.map((s) => `${s.name} (${s.missing})`)));
-    if (a.wrongEdition.length > 0) parts.push("version différente : " + list(a.wrongEdition));
+    const available = t("availabilityCount", a.available, a.total);
+    const parts = [a.blocking === 0 ? t("availabilityOk", available) : `${blockingSummary(a)} (${available})`];
+    if (a.shortages.length > 0) parts.push(t("availabilityMissing", list(a.shortages.map((s) => `${s.name} (${s.missing})`))));
+    if (a.wrongEdition.length > 0) parts.push(t("availabilityWrongEdition", list(a.wrongEdition)));
     if (a.basicShortages.length > 0) {
-      parts.push("terrains de base manquants (non bloquant) : " + list(a.basicShortages.map((s) => `${s.name} (${s.missing})`)));
+      parts.push(t("availabilityBasicMissing", list(a.basicShortages.map((s) => `${s.name} (${s.missing})`))));
     }
     return parts.join(" — ");
   }

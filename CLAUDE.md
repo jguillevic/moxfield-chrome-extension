@@ -21,8 +21,13 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 
 ## Code
 
-- Tout en français : commentaires, textes affichés, messages d'erreur. Les
-  textes s'adressent à l'utilisateur en le tutoyant.
+- Commentaires en français.
+- Textes affichés (libellés, messages d'erreur) : jamais en dur, toujours
+  traduits en français **et** en anglais dans `_locales/<langue>/messages.json`,
+  lus par `t()` / `tn()` (pluriels) ou `data-i18n` (cf. `i18n.js`). En
+  français, les textes s'adressent à l'utilisateur en le tutoyant.
+- L'historique et l'état ne stockent que des données, jamais un libellé :
+  il est calculé à l'affichage, dans la langue du moment.
 - Les commentaires expliquent le *pourquoi* (comportement de Moxfield
   observé, piège déjà rencontré), pas le *quoi*. Préciser quand une
   hypothèse sur le DOM a été « confirmée via inspection réelle ».

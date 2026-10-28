@@ -3,10 +3,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createDeckScraper } = require("../deck-scraper.js");
 const { createDeckChecks } = require("../deck-checks.js");
+const { loadI18n } = require("./helpers");
 
 // normalizeName ne dépend pas de la page : une fenêtre vide suffit.
 const { normalizeName } = createDeckScraper({ document: {} });
-const checks = createDeckChecks(normalizeName);
+const checks = createDeckChecks(normalizeName, loadI18n());
 const {
   isBasicLand,
   buildWrongEditionSet,

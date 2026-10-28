@@ -51,6 +51,13 @@
     return (h1 && h1.textContent.trim()) || document.title.replace(/\s*\|\s*Moxfield.*$/i, "").trim();
   }
 
+  // Textes traduits : voir i18n.js.
+  const i18n = createChromeI18n();
+  const { t, tn } = i18n;
+  // Lu dès le chargement : une fois l'extension rechargée, chrome.i18n peut
+  // ne plus répondre, et c'est justement là qu'il faut ce message.
+  const CONTEXT_INVALIDATED_MESSAGE = t("extensionReloaded");
+
   // Lecture de la liste du deck sur la page : voir deck-scraper.js.
   const { normalizeName, scrapeCardsGuess, getSiteDeclaredTotal, completeCardNames, computeDeckDiff } =
     createDeckScraper(window);
@@ -66,7 +73,7 @@
     computeDeckAvailability,
     blockingSummary,
     availabilityLabel,
-  } = createDeckChecks(normalizeName);
+  } = createDeckChecks(normalizeName, i18n);
 
   // Cartes possédées dans une autre version que celle du deck (cf.
   // buildWrongEditionSet), pour la liste affichée dans la fenêtre. Bloque le
@@ -83,7 +90,7 @@
     }
     el.style.display = "block";
     el.innerHTML =
-      `<strong>🚫 Présentes dans ta collection mais pas dans la bonne version pour ce deck (${names.length} carte(s))</strong> — montage bloqué, corrige ou retire ces lignes avant de valider :<ul>` +
+      `<strong>🚫 ${escapeHtml(tn("printingWarningTitle", names.length))}</strong> — ${escapeHtml(t("printingWarningHint"))}<ul>` +
       names.map((n) => `<li>${escapeHtml(n)}</li>`).join("") +
       "</ul>";
   }
@@ -150,15 +157,15 @@
     const whereText = (s) => {
       const decks = deckUsage.get(normalizeName(s.name));
       if (!decks || decks.length === 0) return "";
-      return ` · <strong>dans : ${decks.map((d) => `${escapeHtml(d.name)} (${d.qty})`).join(", ")}</strong>`;
+      return ` · <strong>${escapeHtml(t("shortageIn", decks.map((d) => `${d.name} (${d.qty})`).join(", ")))}</strong>`;
     };
     el.innerHTML =
-      `<strong>⚠️ Stock insuffisant pour ${shortages.length} carte(s) :</strong>` +
-      `<button type="button" class="msm-secondary msm-export-btn">🛒 Copier les cartes manquantes pour Cardmarket</button><ul>` +
+      `<strong>⚠️ ${escapeHtml(tn("shortageTitle", shortages.length))}</strong>` +
+      `<button type="button" class="msm-secondary msm-export-btn">🛒 ${escapeHtml(t("cardmarketCopyButton"))}</button><ul>` +
       shortages
         .map(
           (s) =>
-            `<li>${escapeHtml(s.name)} — as ${s.have}, besoin ${s.need} (manque ${s.missing})${whereText(s)}</li>`
+            `<li>${escapeHtml(t("shortageItem", s.name, s.have, s.need, s.missing))}${whereText(s)}</li>`
         )
         .join("") +
       "</ul>";
@@ -173,7 +180,8 @@
   // de wants, puis à lancer le Shopping Wizard. Les terrains de base et les
   // cartes en "version différente" n'y figurent pas : elles sont déjà
   // exclues de `shortages` (cf. updateWarnings / computeWrongEditionCards).
-  const CARDMARKET_WANTS_URL = "https://www.cardmarket.com/fr/Magic/Wants";
+  // Page dans la langue de l'extension (cf. cardmarketWantsUrl dans _locales).
+  const CARDMARKET_WANTS_URL = t("cardmarketWantsUrl");
 
   async function copyText(text) {
     try {
@@ -197,11 +205,11 @@
     const text = shortages.map((s) => `${s.missing} ${s.name}`).join("\n");
     const ok = await copyText(text);
     if (!ok) {
-      toast("Impossible de copier la liste dans le presse-papiers.", true);
+      toast(t("clipboardCopyFailed"), true);
       return;
     }
     window.open(CARDMARKET_WANTS_URL, "_blank", "noopener");
-    toast(`${shortages.length} carte(s) copiée(s) — sur Cardmarket, ouvre une liste de wants puis « Ajouter une Deck List » et colle.`);
+    toast(tn("cardmarketCopied", shortages.length));
   }
 
   // Avertissement non bloquant regroupant les deux mêmes problèmes que les
@@ -214,14 +222,12 @@
       return;
     }
     const items = [
-      ...wrongEditionNames.map((n) => `${escapeHtml(n)} — version différente de ta collection`),
-      ...shortages.map(
-        (s) => `${escapeHtml(s.name)} — as ${s.have}, besoin ${s.need} (manque ${s.missing})`
-      ),
+      ...wrongEditionNames.map((n) => escapeHtml(t("basicLandWrongEdition", n))),
+      ...shortages.map((s) => escapeHtml(t("shortageItem", s.name, s.have, s.need, s.missing))),
     ];
     el.style.display = "block";
     el.innerHTML =
-      `<strong>ℹ️ Terrains de base à vérifier (${items.length})</strong> — n'empêche pas de valider :<ul>` +
+      `<strong>ℹ️ ${escapeHtml(t("basicLandTitle", items.length))}</strong> — ${escapeHtml(t("basicLandHint"))}<ul>` +
       items.map((i) => `<li>${i}</li>`).join("") +
       "</ul>";
   }
@@ -238,12 +244,12 @@
       return;
     }
     const total = cards.reduce((sum, c) => sum + c.qty, 0);
-    const base = `${total} carte${total === 1 ? "" : "s"} au total (${cards.length} intitulé${cards.length === 1 ? "" : "s"} différent${cards.length === 1 ? "" : "s"})`;
+    const base = t("cardCountBase", tn("cardCount", total), tn("distinctNames", cards.length));
     // Comparaison au total officiel affiché par Moxfield (main deck +
     // sideboard) : une divergence signale une erreur de scraping en amont
     // (carte manquée ou dupliquée) à corriger manuellement dans la liste.
     if (typeof siteTotal === "number" && siteTotal !== total) {
-      el.textContent = `${base} — ⚠️ le site indique ${siteTotal} carte${siteTotal === 1 ? "" : "s"} : vérifie la liste avant de valider`;
+      el.textContent = t("cardCountMismatch", base, tn("cardCount", siteTotal));
       el.classList.add("msm-card-count-mismatch");
     } else {
       el.textContent = base;
@@ -274,11 +280,9 @@
   }
 
   function unreliableListMessage({ cards, total, siteTotal }) {
-    if (cards.length === 0) return "aucune carte détectée sur la page.";
-    const detected = `${total} carte${total === 1 ? "" : "s"} détectée${total === 1 ? "" : "s"} sur la page`;
-    return siteTotal === null
-      ? `${detected}, mais total annoncé par Moxfield (« N main deck ») introuvable.`
-      : `${detected}, alors que Moxfield en annonce ${siteTotal}.`;
+    if (cards.length === 0) return t("pageNoCards");
+    const detected = tn("pageCardsDetected", total);
+    return siteTotal === null ? t("pageTotalNotFound", detected) : t("pageTotalMismatch", detected, siteTotal);
   }
 
   function renderDeckDiff(changes) {
@@ -294,16 +298,12 @@
     return `<ul class="msm-diff">${items.join("")}</ul>`;
   }
 
-  function formatDay(timestamp) {
-    return new Date(timestamp).toLocaleDateString("fr-FR");
-  }
-
   // Modale d'un deck monté : compare la liste de la page à celle du montage
   // et, si elle a changé, affiche la différence et active « Mettre à jour le
   // montage ». Renvoie la nouvelle liste à enregistrer, ou null.
   async function prepareDeckUpdate(overlay, deckId) {
     const changesEl = overlay.querySelector("#msm-deck-changes");
-    changesEl.innerHTML = '<p class="msm-card-count">Vérification de la liste…</p>';
+    changesEl.innerHTML = `<p class="msm-card-count">${escapeHtml(t("deckChecking"))}</p>`;
     // Juste après un chargement ou une modification, Moxfield peut ne pas
     // avoir fini d'afficher la liste (images construites progressivement en
     // Visual Stacks) : on laisse quelques secondes avant de conclure.
@@ -325,10 +325,9 @@
       // lues...).
       const suspect = pageCards.length > 0 ? computeDeckDiff(deck.cards, pageCards) : [];
       changesEl.innerHTML =
-        '<p class="msm-card-count">Impossible de vérifier si la liste a changé depuis le montage : ' +
-        `${escapeHtml(unreliableListMessage(detection))}</p>` +
+        `<p class="msm-card-count">${escapeHtml(t("deckCannotCheck", unreliableListMessage(detection)))}</p>` +
         (suspect.length > 0
-          ? `<details class="msm-card-count"><summary>Voir ce qui a été détecté (${suspect.length} écart(s) avec le montage)</summary>` +
+          ? `<details class="msm-card-count"><summary>${escapeHtml(tn("deckSuspectSummary", suspect.length))}</summary>` +
             `${renderDeckDiff(suspect)}</details>`
           : "");
       return null;
@@ -336,9 +335,9 @@
     const scraped = pageCards;
     const changes = computeDeckDiff(deck.cards, scraped);
     reportPageChanges(deckId, changes);
-    const since = formatDay(deck.updatedAt || deck.builtAt);
+    const since = i18n.formatDay(deck.updatedAt || deck.builtAt);
     if (changes.length === 0) {
-      changesEl.innerHTML = `<p class="msm-card-count">✅ La liste n'a pas changé depuis le montage (${since}).</p>`;
+      changesEl.innerHTML = `<p class="msm-card-count">✅ ${escapeHtml(t("deckUnchanged", since))}</p>`;
       return null;
     }
 
@@ -346,9 +345,9 @@
     const check = evaluateDeckUpdate(changes, deck, stockMap, lastWrongEditionNames);
     changesEl.innerHTML =
       '<div class="msm-changes">' +
-      `<strong>La liste a changé sur Moxfield depuis le montage (${since}) :</strong>` +
+      `<strong>${escapeHtml(t("deckChangedTitle", since))}</strong>` +
       renderDeckDiff(changes) +
-      "<p>« Mettre à jour le montage » ajuste le stock pour ces seules cartes.</p></div>";
+      `<p>${escapeHtml(t("deckUpdateHint", t("updateBuild")))}</p></div>`;
     renderShortageWarning(overlay.querySelector("#msm-shortage-warning"), check.shortages, deckUsage);
     renderPrintingWarning(overlay.querySelector("#msm-printing-warning"), check.wrongEdition);
     renderBasicLandNotice(overlay.querySelector("#msm-basic-land-warning"), check.basicWrongEdition, check.basicShortages);
@@ -356,7 +355,7 @@
     const updateBtn = overlay.querySelector("#msm-update");
     updateBtn.hidden = false;
     updateBtn.disabled = check.blocked;
-    if (check.blocked) updateBtn.title = "Stock insuffisant ou version différente : corrige d'abord (voir ci-dessus).";
+    if (check.blocked) updateBtn.title = t("deckUpdateBlocked");
     overlay.querySelector("#msm-confirm").classList.remove("msm-primary");
     return scraped.map(({ name, qty }) => ({ name, qty }));
   }
@@ -382,22 +381,18 @@
           ${iconUrl ? `<img src="${iconUrl}" alt="" width="24" height="24" />` : ""}
           <div>
             <div class="msm-modal-brand">Moxfield Stock Manager</div>
-            <h3 id="msm-modal-title">${isBuilt ? "Démonter ce deck" : "Marquer ce deck comme monté physiquement"}</h3>
+            <h3 id="msm-modal-title">${escapeHtml(t(isBuilt ? "overlayTitleUnbuild" : "overlayTitleBuild"))}</h3>
           </div>
         </div>
         ${
           isBuilt
-            ? `<p>Ce deck est actuellement marqué comme monté. Le démonter réincrémentera le stock des cartes qu'il utilise.</p>
+            ? `<p>${escapeHtml(t("overlayBuiltIntro"))}</p>
                <div id="msm-deck-changes"></div>
                <div id="msm-printing-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-shortage-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-basic-land-warning" class="msm-info-warning" style="display:none"></div>`
-            : `<p>
-                 Liste détectée automatiquement à partir de la page — vérifie/corrige avant de valider
-                 (une carte par ligne, "QTE Nom"). Si elle est vide ou incomplète, clique sur le bouton
-                 <strong>« Copier »</strong> de Moxfield puis « Coller depuis le presse-papiers ».
-               </p>
-               <button id="msm-paste-clipboard" class="msm-secondary">📋 Coller depuis le presse-papiers</button>
+            : `<p>${escapeHtml(t("overlayIntro", t("pasteFromClipboard")))}</p>
+               <button id="msm-paste-clipboard" class="msm-secondary">📋 ${escapeHtml(t("pasteFromClipboard"))}</button>
                <div id="msm-card-count" class="msm-card-count"></div>
                <div id="msm-blocking-summary" class="msm-card-count msm-card-count-mismatch" hidden></div>
                <textarea id="msm-cards-textarea" rows="12" placeholder="1 Sol Ring&#10;1 Sidisi, Brood Tyrant&#10;..."></textarea>
@@ -406,9 +401,9 @@
                <div id="msm-basic-land-warning" class="msm-info-warning" style="display:none"></div>`
         }
         <div class="msm-modal-actions">
-          <button id="msm-cancel">Annuler</button>
-          <button id="msm-confirm" class="msm-primary">${isBuilt ? "Démonter" : "Confirmer le montage"}</button>
-          ${isBuilt ? '<button id="msm-update" class="msm-primary" hidden>Mettre à jour le montage</button>' : ""}
+          <button id="msm-cancel">${escapeHtml(t("cancel"))}</button>
+          <button id="msm-confirm" class="msm-primary">${escapeHtml(t(isBuilt ? "unbuild" : "confirmBuild"))}</button>
+          ${isBuilt ? `<button id="msm-update" class="msm-primary" hidden>${escapeHtml(t("updateBuild"))}</button>` : ""}
         </div>
       </div>
     `;
@@ -455,7 +450,7 @@
   // l'utilisateur, pas un bug — déjà rapporté par le service worker s'il
   // s'agissait d'une erreur inattendue.
   function refusal(res) {
-    return Object.assign(new Error(res.error || "Erreur inconnue"), { expected: true });
+    return Object.assign(new Error(res.error || t("unknownError")), { expected: true });
   }
 
   // Erreurs de nos scripts qui échappent à tout try/catch. Les erreurs du
@@ -482,7 +477,7 @@
       return await chrome.runtime.sendMessage(message);
     } catch (err) {
       if (isContextInvalidatedError(err)) {
-        toast("Extension rechargée entre-temps — rafraîchis cette page (F5) puis réessaie.", true);
+        toast(CONTEXT_INVALIDATED_MESSAGE, true);
         return { ok: false, error: "extension-context-invalidated" };
       }
       throw err;
@@ -693,11 +688,7 @@
     if (!btn) return;
     const outdated = btnBuilt && btnOutdated;
     const availability = btnBuilt ? null : btnAvailability;
-    const label = !btnBuilt
-      ? "Marquer comme monté physiquement"
-      : outdated
-        ? "Monté physiquement — la liste a changé depuis le montage (cliquer pour mettre à jour)"
-        : "Monté physiquement (cliquer pour démonter)";
+    const label = t(!btnBuilt ? "buttonBuild" : outdated ? "buttonBuiltOutdated" : "buttonBuilt");
     if (btn.dataset.mode === "bar") {
       btn.replaceChildren(createBarIcon(btnBuilt ? "built" : "build"));
       if (availability) {
@@ -712,7 +703,7 @@
       btn.title = fullLabel;
       btn.setAttribute("aria-label", fullLabel);
     } else {
-      const counts = availability ? ` · ${availability.available}/${availability.total} dispo` : "";
+      const counts = availability ? ` · ${t("buttonAvailableShort", availability.available, availability.total)}` : "";
       btn.textContent = (outdated ? "⚠️ " : btnBuilt ? "✅ " : "🧰 ") + label + counts;
       btn.title = availability ? availabilityLabel(availability) : "";
     }
@@ -821,7 +812,7 @@
 
       overlay.querySelector("#msm-paste-clipboard").addEventListener("click", async () => {
         const ok = await tryFillFromClipboard(textarea);
-        if (!ok) toast("Presse-papiers vide ou format non reconnu — colle manuellement avec Ctrl+V.", true);
+        if (!ok) toast(t("clipboardEmpty"), true);
         // Un collage manuel remplace la liste détectée : on perd l'info de version.
         lastWrongEditionNames = new Set();
         await updateWarnings();
@@ -837,9 +828,9 @@
           // Drive, autre onglet).
           const { stockMap, builtDecks } = await getStockAndDeckUsage(updatedCards, deckId);
           const deck = builtDecks[deckId];
-          if (!deck) throw new Error("Ce deck n'est plus marqué comme monté.");
+          if (!deck) throw new Error(t("deckNoLongerBuilt"));
           if (evaluateDeckUpdate(computeDeckDiff(deck.cards, updatedCards), deck, stockMap, lastWrongEditionNames).blocked) {
-            toast("Mise à jour impossible — stock insuffisant ou version différente.", true);
+            toast(t("updateBlocked"), true);
             return;
           }
           const payload = { deckId, deckName: getDeckName(), url: window.location.href, cards: updatedCards };
@@ -849,10 +840,10 @@
           overlay.remove();
           btnOutdated = false;
           await refreshButtonState(deckId);
-          toast("Montage mis à jour, stock ajusté pour les cartes modifiées.");
+          toast(t("updateDone"));
         } catch (e) {
           if (!e.expected) reportError("deck-page:update", e);
-          toast("Erreur : " + e.message, true);
+          toast(t("errorPrefix", e.message), true);
         }
       });
     }
@@ -866,7 +857,7 @@
           const textarea = overlay.querySelector("#msm-cards-textarea");
           let cards = parseCardsText(textarea.value);
           if (cards.length === 0) {
-            toast("Aucune carte reconnue dans la liste — vérifie le format (QTE Nom).", true);
+            toast(t("noCardsRecognized"), true);
             return;
           }
           // Deux vérifications bloquantes avant de pouvoir valider : version
@@ -878,13 +869,13 @@
           const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
           const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
           if (wrongEdition.length > 0) {
-            toast(`Montage impossible — version différente de ta collection pour : ${wrongEdition.join(", ")}`, true);
+            toast(t("buildBlockedWrongEdition", wrongEdition.join(", ")), true);
             return;
           }
           const shortages = computeShortages(nonBasicCards, stockMap);
           if (shortages.length > 0) {
-            const details = shortages.map((s) => `${s.name} (manque ${s.missing})`).join(", ");
-            toast(`Montage impossible — stock insuffisant : ${details}`, true);
+            const details = shortages.map((s) => t("shortageShort", s.name, s.missing)).join(", ");
+            toast(t("buildBlockedShortage", details), true);
             return;
           }
           payload = { deckId, deckName: getDeckName(), url: window.location.href, cards, built: true };
@@ -894,10 +885,10 @@
         if (!res.ok) throw refusal(res);
         overlay.remove();
         await refreshButtonState(deckId);
-        toast(isBuilt ? "Deck démonté, stock réincrémenté." : "Deck marqué comme monté, stock décrémenté.");
+        toast(t(isBuilt ? "unbuildDone" : "buildDone"));
       } catch (e) {
         if (!e.expected) reportError("deck-page:toggle", e);
-        toast("Erreur : " + e.message, true);
+        toast(t("errorPrefix", e.message), true);
       }
     });
   }

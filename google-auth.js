@@ -41,7 +41,8 @@ function chooseAuthMethod(nav) {
   return brands.some((b) => b.brand === "Google Chrome") ? "chrome" : "web";
 }
 
-function createGoogleWebAuth({ identity, session, runtime, fetch, clientId, scope, isBrave = false, now = () => Date.now(), keepAliveMs = 20 * 1000 }) {
+// i18n : textes traduits (cf. i18n.js).
+function createGoogleWebAuth({ identity, session, runtime, fetch, clientId, scope, i18n: { t }, isBrave = false, now = () => Date.now(), keepAliveMs = 20 * 1000 }) {
   const TOKEN_KEY = "moxfieldStockManagerGoogleToken";
   // Un jeton qui expire dans moins d'une minute est renouvelé d'avance.
   const EXPIRY_MARGIN_MS = 60 * 1000;
@@ -85,7 +86,7 @@ function createGoogleWebAuth({ identity, session, runtime, fetch, clientId, scop
     const res = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) throw new GoogleAuthError("failed", `Google Drive a répondu ${res.status} à la lecture du compte.`);
+    if (!res.ok) throw new GoogleAuthError("failed", t("googleAccountReadError", res.status));
     return (await res.json()).user.emailAddress;
   }
 
@@ -101,19 +102,17 @@ function createGoogleWebAuth({ identity, session, runtime, fetch, clientId, scop
     } catch (e) {
       if (!interactive) throw renewError(e);
       if (USER_CLOSED.test(e.message || "")) {
-        throw new GoogleAuthError("cancelled", "Connexion à Google refusée ou annulée.", e);
+        throw new GoogleAuthError("cancelled", t("googleCancelled"), e);
       }
-      const hint = isBrave
-        ? " Sous Brave, active « Autoriser la connexion Google pour les extensions » (brave://settings/extensions), puis réessaie."
-        : "";
-      throw new GoogleAuthError("failed", `La fenêtre de connexion Google n'a pas pu aboutir.${hint}`, e);
+      const message = t("googleWindowFailed") + (isBrave ? ` ${t("googleBraveHint")}` : "");
+      throw new GoogleAuthError("failed", message, e);
     } finally {
       clearInterval(keepAlive);
     }
   }
 
   function renewError(cause) {
-    return new GoogleAuthError("renew", "Connexion Google à renouveler : clique sur « Reconnecter ».", cause);
+    return new GoogleAuthError("renew", t("googleRenew"), cause);
   }
 
   async function requestToken(interactive, loginHint) {
@@ -126,7 +125,7 @@ function createGoogleWebAuth({ identity, session, runtime, fetch, clientId, scop
     if (!result.token) {
       if (!interactive) throw renewError(result.error ? new Error(result.error) : undefined);
       throw new GoogleAuthError(result.error === "access_denied" ? "cancelled" : "failed",
-        "Connexion à Google refusée ou annulée.", result.error ? new Error(result.error) : undefined);
+        t("googleCancelled"), result.error ? new Error(result.error) : undefined);
     }
     const entry = { token: result.token, expiresAt: now() + result.expiresIn * 1000, email: await readEmail(result.token) };
     await session.set({ [TOKEN_KEY]: entry });

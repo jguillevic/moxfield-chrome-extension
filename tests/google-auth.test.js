@@ -5,6 +5,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createGoogleWebAuth, chooseAuthMethod, GoogleAuthError } = require("../google-auth.js");
+const { loadI18n } = require("./helpers");
 
 const REDIRECT = "https://pkifconeiolgllnjbnbenadbohcihopf.chromiumapp.org/";
 const HOUR = 60 * 60 * 1000;
@@ -19,6 +20,7 @@ function setup(options = {}) {
   let tokenCount = 0;
   const keepAlive = { calls: 0 };
   const auth = createGoogleWebAuth({
+    i18n: loadI18n(),
     identity: {
       getRedirectURL: () => REDIRECT,
       launchWebAuthFlow: async (details) => {

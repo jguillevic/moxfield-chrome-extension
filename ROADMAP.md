@@ -49,6 +49,8 @@ joue des proxies ou d'autres formats.
 
 ## Livré
 
+- Traduction : extension en français et en anglais, selon la langue du
+  navigateur — octobre 2026.
 - Tableau de bord du popup : exemplaires possédés, libres, dans des decks,
   cartes différentes et decks montés — octobre 2026.
 - Faisabilité d'un deck non monté sur le bouton (pastille ✓ / nombre de

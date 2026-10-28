@@ -9,6 +9,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const { fakeGetMessage } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -30,6 +31,7 @@ const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", versi
 // options.navigator : navigateur (Google Chrome par défaut ; cf. BRAVE).
 // options.webAuth : fausse fenêtre de connexion Google, (details) => URL de
 // redirection ; par défaut un jeton pour le compte google.email.
+// options.lang : langue du navigateur (français par défaut).
 // Sans options.drive, un Drive vide (aucun fichier) accepte tous les envois.
 function loadBackground(initialState, options = {}) {
   const storage = {};
@@ -49,6 +51,7 @@ function loadBackground(initialState, options = {}) {
   const google = { email: "moi@gmail.com", profileId: "118294207213255860701", launches: [], driveCalls: [] };
   const listener = (list = []) => ({ addListener: (fn) => list.push(fn) });
   const chrome = {
+    i18n: { getMessage: fakeGetMessage(options.lang || "fr") },
     storage: {
       local: {
         async get(key) {
@@ -1139,4 +1142,25 @@ test("cookie de session renouvelé sans erreur précédente : pas de récupérat
   const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
   await bg.cookieChanged({ cookie: SESSION_COOKIE, removed: false });
   assert.equal(bg.counts.fetches, 0);
+});
+
+// --- Langue du navigateur ---
+
+test("navigateur en anglais : erreurs et historique en anglais", async () => {
+  const bg = loadBackground(SOL_RING_STOCK(), { lang: "en" });
+  const empty = await bg.send({ type: "IMPORT_CSV_TEXT", csvText: CSV_HEADER });
+  assert.equal(empty.error, "Empty or invalid CSV");
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  assert.deepEqual((await historyOf(bg)).map((e) => e.title), ["Deck “Deck a” built: 1 card taken out of the free stock"]);
+});
+
+// L'historique est synchronisé entre des PC qui n'ont pas forcément la même
+// langue : les entrées gardent des données, le libellé est calculé à
+// l'affichage.
+test("historique noté en français, affiché en anglais", async () => {
+  const fr = loadBackground(SOL_RING_STOCK());
+  await build(fr, "a", [{ name: "Sol Ring", qty: 1 }]);
+  assert.match((await historyOf(fr))[0].title, /^Deck « Deck a » monté/);
+  const en = loadBackground(fr.raw(), { lang: "en" });
+  assert.equal((await historyOf(en))[0].title, "Deck “Deck a” built: 1 card taken out of the free stock");
 });
