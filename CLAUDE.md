@@ -109,7 +109,7 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 - Messages de commit en anglais, à l'impératif (« Add… », « Fix… »).
 - Ne pas commiter sans que ce soit demandé.
 - Pas de Python sur le poste : scripts en Node ou shell.
-- Les tests tournent sur GitHub Actions à chaque push sur `main`
+- Les tests tournent sur GitHub Actions à chaque push, sur toutes les branches
   (`.github/workflows/tests.yml`).
 - `package-lock.json` ne doit référencer que `https://registry.npmjs.org/` :
   le registre npm du poste est un Artifactory interne, inaccessible depuis
