@@ -1,149 +1,134 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html>
 <head>
   <meta charset="UTF-8" />
   <title>Moxfield Stock Manager</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
+  <!-- Textes : attributs data-i18n*, remplis par popup.js depuis _locales (cf. i18n.js). -->
   <header class="app-header">
     <div class="brand">
       <img src="icons/icon32.png" alt="" width="22" height="22" />
       <h1>Moxfield Stock Manager</h1>
     </div>
-    <span id="sync-pill" class="pill off">Non synchronisé</span>
+    <span id="sync-pill" class="pill off" data-i18n="syncPillOff"></span>
   </header>
-
   <div class="stats">
     <div class="stat">
       <span class="stat-value" id="stock-owned">0</span>
-      <span class="stat-label">exemplaires possédés</span>
+      <span class="stat-label" data-i18n="statOwned"></span>
     </div>
     <div class="stat">
       <span class="stat-value" id="stock-total">0</span>
-      <span class="stat-label">exemplaires libres</span>
+      <span class="stat-label" data-i18n="statFree"></span>
     </div>
     <div class="stat">
       <span class="stat-value" id="stock-in-decks">0</span>
-      <span class="stat-label">dans des decks</span>
+      <span class="stat-label" data-i18n="statInDecks"></span>
     </div>
     <div class="stat">
       <span class="stat-value" id="stock-count">0</span>
-      <span class="stat-label">cartes différentes</span>
+      <span class="stat-label" data-i18n="statDistinct"></span>
     </div>
   </div>
-
   <section class="card">
     <h2>
-      Decks montés <span class="count" id="built-count">0</span>
+      <span data-i18n="builtDecksTitle"></span> <span class="count" id="built-count">0</span>
       <span class="changed-count" id="built-changed" hidden></span>
     </h2>
     <div id="built-list" class="list"></div>
   </section>
-
   <section class="card">
     <details id="stock-details">
-      <summary><h2>Stock</h2></summary>
+      <summary><h2 data-i18n="stockTitle"></h2></summary>
       <div class="card-body">
-        <input id="stock-filter" type="search" placeholder="Filtrer par nom…" />
+        <input id="stock-filter" type="search" data-i18n-placeholder="stockFilterPlaceholder" />
         <label class="check-row">
           <input type="checkbox" id="stock-only-in-decks" />
-          Seulement les cartes dans des decks montés
+          <span data-i18n="stockOnlyInDecks"></span>
         </label>
-        <p class="hint">« Libre » = disponible hors decks montés. Clique sur une carte présente dans des decks pour voir lesquels.</p>
+        <p class="hint" data-i18n="stockHint"></p>
         <div id="stock-table" class="table-wrap"></div>
       </div>
     </details>
   </section>
-
   <section class="card">
     <details id="history-details">
-      <summary><h2>Historique</h2></summary>
+      <summary><h2 data-i18n="historyTitle"></h2></summary>
       <div class="card-body">
-        <p class="hint">Actions sur le stock et les decks montés, la plus récente en haut.</p>
+        <p class="hint" data-i18n="historyHint"></p>
         <div id="history-list" class="list"></div>
       </div>
     </details>
   </section>
 
   <section class="card">
-    <h2>Collection Moxfield</h2>
-    <p class="hint">
-      Récupérée depuis ton compte Moxfield (il suffit d'y être connecté dans ce navigateur), même Moxfield fermé.
-      Elle est la référence du stock : pour corriger une quantité, modifie ta collection sur Moxfield.
-    </p>
+    <h2 data-i18n="collectionTitle"></h2>
+    <p class="hint" data-i18n="collectionHint"></p>
     <label class="check-row">
       <input type="checkbox" id="collection-auto" />
-      Récupérer automatiquement (après chaque modification sur Moxfield, et toutes les heures)
+      <span data-i18n="collectionAuto"></span>
     </label>
     <p id="collection-state" class="hint"></p>
     <p id="collection-changes" class="hint" hidden></p>
     <div id="collection-uncovered" class="notice error" hidden></div>
     <div class="actions">
-      <button id="collection-fetch-btn" class="primary">Récupérer maintenant</button>
-      <a id="collection-login-link" class="button" href="https://moxfield.com/account/signin" target="_blank" hidden>Se connecter à Moxfield</a>
+      <button id="collection-fetch-btn" class="primary" data-i18n="collectionFetchNow"></button>
+      <a id="collection-login-link" class="button" href="https://moxfield.com/account/signin" target="_blank" hidden data-i18n="collectionSignIn"></a>
       <span id="collection-status" class="status"></span>
     </div>
   </section>
 
   <section class="card">
-    <h2>Import manuel (fichier CSV)</h2>
-    <p class="hint">
-      Solution de secours si la récupération automatique échoue. Sur Moxfield : collection → Export → CSV.
-      Réimporter met le stock à jour sans perdre les decks montés.
-    </p>
+    <h2 data-i18n="csvTitle"></h2>
+    <p class="hint" data-i18n="csvHint"></p>
     <div class="file-row">
       <label class="button file-button">
         <input type="file" id="csv-file-input" accept=".csv,text/csv" hidden />
-        Choisir un fichier CSV
+        <span data-i18n="csvChooseFile"></span>
       </label>
-      <span id="csv-file-name" class="file-name">Aucun fichier choisi</span>
+      <span id="csv-file-name" class="file-name" data-i18n="csvNoFile"></span>
     </div>
     <div class="actions">
-      <button id="import-btn" class="primary">Importer</button>
+      <button id="import-btn" class="primary" data-i18n="csvImport"></button>
       <span id="import-status" class="status"></span>
     </div>
     <details class="sub-details">
-      <summary>Ou coller le texte du CSV</summary>
+      <summary data-i18n="csvPasteSummary"></summary>
       <textarea id="csv-input" rows="4" placeholder="Count,Tradelist Count,Name,Edition,..."></textarea>
-      <button id="import-paste-btn" class="primary">Importer ce texte</button>
+      <button id="import-paste-btn" class="primary" data-i18n="csvImportText"></button>
     </details>
   </section>
 
   <section class="card">
-    <h2>Synchronisation Google Drive</h2>
+    <h2 data-i18n="syncTitle"></h2>
 
     <div id="sync-off" hidden>
-      <p class="hint">
-        Sauvegarde automatique dans un dossier privé de ton Drive et synchronisation entre tes PC.
-        À faire une seule fois par PC. Si le popup se ferme pendant l'autorisation Google, rouvre-le.
-      </p>
-      <button id="sync-connect-btn" class="primary">Connecter Google Drive</button>
+      <p class="hint" data-i18n="syncOffHint"></p>
+      <button id="sync-connect-btn" class="primary" data-i18n="syncConnect"></button>
     </div>
 
     <div id="sync-choice" hidden>
-      <div class="notice warning">
-        Drive contient déjà des données (<span id="sync-choice-date"></span>) et ce PC a aussi un stock.
-        Lesquelles garder ? L'autre version restera dans l'historique.
-      </div>
+      <div class="notice warning" id="sync-choice-text"></div>
       <div class="actions">
-        <button id="sync-keep-remote-btn" class="primary">Garder celles de Drive</button>
-        <button id="sync-keep-local-btn">Garder celles de ce PC</button>
+        <button id="sync-keep-remote-btn" class="primary" data-i18n="syncKeepRemote"></button>
+        <button id="sync-keep-local-btn" data-i18n="syncKeepLocal"></button>
       </div>
     </div>
 
     <div id="sync-account-changed" hidden>
       <div class="notice error">
-        Le compte Google a changé : <strong id="sync-old-account"></strong> →
-        <strong id="sync-new-account"></strong>. Synchronisation en pause.
+        <span data-i18n="syncAccountChanged"></span>
+        <strong id="sync-old-account"></strong> →
+        <strong id="sync-new-account"></strong>.
+        <span data-i18n="syncPaused"></span>
       </div>
       <div class="actions stacked">
-        <button id="sync-account-keep-local-btn" class="primary">Envoyer le stock de ce PC sur le nouveau compte</button>
-        <button id="sync-account-keep-remote-btn">Récupérer le stock du nouveau compte</button>
+        <button id="sync-account-keep-local-btn" class="primary" data-i18n="syncAccountKeepLocal"></button>
+        <button id="sync-account-keep-remote-btn" data-i18n="syncAccountKeepRemote"></button>
       </div>
-      <p class="hint">
-        La version remplacée reste dans l'historique. Revenir à l'ancien compte fait reprendre la synchro.
-      </p>
+      <p class="hint" data-i18n="syncAccountChangedHint"></p>
     </div>
 
     <div id="sync-on" hidden>
@@ -156,12 +141,12 @@
       </div>
       <p id="sync-state"></p>
       <div class="actions">
-        <button id="sync-reconnect-btn" class="primary" hidden>Reconnecter</button>
-        <button id="sync-now-btn">Synchroniser maintenant</button>
-        <button id="sync-disconnect-btn" class="ghost">Déconnecter</button>
+        <button id="sync-reconnect-btn" class="primary" hidden data-i18n="syncReconnect"></button>
+        <button id="sync-now-btn" data-i18n="syncNow"></button>
+        <button id="sync-disconnect-btn" class="ghost" data-i18n="syncDisconnect"></button>
       </div>
       <details id="sync-history" class="sub-details">
-        <summary>Historique des versions (10 dernières)</summary>
+        <summary data-i18n="syncSnapshotsSummary"></summary>
         <div id="sync-snapshots" class="list"></div>
       </details>
     </div>
@@ -171,15 +156,12 @@
 
   <section class="card">
     <details id="error-reports-details">
-      <summary><h2>Rapports d'erreurs</h2></summary>
+      <summary><h2 data-i18n="errorReportsTitle"></h2></summary>
       <div class="card-body">
-        <p class="hint">
-          Quand l'extension rencontre une erreur, un rapport anonyme est envoyé au développeur pour la corriger :
-          message de l'erreur, version de l'extension, navigateur et système. Jamais ton stock, tes decks ni ton adresse mail.
-        </p>
+        <p class="hint" data-i18n="errorReportsHint"></p>
         <label class="check-row">
           <input type="checkbox" id="error-reports-enabled" />
-          Envoyer les rapports d'erreurs
+          <span data-i18n="errorReportsEnabled"></span>
         </label>
         <p id="error-reports-state" class="hint"></p>
       </div>
@@ -188,14 +170,15 @@
 
   <section class="card danger-zone">
     <details>
-      <summary><h2>Zone de danger</h2></summary>
+      <summary><h2 data-i18n="dangerTitle"></h2></summary>
       <div class="card-body">
-        <p class="hint">Vide entièrement le stock et démonte tous les decks marqués comme montés physiquement.</p>
-        <button id="reset-btn" class="danger">Réinitialiser tout le stock</button>
+        <p class="hint" data-i18n="dangerHint"></p>
+        <button id="reset-btn" class="danger" data-i18n="resetButton"></button>
       </div>
     </details>
   </section>
 
+  <script src="i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

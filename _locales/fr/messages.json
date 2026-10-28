@@ -1,0 +1,674 @@
+{
+  "locale": {
+    "message": "fr"
+  },
+  "extName": {
+    "message": "Moxfield Stock Manager"
+  },
+  "extDescription": {
+    "message": "Gère ton stock de cartes physiques à partir de ta collection Moxfield : un deck marqué comme monté sort ses cartes du stock."
+  },
+  "statOwned": {
+    "message": "exemplaires possédés"
+  },
+  "statFree": {
+    "message": "exemplaires libres"
+  },
+  "statInDecks": {
+    "message": "dans des decks"
+  },
+  "statDistinct": {
+    "message": "cartes différentes"
+  },
+  "builtDecksTitle": {
+    "message": "Decks montés"
+  },
+  "stockTitle": {
+    "message": "Stock"
+  },
+  "stockFilterPlaceholder": {
+    "message": "Filtrer par nom…"
+  },
+  "stockOnlyInDecks": {
+    "message": "Seulement les cartes dans des decks montés"
+  },
+  "stockHint": {
+    "message": "« Libre » = disponible hors decks montés. Clique sur une carte présente dans des decks pour voir lesquels."
+  },
+  "historyTitle": {
+    "message": "Historique"
+  },
+  "historyHint": {
+    "message": "Actions sur le stock et les decks montés, la plus récente en haut."
+  },
+  "collectionTitle": {
+    "message": "Collection Moxfield"
+  },
+  "collectionHint": {
+    "message": "Récupérée depuis ton compte Moxfield (il suffit d'y être connecté dans ce navigateur), même Moxfield fermé. Elle est la référence du stock : pour corriger une quantité, modifie ta collection sur Moxfield."
+  },
+  "collectionAuto": {
+    "message": "Récupérer automatiquement (après chaque modification sur Moxfield, et toutes les heures)"
+  },
+  "collectionFetchNow": {
+    "message": "Récupérer maintenant"
+  },
+  "collectionSignIn": {
+    "message": "Se connecter à Moxfield"
+  },
+  "csvTitle": {
+    "message": "Import manuel (fichier CSV)"
+  },
+  "csvHint": {
+    "message": "Solution de secours si la récupération automatique échoue. Sur Moxfield : collection → Export → CSV. Réimporter met le stock à jour sans perdre les decks montés."
+  },
+  "csvChooseFile": {
+    "message": "Choisir un fichier CSV"
+  },
+  "csvImport": {
+    "message": "Importer"
+  },
+  "csvPasteSummary": {
+    "message": "Ou coller le texte du CSV"
+  },
+  "csvImportText": {
+    "message": "Importer ce texte"
+  },
+  "syncTitle": {
+    "message": "Synchronisation Google Drive"
+  },
+  "syncOffHint": {
+    "message": "Sauvegarde automatique dans un dossier privé de ton Drive et synchronisation entre tes PC. À faire une seule fois par PC. Si le popup se ferme pendant l'autorisation Google, rouvre-le."
+  },
+  "syncConnect": {
+    "message": "Connecter Google Drive"
+  },
+  "syncKeepRemote": {
+    "message": "Garder celles de Drive"
+  },
+  "syncKeepLocal": {
+    "message": "Garder celles de ce PC"
+  },
+  "syncAccountChanged": {
+    "message": "Le compte Google a changé :"
+  },
+  "syncPaused": {
+    "message": "Synchronisation en pause."
+  },
+  "syncAccountKeepLocal": {
+    "message": "Envoyer le stock de ce PC sur le nouveau compte"
+  },
+  "syncAccountKeepRemote": {
+    "message": "Récupérer le stock du nouveau compte"
+  },
+  "syncAccountChangedHint": {
+    "message": "La version remplacée reste dans l'historique. Revenir à l'ancien compte fait reprendre la synchro."
+  },
+  "syncReconnect": {
+    "message": "Reconnecter"
+  },
+  "syncNow": {
+    "message": "Synchroniser maintenant"
+  },
+  "syncDisconnect": {
+    "message": "Déconnecter"
+  },
+  "syncSnapshotsSummary": {
+    "message": "Historique des versions (10 dernières)"
+  },
+  "errorReportsTitle": {
+    "message": "Rapports d'erreurs"
+  },
+  "errorReportsHint": {
+    "message": "Quand l'extension rencontre une erreur, un rapport anonyme est envoyé au développeur pour la corriger : message de l'erreur, version de l'extension, navigateur et système. Jamais ton stock, tes decks ni ton adresse mail."
+  },
+  "errorReportsEnabled": {
+    "message": "Envoyer les rapports d'erreurs"
+  },
+  "dangerTitle": {
+    "message": "Zone de danger"
+  },
+  "dangerHint": {
+    "message": "Vide entièrement le stock et démonte tous les decks marqués comme montés physiquement."
+  },
+  "resetButton": {
+    "message": "Réinitialiser tout le stock"
+  },
+  "errorPrefix": {
+    "message": "Erreur : $1"
+  },
+  "loading": {
+    "message": "Chargement…"
+  },
+  "unknownAccount": {
+    "message": "inconnu"
+  },
+  "andMore_one": {
+    "message": "et $1 autre"
+  },
+  "andMore_other": {
+    "message": "et $1 autres"
+  },
+  "distinctCards_one": {
+    "message": "$1 carte différente"
+  },
+  "distinctCards_other": {
+    "message": "$1 cartes différentes"
+  },
+  "deckPageChanged": {
+    "message": "La liste a changé sur Moxfield depuis le montage : $1 — constaté le $2. Ouvre le deck pour mettre à jour le montage."
+  },
+  "builtDecksChanged_one": {
+    "message": "$1 modifié"
+  },
+  "builtDecksChanged_other": {
+    "message": "$1 modifiés"
+  },
+  "builtDecksNone": {
+    "message": "Aucun deck monté pour le moment."
+  },
+  "builtDecksCount_one": {
+    "message": "$1 deck monté"
+  },
+  "builtDecksCount_other": {
+    "message": "$1 decks montés"
+  },
+  "deckChangedBadge": {
+    "message": "Modifié"
+  },
+  "unbuild": {
+    "message": "Démonter"
+  },
+  "stockEmpty": {
+    "message": "Aucune carte en stock — importe ta collection ci-dessus."
+  },
+  "stockNoMatch": {
+    "message": "Aucune carte ne correspond au filtre."
+  },
+  "stockColCard": {
+    "message": "Carte"
+  },
+  "stockColFree": {
+    "message": "Libre"
+  },
+  "stockColDecks": {
+    "message": "Decks"
+  },
+  "stockOwnedTotal": {
+    "message": "Total possédé : $1"
+  },
+  "stockMoreRows_one": {
+    "message": "… et $1 autre carte : affine avec le filtre."
+  },
+  "stockMoreRows_other": {
+    "message": "… et $1 autres cartes : affine avec le filtre."
+  },
+  "csvNothingToImport": {
+    "message": "Aucun contenu à importer."
+  },
+  "csvImported": {
+    "message": "$1, $2."
+  },
+  "copiesImported_one": {
+    "message": "$1 exemplaire importé"
+  },
+  "copiesImported_other": {
+    "message": "$1 exemplaires importés"
+  },
+  "csvNoFile": {
+    "message": "Aucun fichier choisi"
+  },
+  "csvChooseFirst": {
+    "message": "Choisis d'abord un fichier CSV."
+  },
+  "csvReadError": {
+    "message": "Impossible de lire le fichier : $1"
+  },
+  "historyNone": {
+    "message": "Aucune action pour le moment."
+  },
+  "historyOtherDevice": {
+    "message": "sur un autre PC"
+  },
+  "historyDetail": {
+    "message": "Détail"
+  },
+  "collectionLastFetch": {
+    "message": "Dernière récupération : $1."
+  },
+  "collectionNeverFetched": {
+    "message": "Pas encore récupérée."
+  },
+  "collectionLastChanges": {
+    "message": "Derniers changements ($1) : $2."
+  },
+  "collectionUncovered_one": {
+    "message": "Ta collection ne couvre plus $1 carte de decks montés :"
+  },
+  "collectionUncovered_other": {
+    "message": "Ta collection ne couvre plus $1 cartes de decks montés :"
+  },
+  "collectionUncoveredItem": {
+    "message": "$1 — manque $2 (dans : $3)"
+  },
+  "collectionFetching": {
+    "message": "Récupération…"
+  },
+  "collectionNoChange": {
+    "message": "Aucun changement."
+  },
+  "collectionChanged_one": {
+    "message": "$1 carte modifiée, stock mis à jour."
+  },
+  "collectionChanged_other": {
+    "message": "$1 cartes modifiées, stock mis à jour."
+  },
+  "syncChoiceNotice": {
+    "message": "Drive contient déjà des données (modifiées le $1) et ce PC a aussi un stock. Lesquelles garder ? L'autre version restera dans l'historique."
+  },
+  "syncAccountChosen": {
+    "message": "Compte choisi à la connexion"
+  },
+  "syncAccountProfile": {
+    "message": "Compte du profil Chrome"
+  },
+  "syncSwitchAccountWeb": {
+    "message": "Pour changer de compte : Déconnecter, puis Connecter Google Drive avec l'autre compte."
+  },
+  "syncSwitchAccountProfile": {
+    "message": "Pour changer de compte, change celui du profil Chrome : l'extension te demandera quoi faire."
+  },
+  "syncPillOff": {
+    "message": "Non synchronisé"
+  },
+  "syncPillPaused": {
+    "message": "En pause"
+  },
+  "syncPillError": {
+    "message": "Erreur de synchro"
+  },
+  "syncPillSending": {
+    "message": "Envoi en cours"
+  },
+  "syncPillOk": {
+    "message": "Synchronisé"
+  },
+  "syncPendingChanges": {
+    "message": "Modifications en attente d'envoi…"
+  },
+  "syncFirst": {
+    "message": "Première synchronisation…"
+  },
+  "syncLast": {
+    "message": "Dernière synchro : $1"
+  },
+  "snapshotConflict": {
+    "message": "version écartée lors d'un conflit"
+  },
+  "snapshotManual": {
+    "message": "sauvegarde manuelle"
+  },
+  "snapshotsNone": {
+    "message": "Aucune version dans l'historique pour le moment."
+  },
+  "snapshotRestore": {
+    "message": "Restaurer"
+  },
+  "snapshotRestoreConfirm": {
+    "message": "Remplacer le stock et les decks montés par la version du $1 ? Elle sera aussi appliquée à tes autres PC."
+  },
+  "snapshotRestoring": {
+    "message": "Restauration…"
+  },
+  "snapshotRestored": {
+    "message": "Restauré : $1, $2."
+  },
+  "syncConnecting": {
+    "message": "Connexion…"
+  },
+  "syncFetchingDrive": {
+    "message": "Récupération depuis Drive…"
+  },
+  "syncSendingDrive": {
+    "message": "Envoi vers Drive…"
+  },
+  "syncSendingNewAccount": {
+    "message": "Envoi vers le nouveau compte…"
+  },
+  "syncAccountKeepRemoteConfirm": {
+    "message": "Remplacer le stock de ce PC par celui du nouveau compte ? (s'il n'en a pas, le stock de ce PC y sera envoyé)"
+  },
+  "syncFetchingNewAccount": {
+    "message": "Récupération depuis le nouveau compte…"
+  },
+  "syncSyncing": {
+    "message": "Synchronisation…"
+  },
+  "syncDisconnectConfirm": {
+    "message": "Arrêter la synchronisation sur ce PC ? Les données restent sur ce PC et sur Drive."
+  },
+  "resetSyncWarning": {
+    "message": "La synchronisation est active : tes autres PC seront aussi vidés."
+  },
+  "resetConfirm": {
+    "message": "Réinitialiser tout le stock et tous les decks montés ?"
+  },
+  "errorReportsNotConfigured": {
+    "message": "Aucun service de rapports configuré dans cette version : rien n'est envoyé."
+  },
+  "historyCollectionFetched_one": {
+    "message": "Collection Moxfield récupérée : $1 carte modifiée"
+  },
+  "historyCollectionFetched_other": {
+    "message": "Collection Moxfield récupérée : $1 cartes modifiées"
+  },
+  "historyCsvImport_one": {
+    "message": "Import CSV : $1 carte modifiée"
+  },
+  "historyCsvImport_other": {
+    "message": "Import CSV : $1 cartes modifiées"
+  },
+  "historyDeckBuilt_one": {
+    "message": "Deck « $2 » monté : $1 carte retirée du stock libre"
+  },
+  "historyDeckBuilt_other": {
+    "message": "Deck « $2 » monté : $1 cartes retirées du stock libre"
+  },
+  "historyDeckUnbuilt_one": {
+    "message": "Deck « $2 » démonté : $1 carte rendue au stock"
+  },
+  "historyDeckUnbuilt_other": {
+    "message": "Deck « $2 » démonté : $1 cartes rendues au stock"
+  },
+  "historyDeckUpdated_one": {
+    "message": "Montage de « $2 » mis à jour : $1 carte modifiée"
+  },
+  "historyDeckUpdated_other": {
+    "message": "Montage de « $2 » mis à jour : $1 cartes modifiées"
+  },
+  "historyReset_one": {
+    "message": "Stock réinitialisé ($1 deck démonté)"
+  },
+  "historyReset_other": {
+    "message": "Stock réinitialisé ($1 decks démontés)"
+  },
+  "historyDriveRestore": {
+    "message": "Version de l'historique Google Drive restaurée"
+  },
+  "blockingSummary_one": {
+    "message": "$1 carte bloque le montage : $2"
+  },
+  "blockingSummary_other": {
+    "message": "$1 cartes bloquent le montage : $2"
+  },
+  "blockingMissing_one": {
+    "message": "$1 manquante en stock"
+  },
+  "blockingMissing_other": {
+    "message": "$1 manquantes en stock"
+  },
+  "blockingWrongEdition_one": {
+    "message": "$1 dans une autre version"
+  },
+  "blockingWrongEdition_other": {
+    "message": "$1 dans une autre version"
+  },
+  "availabilityCount": {
+    "message": "$1/$2 cartes disponibles en stock libre, hors terrains de base"
+  },
+  "availabilityOk": {
+    "message": "montable : $1"
+  },
+  "availabilityMissing": {
+    "message": "manque $1"
+  },
+  "availabilityWrongEdition": {
+    "message": "version différente : $1"
+  },
+  "availabilityBasicMissing": {
+    "message": "terrains de base manquants (non bloquant) : $1"
+  },
+  "moxfieldNetwork": {
+    "message": "Moxfield est injoignable (réseau)."
+  },
+  "moxfieldSessionExpired": {
+    "message": "Session Moxfield expirée : reconnecte-toi sur moxfield.com dans ce navigateur."
+  },
+  "moxfieldBlocked": {
+    "message": "Moxfield a refusé la récupération (code $1). Réessaie plus tard, ou utilise l'import CSV."
+  },
+  "moxfieldStatusCode": {
+    "message": "code $1"
+  },
+  "moxfieldUnexpected": {
+    "message": "Réponse inattendue de Moxfield (étape « $1 », $2) : son fonctionnement a peut-être changé. Utilise l'import CSV en attendant."
+  },
+  "moxfieldUnreadable": {
+    "message": "réponse illisible"
+  },
+  "moxfieldNoToken": {
+    "message": "jeton absent"
+  },
+  "moxfieldNoSession": {
+    "message": "Pas de session Moxfield : connecte-toi sur moxfield.com dans ce navigateur."
+  },
+  "moxfieldNotCollectionCsv": {
+    "message": "pas un CSV de collection"
+  },
+  "googleAccountReadError": {
+    "message": "Google Drive a répondu $1 à la lecture du compte."
+  },
+  "googleCancelled": {
+    "message": "Connexion à Google refusée ou annulée."
+  },
+  "googleWindowFailed": {
+    "message": "La fenêtre de connexion Google n'a pas pu aboutir."
+  },
+  "googleBraveHint": {
+    "message": "Sous Brave, active « Autoriser la connexion Google pour les extensions » (brave://settings/extensions), puis réessaie."
+  },
+  "googleRenew": {
+    "message": "Connexion Google à renouveler : clique sur « Reconnecter »."
+  },
+  "csvEmpty": {
+    "message": "CSV vide ou invalide"
+  },
+  "csvColumnsMissing": {
+    "message": "Colonnes 'Count' / 'Name' introuvables dans le CSV — format inattendu."
+  },
+  "deckNoLongerBuilt": {
+    "message": "Ce deck n'est plus marqué comme monté."
+  },
+  "backupNotOurs": {
+    "message": "Ce fichier n'est pas une sauvegarde Moxfield Stock Manager."
+  },
+  "backupVersionUnsupported": {
+    "message": "Version de sauvegarde non prise en charge : $1."
+  },
+  "backupMissingParts": {
+    "message": "Sauvegarde corrompue : stock ou decks montés manquants."
+  },
+  "backupBadStockEntry": {
+    "message": "Sauvegarde corrompue : entrée de stock invalide."
+  },
+  "backupBadDeck": {
+    "message": "Sauvegarde corrompue : deck monté invalide."
+  },
+  "driveHttpError": {
+    "message": "Google Drive a répondu $1 : $2"
+  },
+  "unknownMessageType": {
+    "message": "Type de message inconnu : $1"
+  },
+  "cardmarketWantsUrl": {
+    "message": "https://www.cardmarket.com/fr/Magic/Wants"
+  },
+  "extensionReloaded": {
+    "message": "Extension rechargée entre-temps — rafraîchis cette page (F5) puis réessaie."
+  },
+  "unknownError": {
+    "message": "Erreur inconnue"
+  },
+  "printingWarningTitle_one": {
+    "message": "Présente dans ta collection mais pas dans la bonne version pour ce deck ($1 carte)"
+  },
+  "printingWarningTitle_other": {
+    "message": "Présentes dans ta collection mais pas dans la bonne version pour ce deck ($1 cartes)"
+  },
+  "printingWarningHint": {
+    "message": "montage bloqué, corrige ou retire ces lignes avant de valider :"
+  },
+  "shortageTitle_one": {
+    "message": "Stock insuffisant pour $1 carte :"
+  },
+  "shortageTitle_other": {
+    "message": "Stock insuffisant pour $1 cartes :"
+  },
+  "shortageItem": {
+    "message": "$1 — as $2, besoin $3 (manque $4)"
+  },
+  "shortageIn": {
+    "message": "dans : $1"
+  },
+  "shortageShort": {
+    "message": "$1 (manque $2)"
+  },
+  "cardmarketCopyButton": {
+    "message": "Copier les cartes manquantes pour Cardmarket"
+  },
+  "clipboardCopyFailed": {
+    "message": "Impossible de copier la liste dans le presse-papiers."
+  },
+  "cardmarketCopied_one": {
+    "message": "$1 carte copiée — sur Cardmarket, ouvre une liste de wants puis « Ajouter une Deck List » et colle."
+  },
+  "cardmarketCopied_other": {
+    "message": "$1 cartes copiées — sur Cardmarket, ouvre une liste de wants puis « Ajouter une Deck List » et colle."
+  },
+  "basicLandWrongEdition": {
+    "message": "$1 — version différente de ta collection"
+  },
+  "basicLandTitle": {
+    "message": "Terrains de base à vérifier ($1)"
+  },
+  "basicLandHint": {
+    "message": "n'empêche pas de valider :"
+  },
+  "cardCountBase": {
+    "message": "$1 au total ($2)"
+  },
+  "cardCount_one": {
+    "message": "$1 carte"
+  },
+  "cardCount_other": {
+    "message": "$1 cartes"
+  },
+  "distinctNames_one": {
+    "message": "$1 intitulé différent"
+  },
+  "distinctNames_other": {
+    "message": "$1 intitulés différents"
+  },
+  "cardCountMismatch": {
+    "message": "$1 — ⚠️ le site indique $2 : vérifie la liste avant de valider"
+  },
+  "pageNoCards": {
+    "message": "aucune carte détectée sur la page."
+  },
+  "pageCardsDetected_one": {
+    "message": "$1 carte détectée sur la page"
+  },
+  "pageCardsDetected_other": {
+    "message": "$1 cartes détectées sur la page"
+  },
+  "pageTotalNotFound": {
+    "message": "$1, mais total annoncé par Moxfield (« N main deck ») introuvable."
+  },
+  "pageTotalMismatch": {
+    "message": "$1, alors que Moxfield en annonce $2."
+  },
+  "deckChecking": {
+    "message": "Vérification de la liste…"
+  },
+  "deckCannotCheck": {
+    "message": "Impossible de vérifier si la liste a changé depuis le montage : $1"
+  },
+  "deckSuspectSummary_one": {
+    "message": "Voir ce qui a été détecté ($1 écart avec le montage)"
+  },
+  "deckSuspectSummary_other": {
+    "message": "Voir ce qui a été détecté ($1 écarts avec le montage)"
+  },
+  "deckUnchanged": {
+    "message": "La liste n'a pas changé depuis le montage ($1)."
+  },
+  "deckChangedTitle": {
+    "message": "La liste a changé sur Moxfield depuis le montage ($1) :"
+  },
+  "deckUpdateHint": {
+    "message": "« $1 » ajuste le stock pour ces seules cartes."
+  },
+  "deckUpdateBlocked": {
+    "message": "Stock insuffisant ou version différente : corrige d'abord (voir ci-dessus)."
+  },
+  "overlayTitleUnbuild": {
+    "message": "Démonter ce deck"
+  },
+  "overlayTitleBuild": {
+    "message": "Marquer ce deck comme monté physiquement"
+  },
+  "overlayBuiltIntro": {
+    "message": "Ce deck est actuellement marqué comme monté. Le démonter réincrémentera le stock des cartes qu'il utilise."
+  },
+  "overlayIntro": {
+    "message": "Liste détectée automatiquement à partir de la page — vérifie/corrige avant de valider (une carte par ligne, \"QTE Nom\"). Si elle est vide ou incomplète, clique sur le bouton « Copier » de Moxfield puis « $1 »."
+  },
+  "pasteFromClipboard": {
+    "message": "Coller depuis le presse-papiers"
+  },
+  "cancel": {
+    "message": "Annuler"
+  },
+  "confirmBuild": {
+    "message": "Confirmer le montage"
+  },
+  "updateBuild": {
+    "message": "Mettre à jour le montage"
+  },
+  "buttonBuild": {
+    "message": "Marquer comme monté physiquement"
+  },
+  "buttonBuiltOutdated": {
+    "message": "Monté physiquement — la liste a changé depuis le montage (cliquer pour mettre à jour)"
+  },
+  "buttonBuilt": {
+    "message": "Monté physiquement (cliquer pour démonter)"
+  },
+  "buttonAvailableShort": {
+    "message": "$1/$2 dispo"
+  },
+  "clipboardEmpty": {
+    "message": "Presse-papiers vide ou format non reconnu — colle manuellement avec Ctrl+V."
+  },
+  "updateBlocked": {
+    "message": "Mise à jour impossible — stock insuffisant ou version différente."
+  },
+  "updateDone": {
+    "message": "Montage mis à jour, stock ajusté pour les cartes modifiées."
+  },
+  "noCardsRecognized": {
+    "message": "Aucune carte reconnue dans la liste — vérifie le format (QTE Nom)."
+  },
+  "buildBlockedWrongEdition": {
+    "message": "Montage impossible — version différente de ta collection pour : $1"
+  },
+  "buildBlockedShortage": {
+    "message": "Montage impossible — stock insuffisant : $1"
+  },
+  "unbuildDone": {
+    "message": "Deck démonté, stock réincrémenté."
+  },
+  "buildDone": {
+    "message": "Deck marqué comme monté, stock décrémenté."
+  }
+}

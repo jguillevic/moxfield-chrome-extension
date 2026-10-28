@@ -7,18 +7,20 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const { fakeGetMessage } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
 const HTML = fs.readFileSync(path.join(ROOT, "popup.html"), "utf8");
-const SCRIPT = fs.readFileSync(path.join(ROOT, "popup.js"), "utf8");
+const SCRIPTS = ["i18n.js", "popup.js"].map((f) => fs.readFileSync(path.join(ROOT, f), "utf8"));
 
 const EMPTY_STATE = { stock: {}, builtDecks: {} };
 const SYNC_OFF = { enabled: false };
 
 // responses : réponse du faux service worker par type de message (objet ou
-// fonction recevant le message).
-function openPopup(responses) {
-  const dom = new JSDOM(HTML.replace(/<script src="popup.js"><\/script>/, ""), { runScripts: "outside-only" });
+// fonction recevant le message) ; lang : langue du navigateur (français par
+// défaut).
+function openPopup(responses, lang = "fr") {
+  const dom = new JSDOM(HTML.replace(/<script src="[^"]+"><\/script>/g, ""), { runScripts: "outside-only" });
   const win = dom.window;
   const sent = [];
   const storageListeners = [];
@@ -28,6 +30,7 @@ function openPopup(responses) {
     ...responses,
   };
   win.chrome = {
+    i18n: { getMessage: fakeGetMessage(lang) },
     runtime: {
       sendMessage: async (msg) => {
         // Sérialisé comme par Chrome (et ramené dans le contexte des tests).
@@ -40,7 +43,7 @@ function openPopup(responses) {
     storage: { onChanged: { addListener: (fn) => storageListeners.push(fn) } },
   };
   win.confirm = () => true;
-  win.eval(SCRIPT);
+  for (const script of SCRIPTS) win.eval(script);
   const $ = (id) => win.document.getElementById(id);
   return {
     $,
@@ -114,7 +117,7 @@ test("cartes de decks montés non couvertes, noms échappés", async (t) => {
   await settle();
   const el = p.$("collection-uncovered");
   assert.equal(el.hidden, false);
-  assert.match(el.textContent, /ne couvre plus 1 carte\(s\)/);
+  assert.match(el.textContent, /ne couvre plus 1 carte de decks montés/);
   assert.match(el.textContent, /Rhystic <Study> — manque 2 \(dans : Deck a, Deck b\)/);
   assert.equal(el.querySelector("li").children.length, 0, "pas de HTML injecté");
 });
@@ -134,7 +137,7 @@ test("« Récupérer maintenant » : lance la récupération et résume le résu
   assert.equal(p.$("collection-fetch-btn").disabled, true, "bouton désactivé pendant la récupération");
   await settle();
   assert.ok(p.sent.some((m) => m.type === "COLLECTION_FETCH_NOW"));
-  assert.equal(p.$("collection-status").textContent, "2 carte(s) modifiée(s), stock mis à jour.");
+  assert.equal(p.$("collection-status").textContent, "2 cartes modifiées, stock mis à jour.");
   assert.equal(p.$("collection-fetch-btn").disabled, false);
   assert.match(p.$("collection-state").textContent, /^Dernière récupération/);
 });
@@ -209,7 +212,7 @@ test("stock déplié : 200 lignes au plus, avec le nombre de cartes restantes", 
   assert.equal(rows.length, 201, "en-tête + 200 cartes");
   assert.match(rows[1].textContent, /Card 0000/);
   assert.equal(p.$("stock-table").querySelectorAll("button").length, 0, "quantités non modifiables : Moxfield fait référence");
-  assert.equal(p.$("stock-table").querySelector("p.hint").textContent, "… et 300 autre(s) carte(s) : affine avec le filtre.");
+  assert.equal(p.$("stock-table").querySelector("p.hint").textContent, "… et 300 autres cartes : affine avec le filtre.");
 });
 
 test("filtre : cherche dans tout le stock, au-delà des 200 premières", async (t) => {
@@ -354,7 +357,7 @@ test("historique : détail tronqué signalé", async (t) => {
   await settle();
   await openHistory(p);
   const items = [...p.$("history-list").querySelectorAll("li")].map((li) => li.textContent);
-  assert.deepEqual(items, ["+1 Lotus Petal (2 → 3)", "−2 Sol Ring (3 → 1)", "… et 29998 autre(s)"]);
+  assert.deepEqual(items, ["+1 Lotus Petal (2 → 3)", "−2 Sol Ring (3 → 1)", "… et 29998 autres"]);
 });
 
 // --- Rapports d'erreurs ---
@@ -442,4 +445,32 @@ test("pas de session Moxfield : lien vers la connexion, absent pour les autres e
     assert.equal(link.href, "https://moxfield.com/account/signin");
     assert.equal(link.target, "_blank");
   }
+});
+
+// --- Langue du navigateur ---
+
+test("tous les textes fixes du popup sont traduits, dans chaque langue", async (t) => {
+  for (const lang of ["fr", "en"]) {
+    const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}) }, lang);
+    t.after(p.close);
+    const doc = p.win.document;
+    assert.equal(doc.documentElement.lang, lang);
+    for (const el of doc.querySelectorAll("[data-i18n]")) {
+      assert.ok(el.textContent && el.textContent !== el.dataset.i18n, `${lang} : ${el.dataset.i18n} non traduit`);
+    }
+    assert.notEqual(p.$("stock-filter").placeholder, "stockFilterPlaceholder");
+  }
+});
+
+test("navigateur en anglais : popup en anglais, dates comprises", async (t) => {
+  const meta = { lastSuccessAt: new Date(2026, 9, 7, 9, 0).getTime() };
+  const p = openPopup({ GET_STATE: { ok: true, state: MOUNTED_STATE }, GET_COLLECTION_STATUS: collectionStatus(meta) }, "en");
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("stock-owned").nextElementSibling.textContent, "copies owned");
+  assert.equal(p.$("sync-pill").textContent, "Not synced");
+  assert.equal(p.$("collection-state").textContent, "Last fetched: 10/7/26, 9:00 AM.");
+  assert.deepEqual([...p.$("built-list").querySelectorAll("button")].map((b) => b.textContent), ["Unbuild", "Unbuild"]);
+  await openStock(p);
+  assert.deepEqual([...p.$("stock-table").querySelectorAll("th")].map((th) => th.textContent), ["Card", "Free", "Decks"]);
 });

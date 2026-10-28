@@ -6,6 +6,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createMoxfieldCollection, computeCollectionDiff } = require("../moxfield-collection.js");
+const { loadI18n } = require("./helpers");
 
 const CSV = '"Count","Tradelist Count","Name","Edition"\n"2","0","Sol Ring","c21"\n';
 const LOGGED_IN = [
@@ -39,7 +40,7 @@ function fakeMoxfield({ cookies = LOGGED_IN, overrides = {} } = {}) {
     if (step === "download") return jsonResponse(200, { access_token: "export-token", token_type: "Bearer", expires_in_minutes: 1 });
     return jsonResponse(200, CSV);
   };
-  const client = createMoxfieldCollection({ fetch, getCookies: async () => cookies });
+  const client = createMoxfieldCollection({ fetch, getCookies: async () => cookies, i18n: loadI18n() });
   return { client, requests };
 }
 

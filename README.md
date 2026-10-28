@@ -4,6 +4,9 @@ Ajoute une gestion de stock de cartes physiques par-dessus Moxfield : flag un
 deck comme « monté physiquement » et le stock est décrémenté automatiquement,
 carte par carte, selon la decklist. Démonte-le pour réincrémenter.
 
+*English: the extension is available in English and French — it follows
+your browser's language. This README is in French.*
+
 ## Installation
 
 1. Clone le dépôt (`git clone https://github.com/jguillevic/moxfield-chrome-extension.git`)
@@ -323,12 +326,32 @@ en cas de conflit : rien ne s'y perd).
   par jour et par PC.
 - Actif par défaut ; pour le couper : popup, section **Rapports d'erreurs**,
   décocher la case.
+- Le message d'erreur est dans la langue du navigateur (cf. « Langue »).
 - Pour le mainteneur : les rapports arrivent dans le projet Sentry dont la
   DSN est renseignée dans `SENTRY_DSN` (`background.js`). Sans DSN, rien
   n'est envoyé (la case est grisée). La DSN n'est pas un secret : elle ne
   permet que d'envoyer des rapports, pas de les lire.
 
+### 7. Langue
+
+- L'extension s'affiche en **français** ou en **anglais**, selon la langue
+  du navigateur (réglages du navigateur → Langues) : popup, bouton et
+  fenêtre de montage sur la page d'un deck, messages, historique, nom et
+  description dans la liste des extensions. Toute autre langue affiche
+  l'anglais.
+- Les dates suivent le format de cette langue, et le bouton Cardmarket
+  ouvre la version du site dans cette langue.
+- L'historique est traduit à l'affichage : une action notée sur un PC en
+  français s'affiche en anglais sur un PC en anglais, et inversement.
+
 ## Limites connues
+
+- Pas de choix de la langue dans l'extension : elle suit celle du
+  navigateur (le système de traduction de Chrome ne permet pas d'en
+  changer). Après un changement de langue du navigateur, les messages
+  d'erreur déjà affichés (dernière récupération de la collection, synchro
+  Google Drive) restent dans l'ancienne langue jusqu'à la prochaine
+  tentative.
 
 - Le scraping repose sur des repères structurels de la page, pas sur une
   API officielle — Moxfield n'en fournit pas. La structure lue dépend du
@@ -438,10 +461,29 @@ sur `main` (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
   (`content-deck.js`, exécuté dans une page de test avec un faux `chrome`) —
   faisabilité affichée, recalcul en direct quand la page ou le stock
   change, tolérance à une liste brièvement incohérente, erreurs
-  rapportées (contrôle de la page, erreurs de l'extension mais pas du site).
+  rapportées (contrôle de la page, erreurs de l'extension mais pas du site),
+  bouton et fenêtre de montage en anglais.
+- `tests/i18n.test.js` : traductions (`i18n.js`, `_locales/`) — mêmes
+  clés et mêmes valeurs insérées dans chaque langue, pas de « $ » que Chrome
+  refuserait, pluriels complets, nom et description du manifest, toute clé
+  utilisée par le code existe et toute clé existante sert, pluriels et dates
+  selon la langue, messages illisibles après un rechargement de
+  l'extension. Le popup (tous ses textes fixes traduits, popup en anglais)
+  et le service worker (erreurs et historique en anglais, historique noté
+  dans une langue et affiché dans l'autre) sont testés en anglais dans
+  leurs propres fichiers. Les tests attendent les textes français : un
+  faux `chrome.i18n` lit les vrais fichiers de langue.
+
+**Ajouter ou modifier un texte affiché** : jamais en dur dans le code. Une
+clé dans `_locales/fr/messages.json` **et** `_locales/en/messages.json`,
+lue par `t("clé", valeurs…)` (ou `tn("clé", nombre, …)` pour un pluriel :
+clés `clé_one` et `clé_other`), ou par un attribut `data-i18n` dans
+`popup.html`. Valeurs insérées en `$1`…`$9`, jamais collées l'une à
+l'autre. `tests/i18n.test.js` signale une clé oubliée dans une langue.
 
 Non couverts : la synchro Google Drive, le reste du popup, la fenêtre de
-montage et l'intégration à la barre d'actions de Moxfield.
+montage (hors ses textes en anglais), l'intégration à la barre d'actions de
+Moxfield, et la qualité des traductions elles-mêmes (relecture humaine).
 
 ## Crédits
 

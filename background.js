@@ -11,8 +11,13 @@
 
 // Modules partagés (chargés tels quels, cf. leur en-tête) :
 // createDeckChecks, createMoxfieldCollection, computeCollectionDiff,
-// createHistory, createErrorReports, createGoogleWebAuth, chooseAuthMethod.
-importScripts("deck-checks.js", "moxfield-collection.js", "history.js", "error-reports.js", "google-auth.js");
+// createHistory, createErrorReports, createGoogleWebAuth, chooseAuthMethod,
+// createChromeI18n.
+importScripts("i18n.js", "deck-checks.js", "moxfield-collection.js", "history.js", "error-reports.js", "google-auth.js");
+
+// Textes renvoyés au popup et à la page d'un deck (erreurs, historique),
+// dans la langue du navigateur (cf. i18n.js).
+const i18n = createChromeI18n();
 
 const STORAGE_KEY = "moxfieldStockManagerState";
 
@@ -51,7 +56,7 @@ async function writeState(state) {
 // le PC d'origine : Chrome ne donne pas le nom de l'ordinateur, chaque PC
 // tire donc un identifiant au hasard, propre à ce PC (non synchronisé).
 const DEVICE_KEY = "moxfieldStockManagerDevice";
-const historyLog = createHistory(normalizeName);
+const historyLog = createHistory(normalizeName, i18n);
 
 async function getDeviceId() {
   const data = await chrome.storage.local.get(DEVICE_KEY);
@@ -163,13 +168,13 @@ function parseCSVLine(line) {
 
 function parseCollectionCSV(csvText) {
   const lines = csvText.replace(/\r\n/g, "\n").split("\n").filter((l) => l.trim().length > 0);
-  if (lines.length < 2) throw new Error("CSV vide ou invalide");
+  if (lines.length < 2) throw new Error(i18n.t("csvEmpty"));
 
   const header = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase());
   const countIdx = header.indexOf("count");
   const nameIdx = header.indexOf("name");
   if (countIdx === -1 || nameIdx === -1) {
-    throw new Error("Colonnes 'Count' / 'Name' introuvables dans le CSV — format inattendu.");
+    throw new Error(i18n.t("csvColumnsMissing"));
   }
 
   const aggregated = {};
@@ -288,7 +293,7 @@ async function updateDeck(state, { deckId, deckName, url, cards }) {
 
 async function handleUpdateBuiltDeck({ deckId, deckName, url, cards }) {
   const state = await getState();
-  if (!state.builtDecks[deckId]) throw new Error("Ce deck n'est plus marqué comme monté.");
+  if (!state.builtDecks[deckId]) throw new Error(i18n.t("deckNoLongerBuilt"));
   await updateDeck(state, { deckId, deckName, url, cards });
   await setState(state);
   return { ok: true };
@@ -392,23 +397,23 @@ function makeDoc(state, updatedAt) {
 // n'avaient qu'un champ exportedAt.
 function parseDoc(doc) {
   if (!isPlainObject(doc) || doc.app !== DOC_APP) {
-    throw new Error("Ce fichier n'est pas une sauvegarde Moxfield Stock Manager.");
+    throw new Error(i18n.t("backupNotOurs"));
   }
   if (doc.version !== DOC_VERSION) {
-    throw new Error(`Version de sauvegarde non prise en charge : ${doc.version}.`);
+    throw new Error(i18n.t("backupVersionUnsupported", doc.version));
   }
   const { stock, builtDecks } = doc.state || {};
   if (!isPlainObject(stock) || !isPlainObject(builtDecks)) {
-    throw new Error("Sauvegarde corrompue : stock ou decks montés manquants.");
+    throw new Error(i18n.t("backupMissingParts"));
   }
   for (const c of Object.values(stock)) {
     if (typeof c?.name !== "string" || !Number.isFinite(c?.qty)) {
-      throw new Error("Sauvegarde corrompue : entrée de stock invalide.");
+      throw new Error(i18n.t("backupBadStockEntry"));
     }
   }
   for (const d of Object.values(builtDecks)) {
     if (typeof d?.name !== "string" || !Array.isArray(d?.cards)) {
-      throw new Error("Sauvegarde corrompue : deck monté invalide.");
+      throw new Error(i18n.t("backupBadDeck"));
     }
   }
   // Historique absent des sauvegardes d'avant sa création ; entrées
@@ -430,6 +435,7 @@ const googleWebAuth = createGoogleWebAuth({
   fetch: (...args) => fetch(...args),
   clientId: GOOGLE_WEB_CLIENT_ID,
   scope: DRIVE_SCOPE,
+  i18n,
   isBrave: Boolean(browserNavigator && browserNavigator.brave),
 });
 
@@ -449,11 +455,9 @@ async function getAuthToken(interactive) {
     ({ token } = await chrome.identity.getAuthToken({ interactive }));
   } catch (e) {
     // Jeton à renouveler : situation normale, pas une erreur à rapporter.
-    throw Object.assign(new Error(interactive
-      ? "Connexion à Google refusée ou annulée."
-      : "Connexion Google à renouveler : clique sur « Reconnecter ».", { cause: e }), { expected: !interactive });
+    throw Object.assign(new Error(i18n.t(interactive ? "googleCancelled" : "googleRenew"), { cause: e }), { expected: !interactive });
   }
-  if (!token) throw new Error("Connexion à Google refusée ou annulée.");
+  if (!token) throw new Error(i18n.t("googleCancelled"));
   return token;
 }
 
@@ -478,7 +482,7 @@ async function driveFetch(url, options = {}, interactive = false) {
     }
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Google Drive a répondu ${res.status} : ${body.slice(0, 200)}`);
+      throw new Error(i18n.t("driveHttpError", res.status, body.slice(0, 200)));
     }
     return res;
   }
@@ -849,8 +853,9 @@ const COLLECTION_DUE_MS = (COLLECTION_PERIOD_MINUTES - 5) * 60 * 1000;
 const moxfieldCollection = createMoxfieldCollection({
   fetch: (...args) => fetch(...args),
   getCookies: () => chrome.cookies.getAll({ domain: "moxfield.com" }),
+  i18n,
 });
-const { isBasicLand } = createDeckChecks(normalizeName);
+const { isBasicLand } = createDeckChecks(normalizeName, i18n);
 
 async function getCollectionMeta() {
   const data = await chrome.storage.local.get(COLLECTION_META_KEY);
@@ -1097,7 +1102,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse(await handleSetErrorReports(msg.payload || {}));
           break;
         default:
-          sendResponse({ ok: false, error: "Type de message inconnu: " + msg.type });
+          sendResponse({ ok: false, error: i18n.t("unknownMessageType", msg.type) });
       }
     } catch (e) {
       reportError(`message:${msg.type}`, e, causeOf(e));

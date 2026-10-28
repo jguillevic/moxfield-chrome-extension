@@ -4,8 +4,33 @@ const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
 const { createDeckScraper } = require("../deck-scraper.js");
+const { createI18n } = require("../i18n.js");
 
 const FIXTURES_DIR = path.join(__dirname, "fixtures");
+const LOCALES_DIR = path.join(__dirname, "..", "_locales");
+
+// Messages d'une langue (_locales/<lang>/messages.json).
+function loadMessages(lang) {
+  return JSON.parse(fs.readFileSync(path.join(LOCALES_DIR, lang, "messages.json"), "utf8"));
+}
+
+// Équivalent de chrome.i18n.getMessage pour une langue : "" si la clé
+// n'existe pas, $1…$9 remplacés par les valeurs, "$" par "$".
+function fakeGetMessage(lang = "fr") {
+  const messages = loadMessages(lang);
+  return (key, subs) => {
+    const entry = messages[key];
+    if (!entry) return "";
+    const values = subs === undefined ? [] : [].concat(subs);
+    return entry.message.replace(/\$(\$|[1-9])/g, (m, d) => (d === "$" ? "$" : String(values[d - 1] ?? "")));
+  };
+}
+
+// Textes traduits (cf. i18n.js), comme dans l'extension. Français par
+// défaut : c'est la langue des libellés attendus dans les tests.
+function loadI18n(lang = "fr") {
+  return createI18n(fakeGetMessage(lang));
+}
 
 // jsdom ne calcule aucune mise en page : getBoundingClientRect y renvoie
 // toujours une taille nulle, et isVisible écarterait tout. On reproduit le
@@ -45,4 +70,4 @@ function totalOf(cards) {
   return cards.reduce((sum, c) => sum + c.qty, 0);
 }
 
-module.exports = { FIXTURES_DIR, loadPage, simulateLayout, summarize, totalOf };
+module.exports = { FIXTURES_DIR, LOCALES_DIR, loadPage, simulateLayout, summarize, totalOf, loadMessages, fakeGetMessage, loadI18n };

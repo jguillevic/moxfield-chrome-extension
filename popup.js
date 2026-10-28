@@ -1,3 +1,7 @@
+// Textes traduits (cf. i18n.js), posés avant tout affichage.
+const { t, tn, formatDateTime, translateDocument } = createChromeI18n();
+translateDocument(document);
+
 function send(type, payload) {
   return chrome.runtime.sendMessage({ type, payload });
 }
@@ -21,22 +25,19 @@ async function loadState() {
 // page du deck (cf. SET_DECK_PAGE_CHANGES dans background.js).
 const MAX_CHANGES_IN_TOOLTIP = 10;
 
-// "+1 Elvish Mystic, −1 Stitcher's Supplier, et 3 autre(s)".
+// "+1 Elvish Mystic, −1 Stitcher's Supplier, et 3 autres".
 function formatChanges(changes) {
   const items = changes.slice(0, MAX_CHANGES_IN_TOOLTIP).map((c) => {
     const delta = c.to - c.from;
     return `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${c.name}`;
   });
   const more = changes.length - items.length;
-  if (more > 0) items.push(`et ${more} autre(s)`);
+  if (more > 0) items.push(tn("andMore", more));
   return items.join(", ");
 }
 
 function describePageChanges(deck) {
-  return (
-    `La liste a changé sur Moxfield depuis le montage : ${formatChanges(deck.pageChanges)}` +
-    ` — constaté le ${formatDate(deck.pageCheckedAt)}. Ouvre le deck pour mettre à jour le montage.`
-  );
+  return t("deckPageChanged", formatChanges(deck.pageChanges), formatDateTime(deck.pageCheckedAt));
 }
 
 function renderBuiltDecks(state) {
@@ -46,9 +47,9 @@ function renderBuiltDecks(state) {
   const changedCount = decks.filter(([, d]) => d.pageChanges && d.pageChanges.length > 0).length;
   const changedEl = document.getElementById("built-changed");
   changedEl.hidden = changedCount === 0;
-  changedEl.textContent = `${changedCount} modifié${changedCount > 1 ? "s" : ""}`;
+  changedEl.textContent = tn("builtDecksChanged", changedCount);
   if (decks.length === 0) {
-    list.innerHTML = '<p class="hint">Aucun deck monté pour le moment.</p>';
+    list.innerHTML = `<p class="hint">${escapeHtml(t("builtDecksNone"))}</p>`;
     return;
   }
   list.innerHTML = "";
@@ -65,13 +66,13 @@ function renderBuiltDecks(state) {
     if (deck.pageChanges && deck.pageChanges.length > 0) {
       const badge = document.createElement("span");
       badge.className = "badge-changed";
-      badge.textContent = "Modifié";
+      badge.textContent = t("deckChangedBadge");
       badge.title = describePageChanges(deck);
       nameCell.appendChild(badge);
     }
     const btn = document.createElement("button");
     btn.className = "secondary";
-    btn.textContent = "Démonter";
+    btn.textContent = t("unbuild");
     btn.addEventListener("click", async () => {
       await send("TOGGLE_DECK_BUILT", { deckId, deckName: deck.name, url: deck.url, cards: [], built: false });
       refresh();
@@ -158,14 +159,13 @@ function renderStock(state, filter, onlyInDecks) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   if (entries.length === 0) {
-    container.innerHTML = rows.size === 0
-      ? '<p class="hint">Aucune carte en stock — importe ta collection ci-dessus.</p>'
-      : '<p class="hint">Aucune carte ne correspond au filtre.</p>';
+    container.innerHTML = `<p class="hint">${escapeHtml(t(rows.size === 0 ? "stockEmpty" : "stockNoMatch"))}</p>`;
     return;
   }
 
   const table = document.createElement("table");
-  table.innerHTML = "<tr><th>Carte</th><th>Libre</th><th>Decks</th></tr>";
+  const headers = ["stockColCard", "stockColFree", "stockColDecks"].map((k) => `<th>${escapeHtml(t(k))}</th>`);
+  table.innerHTML = `<tr>${headers.join("")}</tr>`;
   for (const card of entries.slice(0, MAX_STOCK_ROWS)) {
     const u = usage.get(card.key);
     const expanded = u && expandedCards.has(card.key);
@@ -189,7 +189,7 @@ function renderStock(state, filter, onlyInDecks) {
       const detail = document.createElement("tr");
       detail.className = "deck-usage";
       detail.innerHTML =
-        `<td colspan="3">Total possédé : ${ownedQty(card.qty, u.total)}<ul>` +
+        `<td colspan="3">${escapeHtml(t("stockOwnedTotal", ownedQty(card.qty, u.total)))}<ul>` +
         u.decks
           .map((d) => `<li><a href="${escapeHtml(d.url)}" target="_blank">${escapeHtml(d.name)}</a> ×${d.qty}</li>`)
           .join("") +
@@ -202,7 +202,7 @@ function renderStock(state, filter, onlyInDecks) {
   if (entries.length > MAX_STOCK_ROWS) {
     const more = document.createElement("p");
     more.className = "hint";
-    more.textContent = `… et ${entries.length - MAX_STOCK_ROWS} autre(s) carte(s) : affine avec le filtre.`;
+    more.textContent = tn("stockMoreRows", entries.length - MAX_STOCK_ROWS);
     container.appendChild(more);
   }
 }
@@ -217,15 +217,15 @@ async function refresh() {
 
 async function importCSVText(csvText, status) {
   if (!csvText || !csvText.trim()) {
-    status.textContent = "Aucun contenu à importer.";
+    status.textContent = t("csvNothingToImport");
     return;
   }
   const res = await chrome.runtime.sendMessage({ type: "IMPORT_CSV_TEXT", csvText });
   if (res.ok) {
-    status.textContent = `${res.cardCount} cartes différentes, ${res.totalQty} exemplaires importés.`;
+    status.textContent = t("csvImported", tn("distinctCards", res.cardCount), tn("copiesImported", res.totalQty));
     refresh();
   } else {
-    status.textContent = "Erreur : " + res.error;
+    status.textContent = t("errorPrefix", res.error);
   }
 }
 
@@ -233,7 +233,7 @@ async function importCSVText(csvText, status) {
 // nous-mêmes le nom du fichier choisi.
 function showChosenFile() {
   const file = document.getElementById("csv-file-input").files[0];
-  document.getElementById("csv-file-name").textContent = file ? file.name : "Aucun fichier choisi";
+  document.getElementById("csv-file-name").textContent = file ? file.name : t("csvNoFile");
 }
 
 document.getElementById("csv-file-input").addEventListener("change", showChosenFile);
@@ -243,7 +243,7 @@ document.getElementById("import-btn").addEventListener("click", async () => {
   const status = document.getElementById("import-status");
   const file = fileInput.files[0];
   if (!file) {
-    status.textContent = "Choisis d'abord un fichier CSV.";
+    status.textContent = t("csvChooseFirst");
     return;
   }
   try {
@@ -252,7 +252,7 @@ document.getElementById("import-btn").addEventListener("click", async () => {
     fileInput.value = "";
     showChosenFile();
   } catch (e) {
-    status.textContent = "Impossible de lire le fichier : " + e.message;
+    status.textContent = t("csvReadError", e.message);
   }
 });
 
@@ -281,7 +281,7 @@ async function renderHistory() {
   const { entries } = await send("GET_HISTORY");
   list.innerHTML = "";
   if (entries.length === 0) {
-    list.innerHTML = '<p class="hint">Aucune action pour le moment.</p>';
+    list.innerHTML = `<p class="hint">${escapeHtml(t("historyNone"))}</p>`;
     return;
   }
   for (const e of entries) {
@@ -291,7 +291,7 @@ async function renderHistory() {
     text.className = "history-text";
     const meta = document.createElement("span");
     meta.className = "hint";
-    meta.textContent = formatDate(e.at) + (e.otherDevice ? " · sur un autre PC" : "");
+    meta.textContent = formatDateTime(e.at) + (e.otherDevice ? ` · ${t("historyOtherDevice")}` : "");
     const title = document.createElement("span");
     title.className = "history-title";
     title.textContent = e.title;
@@ -300,7 +300,7 @@ async function renderHistory() {
       const details = document.createElement("details");
       details.className = "sub-details";
       const summary = document.createElement("summary");
-      summary.textContent = "Détail";
+      summary.textContent = t("historyDetail");
       const ul = document.createElement("ul");
       for (const c of e.changes) {
         const li = document.createElement("li");
@@ -310,7 +310,7 @@ async function renderHistory() {
       // Détail tronqué à l'enregistrement (cf. compactEntry dans history.js).
       if (e.changeCount > e.changes.length) {
         const more = document.createElement("li");
-        more.textContent = `… et ${e.changeCount - e.changes.length} autre(s)`;
+        more.textContent = `… ${tn("andMore", e.changeCount - e.changes.length)}`;
         ul.appendChild(more);
       }
       details.append(summary, ul);
@@ -331,13 +331,13 @@ async function renderCollection() {
   document.getElementById("collection-auto").checked = meta.enabled;
 
   const state = document.getElementById("collection-state");
-  const lastSuccess = meta.lastSuccessAt ? `Dernière récupération : ${formatDate(meta.lastSuccessAt)}.` : "";
+  const lastSuccess = meta.lastSuccessAt ? t("collectionLastFetch", formatDateTime(meta.lastSuccessAt)) : "";
   if (meta.lastError) {
     state.className = "sync-error";
     state.textContent = `${meta.lastError.message}${lastSuccess ? ` ${lastSuccess}` : ""}`;
   } else {
     state.className = "hint";
-    state.textContent = lastSuccess || "Pas encore récupérée.";
+    state.textContent = lastSuccess || t("collectionNeverFetched");
   }
 
   // Pas de session Moxfield : lien vers la connexion. La récupération se
@@ -347,16 +347,16 @@ async function renderCollection() {
   const changesEl = document.getElementById("collection-changes");
   changesEl.hidden = !meta.lastChanges;
   if (meta.lastChanges) {
-    changesEl.textContent = `Derniers changements (${formatDate(meta.lastChangesAt)}) : ${formatChanges(meta.lastChanges)}.`;
+    changesEl.textContent = t("collectionLastChanges", formatDateTime(meta.lastChangesAt), formatChanges(meta.lastChanges));
   }
 
   // Cartes de decks montés que la collection ne couvre plus.
   const uncoveredEl = document.getElementById("collection-uncovered");
   uncoveredEl.hidden = uncovered.length === 0;
   uncoveredEl.innerHTML =
-    `<strong>Ta collection ne couvre plus ${uncovered.length} carte(s) de decks montés :</strong><ul>` +
+    `<strong>${escapeHtml(tn("collectionUncovered", uncovered.length))}</strong><ul>` +
     uncovered
-      .map((u) => `<li>${escapeHtml(u.name)} — manque ${u.missing} (dans : ${u.decks.map(escapeHtml).join(", ")})</li>`)
+      .map((u) => `<li>${escapeHtml(t("collectionUncoveredItem", u.name, u.missing, u.decks.join(", ")))}</li>`)
       .join("") +
     "</ul>";
 }
@@ -370,12 +370,12 @@ document.getElementById("collection-fetch-btn").addEventListener("click", async 
   const btn = document.getElementById("collection-fetch-btn");
   const status = document.getElementById("collection-status");
   btn.disabled = true;
-  status.textContent = "Récupération…";
+  status.textContent = t("collectionFetching");
   try {
     const res = await send("COLLECTION_FETCH_NOW");
     if (!res.ok) status.textContent = "";
-    else if (res.changes.length === 0) status.textContent = "Aucun changement.";
-    else status.textContent = `${res.changes.length} carte(s) modifiée(s), stock mis à jour.`;
+    else if (res.changes.length === 0) status.textContent = t("collectionNoChange");
+    else status.textContent = tn("collectionChanged", res.changes.length);
   } finally {
     btn.disabled = false;
     renderCollection();
@@ -385,9 +385,6 @@ document.getElementById("collection-fetch-btn").addEventListener("click", async 
 // --- Synchronisation Google Drive ---
 // Le travail se fait dans le service worker ; le popup ne fait qu'afficher
 // l'état de la synchro, qu'il relit à chaque changement du stockage local.
-function formatDate(value) {
-  return new Date(value).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
-}
 
 let syncMeta = null;
 
@@ -401,42 +398,40 @@ async function renderSync() {
   document.getElementById("sync-account-changed").hidden = !(m.enabled && !m.pendingChoice && m.accountMismatch);
   document.getElementById("sync-on").hidden = !(m.enabled && !blocked);
   document.getElementById("sync-reconnect-btn").hidden = !m.lastError;
-  document.getElementById("sync-account").textContent = m.accountEmail || "inconnu";
+  document.getElementById("sync-account").textContent = m.accountEmail || t("unknownAccount");
   if (m.accountMismatch) {
-    document.getElementById("sync-old-account").textContent = m.accountEmail || "inconnu";
-    document.getElementById("sync-new-account").textContent = m.accountMismatch.email || "inconnu";
+    document.getElementById("sync-old-account").textContent = m.accountEmail || t("unknownAccount");
+    document.getElementById("sync-new-account").textContent = m.accountMismatch.email || t("unknownAccount");
   }
   if (m.pendingChoice) {
-    document.getElementById("sync-choice-date").textContent = `modifiées le ${formatDate(m.pendingChoice.remoteUpdatedAt)}`;
+    document.getElementById("sync-choice-text").textContent = t("syncChoiceNotice", formatDateTime(m.pendingChoice.remoteUpdatedAt));
   }
   document.getElementById("sync-avatar").textContent = (m.accountEmail || "?").charAt(0);
   // Hors Google Chrome, le compte est celui choisi dans la fenêtre de
   // connexion Google (cf. google-auth.js), pas celui du profil.
   const web = m.authMethod === "web";
-  document.getElementById("sync-account-hint").textContent = web ? "Compte choisi à la connexion" : "Compte du profil Chrome";
-  document.getElementById("sync-account-box").title = web
-    ? "Pour changer de compte : Déconnecter, puis Connecter Google Drive avec l'autre compte."
-    : "Pour changer de compte, change celui du profil Chrome : l'extension te demandera quoi faire.";
+  document.getElementById("sync-account-hint").textContent = t(web ? "syncAccountChosen" : "syncAccountProfile");
+  document.getElementById("sync-account-box").title = t(web ? "syncSwitchAccountWeb" : "syncSwitchAccountProfile");
 
   const state = document.getElementById("sync-state");
   let pill;
   if (!m.enabled) {
-    pill = ["off", "Non synchronisé"];
+    pill = ["off", t("syncPillOff")];
     state.textContent = "";
   } else if (blocked) {
-    pill = ["pending", "En pause"];
+    pill = ["pending", t("syncPillPaused")];
   } else if (m.lastError) {
-    pill = ["error", "Erreur de synchro"];
+    pill = ["error", t("syncPillError")];
     state.className = "sync-error";
     state.textContent = m.lastError;
   } else if (m.dirty || !m.lastSyncAt) {
-    pill = ["pending", "Envoi en cours"];
+    pill = ["pending", t("syncPillSending")];
     state.className = "";
-    state.textContent = m.lastSyncAt ? "Modifications en attente d'envoi…" : "Première synchronisation…";
+    state.textContent = t(m.lastSyncAt ? "syncPendingChanges" : "syncFirst");
   } else {
-    pill = ["ok", "Synchronisé"];
+    pill = ["ok", t("syncPillOk")];
     state.className = "";
-    state.textContent = `Dernière synchro : ${formatDate(m.lastSyncAt)}`;
+    state.textContent = t("syncLast", formatDateTime(m.lastSyncAt));
   }
   const pillEl = document.getElementById("sync-pill");
   pillEl.className = `pill ${pill[0]}`;
@@ -447,24 +442,25 @@ async function runSyncAction(type, payload, pendingText) {
   const status = document.getElementById("sync-status");
   status.textContent = pendingText;
   const res = await send(type, payload);
-  status.textContent = res.ok ? "" : "Erreur : " + res.error;
+  status.textContent = res.ok ? "" : t("errorPrefix", res.error);
   renderSync();
   return res;
 }
 
-const SNAPSHOT_REASONS = { daily: "", conflict: " — version écartée lors d'un conflit", manual: " — sauvegarde manuelle" };
+// Origine d'une version, ajoutée à sa date (rien pour l'instantané quotidien).
+const SNAPSHOT_REASONS = { conflict: "snapshotConflict", manual: "snapshotManual" };
 
 async function renderSnapshots() {
   const container = document.getElementById("sync-snapshots");
-  container.innerHTML = '<p class="hint">Chargement…</p>';
+  container.innerHTML = `<p class="hint">${escapeHtml(t("loading"))}</p>`;
   const res = await send("DRIVE_LIST_SNAPSHOTS");
   if (!res.ok) {
     container.innerHTML = "";
-    document.getElementById("sync-status").textContent = "Erreur : " + res.error;
+    document.getElementById("sync-status").textContent = t("errorPrefix", res.error);
     return;
   }
   if (res.snapshots.length === 0) {
-    container.innerHTML = '<p class="hint">Aucune version dans l\'historique pour le moment.</p>';
+    container.innerHTML = `<p class="hint">${escapeHtml(t("snapshotsNone"))}</p>`;
     return;
   }
   container.innerHTML = "";
@@ -473,15 +469,15 @@ async function renderSnapshots() {
     row.className = "deck-row";
     const label = document.createElement("span");
     label.className = "hint";
-    label.textContent = `${formatDate(s.createdTime)}${SNAPSHOT_REASONS[s.reason] ?? ""}`;
+    label.textContent = formatDateTime(s.createdTime) + (SNAPSHOT_REASONS[s.reason] ? ` — ${t(SNAPSHOT_REASONS[s.reason])}` : "");
     const btn = document.createElement("button");
     btn.className = "secondary";
-    btn.textContent = "Restaurer";
+    btn.textContent = t("snapshotRestore");
     btn.addEventListener("click", async () => {
-      if (!confirm(`Remplacer le stock et les decks montés par la version du ${formatDate(s.createdTime)} ? Elle sera aussi appliquée à tes autres PC.`)) return;
-      const r = await runSyncAction("DRIVE_RESTORE_SNAPSHOT", { fileId: s.id }, "Restauration…");
+      if (!confirm(t("snapshotRestoreConfirm", formatDateTime(s.createdTime)))) return;
+      const r = await runSyncAction("DRIVE_RESTORE_SNAPSHOT", { fileId: s.id }, t("snapshotRestoring"));
       if (r.ok) {
-        document.getElementById("sync-status").textContent = `Restauré : ${r.cardCount} cartes différentes, ${r.deckCount} decks montés.`;
+        document.getElementById("sync-status").textContent = t("snapshotRestored", tn("distinctCards", r.cardCount), tn("builtDecksCount", r.deckCount));
       }
     });
     row.appendChild(label);
@@ -490,19 +486,19 @@ async function renderSnapshots() {
   }
 }
 
-document.getElementById("sync-connect-btn").addEventListener("click", () => runSyncAction("DRIVE_CONNECT", undefined, "Connexion…"));
-document.getElementById("sync-reconnect-btn").addEventListener("click", () => runSyncAction("DRIVE_CONNECT", undefined, "Connexion…"));
-document.getElementById("sync-keep-remote-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "remote" }, "Récupération depuis Drive…"));
-document.getElementById("sync-keep-local-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "local" }, "Envoi vers Drive…"));
-document.getElementById("sync-account-keep-local-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "local" }, "Envoi vers le nouveau compte…"));
+document.getElementById("sync-connect-btn").addEventListener("click", () => runSyncAction("DRIVE_CONNECT", undefined, t("syncConnecting")));
+document.getElementById("sync-reconnect-btn").addEventListener("click", () => runSyncAction("DRIVE_CONNECT", undefined, t("syncConnecting")));
+document.getElementById("sync-keep-remote-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "remote" }, t("syncFetchingDrive")));
+document.getElementById("sync-keep-local-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "local" }, t("syncSendingDrive")));
+document.getElementById("sync-account-keep-local-btn").addEventListener("click", () => runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "local" }, t("syncSendingNewAccount")));
 document.getElementById("sync-account-keep-remote-btn").addEventListener("click", () => {
-  if (confirm("Remplacer le stock de ce PC par celui du nouveau compte ? (s'il n'en a pas, le stock de ce PC y sera envoyé)")) {
-    runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "remote" }, "Récupération depuis le nouveau compte…");
+  if (confirm(t("syncAccountKeepRemoteConfirm"))) {
+    runSyncAction("DRIVE_RESOLVE_CHOICE", { keep: "remote" }, t("syncFetchingNewAccount"));
   }
 });
-document.getElementById("sync-now-btn").addEventListener("click", () => runSyncAction("SYNC_NOW", undefined, "Synchronisation…"));
+document.getElementById("sync-now-btn").addEventListener("click", () => runSyncAction("SYNC_NOW", undefined, t("syncSyncing")));
 document.getElementById("sync-disconnect-btn").addEventListener("click", () => {
-  if (confirm("Arrêter la synchronisation sur ce PC ? Les données restent sur ce PC et sur Drive.")) {
+  if (confirm(t("syncDisconnectConfirm"))) {
     runSyncAction("DRIVE_DISCONNECT", undefined, "");
   }
 });
@@ -511,8 +507,8 @@ document.getElementById("sync-history").addEventListener("toggle", (e) => {
 });
 
 document.getElementById("reset-btn").addEventListener("click", async () => {
-  const warning = syncMeta?.enabled ? "\n\nLa synchronisation est active : tes autres PC seront aussi vidés." : "";
-  if (confirm("Réinitialiser tout le stock et tous les decks montés ?" + warning)) {
+  const warning = syncMeta?.enabled ? `\n\n${t("resetSyncWarning")}` : "";
+  if (confirm(t("resetConfirm") + warning)) {
     await send("RESET_STOCK");
     refresh();
   }
@@ -526,7 +522,7 @@ async function renderErrorReports() {
   checkbox.disabled = !configured;
   document.getElementById("error-reports-state").textContent = configured
     ? ""
-    : "Aucun service de rapports configuré dans cette version : rien n'est envoyé.";
+    : t("errorReportsNotConfigured");
 }
 
 document.getElementById("error-reports-details").addEventListener("toggle", (e) => {

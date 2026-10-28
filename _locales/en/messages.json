@@ -1,0 +1,674 @@
+{
+  "locale": {
+    "message": "en"
+  },
+  "extName": {
+    "message": "Moxfield Stock Manager"
+  },
+  "extDescription": {
+    "message": "Manage your physical card stock from your Moxfield collection: marking a deck as built takes its cards out of the stock."
+  },
+  "statOwned": {
+    "message": "copies owned"
+  },
+  "statFree": {
+    "message": "free copies"
+  },
+  "statInDecks": {
+    "message": "in decks"
+  },
+  "statDistinct": {
+    "message": "distinct cards"
+  },
+  "builtDecksTitle": {
+    "message": "Built decks"
+  },
+  "stockTitle": {
+    "message": "Stock"
+  },
+  "stockFilterPlaceholder": {
+    "message": "Filter by name…"
+  },
+  "stockOnlyInDecks": {
+    "message": "Only cards in built decks"
+  },
+  "stockHint": {
+    "message": "“Free” = available outside built decks. Click a card that is in decks to see which ones."
+  },
+  "historyTitle": {
+    "message": "History"
+  },
+  "historyHint": {
+    "message": "Actions on the stock and built decks, most recent first."
+  },
+  "collectionTitle": {
+    "message": "Moxfield collection"
+  },
+  "collectionHint": {
+    "message": "Fetched from your Moxfield account (you just need to be signed in to it in this browser), even with Moxfield closed. It is the reference for the stock: to fix a quantity, edit your collection on Moxfield."
+  },
+  "collectionAuto": {
+    "message": "Fetch automatically (after each change on Moxfield, and every hour)"
+  },
+  "collectionFetchNow": {
+    "message": "Fetch now"
+  },
+  "collectionSignIn": {
+    "message": "Sign in to Moxfield"
+  },
+  "csvTitle": {
+    "message": "Manual import (CSV file)"
+  },
+  "csvHint": {
+    "message": "Fallback if the automatic fetch fails. On Moxfield: collection → Export → CSV. Importing again updates the stock without losing built decks."
+  },
+  "csvChooseFile": {
+    "message": "Choose a CSV file"
+  },
+  "csvImport": {
+    "message": "Import"
+  },
+  "csvPasteSummary": {
+    "message": "Or paste the CSV text"
+  },
+  "csvImportText": {
+    "message": "Import this text"
+  },
+  "syncTitle": {
+    "message": "Google Drive sync"
+  },
+  "syncOffHint": {
+    "message": "Automatic backup to a private folder in your Drive, synced between your computers. Only needed once per computer. If the popup closes during Google authorization, open it again."
+  },
+  "syncConnect": {
+    "message": "Connect Google Drive"
+  },
+  "syncKeepRemote": {
+    "message": "Keep Drive's data"
+  },
+  "syncKeepLocal": {
+    "message": "Keep this computer's data"
+  },
+  "syncAccountChanged": {
+    "message": "The Google account changed:"
+  },
+  "syncPaused": {
+    "message": "Sync paused."
+  },
+  "syncAccountKeepLocal": {
+    "message": "Send this computer's stock to the new account"
+  },
+  "syncAccountKeepRemote": {
+    "message": "Get the new account's stock"
+  },
+  "syncAccountChangedHint": {
+    "message": "The replaced version stays in the history. Switching back to the old account resumes the sync."
+  },
+  "syncReconnect": {
+    "message": "Reconnect"
+  },
+  "syncNow": {
+    "message": "Sync now"
+  },
+  "syncDisconnect": {
+    "message": "Disconnect"
+  },
+  "syncSnapshotsSummary": {
+    "message": "Version history (last 10)"
+  },
+  "errorReportsTitle": {
+    "message": "Error reports"
+  },
+  "errorReportsHint": {
+    "message": "When the extension hits an error, an anonymous report is sent to the developer so it can be fixed: error message, extension version, browser and system. Never your stock, your decks or your email address."
+  },
+  "errorReportsEnabled": {
+    "message": "Send error reports"
+  },
+  "dangerTitle": {
+    "message": "Danger zone"
+  },
+  "dangerHint": {
+    "message": "Completely empties the stock and unbuilds every deck marked as physically built."
+  },
+  "resetButton": {
+    "message": "Reset the whole stock"
+  },
+  "errorPrefix": {
+    "message": "Error: $1"
+  },
+  "loading": {
+    "message": "Loading…"
+  },
+  "unknownAccount": {
+    "message": "unknown"
+  },
+  "andMore_one": {
+    "message": "and $1 more"
+  },
+  "andMore_other": {
+    "message": "and $1 more"
+  },
+  "distinctCards_one": {
+    "message": "$1 distinct card"
+  },
+  "distinctCards_other": {
+    "message": "$1 distinct cards"
+  },
+  "deckPageChanged": {
+    "message": "The list changed on Moxfield since the deck was built: $1 — seen on $2. Open the deck to update the build."
+  },
+  "builtDecksChanged_one": {
+    "message": "$1 changed"
+  },
+  "builtDecksChanged_other": {
+    "message": "$1 changed"
+  },
+  "builtDecksNone": {
+    "message": "No built decks yet."
+  },
+  "builtDecksCount_one": {
+    "message": "$1 built deck"
+  },
+  "builtDecksCount_other": {
+    "message": "$1 built decks"
+  },
+  "deckChangedBadge": {
+    "message": "Changed"
+  },
+  "unbuild": {
+    "message": "Unbuild"
+  },
+  "stockEmpty": {
+    "message": "No cards in stock — import your collection above."
+  },
+  "stockNoMatch": {
+    "message": "No card matches the filter."
+  },
+  "stockColCard": {
+    "message": "Card"
+  },
+  "stockColFree": {
+    "message": "Free"
+  },
+  "stockColDecks": {
+    "message": "Decks"
+  },
+  "stockOwnedTotal": {
+    "message": "Total owned: $1"
+  },
+  "stockMoreRows_one": {
+    "message": "… and $1 more card: narrow it down with the filter."
+  },
+  "stockMoreRows_other": {
+    "message": "… and $1 more cards: narrow it down with the filter."
+  },
+  "csvNothingToImport": {
+    "message": "Nothing to import."
+  },
+  "csvImported": {
+    "message": "$1, $2."
+  },
+  "copiesImported_one": {
+    "message": "$1 copy imported"
+  },
+  "copiesImported_other": {
+    "message": "$1 copies imported"
+  },
+  "csvNoFile": {
+    "message": "No file chosen"
+  },
+  "csvChooseFirst": {
+    "message": "Choose a CSV file first."
+  },
+  "csvReadError": {
+    "message": "Could not read the file: $1"
+  },
+  "historyNone": {
+    "message": "No actions yet."
+  },
+  "historyOtherDevice": {
+    "message": "on another computer"
+  },
+  "historyDetail": {
+    "message": "Details"
+  },
+  "collectionLastFetch": {
+    "message": "Last fetched: $1."
+  },
+  "collectionNeverFetched": {
+    "message": "Not fetched yet."
+  },
+  "collectionLastChanges": {
+    "message": "Latest changes ($1): $2."
+  },
+  "collectionUncovered_one": {
+    "message": "Your collection no longer covers $1 card from built decks:"
+  },
+  "collectionUncovered_other": {
+    "message": "Your collection no longer covers $1 cards from built decks:"
+  },
+  "collectionUncoveredItem": {
+    "message": "$1 — $2 missing (in: $3)"
+  },
+  "collectionFetching": {
+    "message": "Fetching…"
+  },
+  "collectionNoChange": {
+    "message": "No changes."
+  },
+  "collectionChanged_one": {
+    "message": "$1 card changed, stock updated."
+  },
+  "collectionChanged_other": {
+    "message": "$1 cards changed, stock updated."
+  },
+  "syncChoiceNotice": {
+    "message": "Drive already holds data (changed on $1) and this computer has a stock too. Which one should be kept? The other version will stay in the history."
+  },
+  "syncAccountChosen": {
+    "message": "Account chosen when signing in"
+  },
+  "syncAccountProfile": {
+    "message": "Chrome profile account"
+  },
+  "syncSwitchAccountWeb": {
+    "message": "To switch accounts: Disconnect, then Connect Google Drive with the other account."
+  },
+  "syncSwitchAccountProfile": {
+    "message": "To switch accounts, change the Chrome profile's account: the extension will ask you what to do."
+  },
+  "syncPillOff": {
+    "message": "Not synced"
+  },
+  "syncPillPaused": {
+    "message": "Paused"
+  },
+  "syncPillError": {
+    "message": "Sync error"
+  },
+  "syncPillSending": {
+    "message": "Sending"
+  },
+  "syncPillOk": {
+    "message": "Synced"
+  },
+  "syncPendingChanges": {
+    "message": "Changes waiting to be sent…"
+  },
+  "syncFirst": {
+    "message": "First sync…"
+  },
+  "syncLast": {
+    "message": "Last sync: $1"
+  },
+  "snapshotConflict": {
+    "message": "version set aside during a conflict"
+  },
+  "snapshotManual": {
+    "message": "manual backup"
+  },
+  "snapshotsNone": {
+    "message": "No versions in the history yet."
+  },
+  "snapshotRestore": {
+    "message": "Restore"
+  },
+  "snapshotRestoreConfirm": {
+    "message": "Replace the stock and built decks with the version from $1? It will also be applied to your other computers."
+  },
+  "snapshotRestoring": {
+    "message": "Restoring…"
+  },
+  "snapshotRestored": {
+    "message": "Restored: $1, $2."
+  },
+  "syncConnecting": {
+    "message": "Connecting…"
+  },
+  "syncFetchingDrive": {
+    "message": "Fetching from Drive…"
+  },
+  "syncSendingDrive": {
+    "message": "Sending to Drive…"
+  },
+  "syncSendingNewAccount": {
+    "message": "Sending to the new account…"
+  },
+  "syncAccountKeepRemoteConfirm": {
+    "message": "Replace this computer's stock with the new account's? (if it has none, this computer's stock will be sent to it)"
+  },
+  "syncFetchingNewAccount": {
+    "message": "Fetching from the new account…"
+  },
+  "syncSyncing": {
+    "message": "Syncing…"
+  },
+  "syncDisconnectConfirm": {
+    "message": "Stop syncing on this computer? The data stays on this computer and on Drive."
+  },
+  "resetSyncWarning": {
+    "message": "Sync is on: your other computers will be emptied too."
+  },
+  "resetConfirm": {
+    "message": "Reset the whole stock and all built decks?"
+  },
+  "errorReportsNotConfigured": {
+    "message": "No report service is set up in this version: nothing is sent."
+  },
+  "historyCollectionFetched_one": {
+    "message": "Moxfield collection fetched: $1 card changed"
+  },
+  "historyCollectionFetched_other": {
+    "message": "Moxfield collection fetched: $1 cards changed"
+  },
+  "historyCsvImport_one": {
+    "message": "CSV import: $1 card changed"
+  },
+  "historyCsvImport_other": {
+    "message": "CSV import: $1 cards changed"
+  },
+  "historyDeckBuilt_one": {
+    "message": "Deck “$2” built: $1 card taken out of the free stock"
+  },
+  "historyDeckBuilt_other": {
+    "message": "Deck “$2” built: $1 cards taken out of the free stock"
+  },
+  "historyDeckUnbuilt_one": {
+    "message": "Deck “$2” unbuilt: $1 card returned to the stock"
+  },
+  "historyDeckUnbuilt_other": {
+    "message": "Deck “$2” unbuilt: $1 cards returned to the stock"
+  },
+  "historyDeckUpdated_one": {
+    "message": "Build of “$2” updated: $1 card changed"
+  },
+  "historyDeckUpdated_other": {
+    "message": "Build of “$2” updated: $1 cards changed"
+  },
+  "historyReset_one": {
+    "message": "Stock reset ($1 deck unbuilt)"
+  },
+  "historyReset_other": {
+    "message": "Stock reset ($1 decks unbuilt)"
+  },
+  "historyDriveRestore": {
+    "message": "Google Drive history version restored"
+  },
+  "blockingSummary_one": {
+    "message": "$1 card blocks the build: $2"
+  },
+  "blockingSummary_other": {
+    "message": "$1 cards block the build: $2"
+  },
+  "blockingMissing_one": {
+    "message": "$1 missing from stock"
+  },
+  "blockingMissing_other": {
+    "message": "$1 missing from stock"
+  },
+  "blockingWrongEdition_one": {
+    "message": "$1 in another printing"
+  },
+  "blockingWrongEdition_other": {
+    "message": "$1 in another printing"
+  },
+  "availabilityCount": {
+    "message": "$1/$2 cards available in the free stock, excluding basic lands"
+  },
+  "availabilityOk": {
+    "message": "buildable: $1"
+  },
+  "availabilityMissing": {
+    "message": "missing $1"
+  },
+  "availabilityWrongEdition": {
+    "message": "different printing: $1"
+  },
+  "availabilityBasicMissing": {
+    "message": "missing basic lands (not blocking): $1"
+  },
+  "moxfieldNetwork": {
+    "message": "Moxfield can't be reached (network)."
+  },
+  "moxfieldSessionExpired": {
+    "message": "Moxfield session expired: sign in again on moxfield.com in this browser."
+  },
+  "moxfieldBlocked": {
+    "message": "Moxfield refused the fetch (code $1). Try again later, or use the CSV import."
+  },
+  "moxfieldStatusCode": {
+    "message": "code $1"
+  },
+  "moxfieldUnexpected": {
+    "message": "Unexpected response from Moxfield (step “$1”, $2): the way it works may have changed. Use the CSV import in the meantime."
+  },
+  "moxfieldUnreadable": {
+    "message": "unreadable response"
+  },
+  "moxfieldNoToken": {
+    "message": "missing token"
+  },
+  "moxfieldNoSession": {
+    "message": "No Moxfield session: sign in on moxfield.com in this browser."
+  },
+  "moxfieldNotCollectionCsv": {
+    "message": "not a collection CSV"
+  },
+  "googleAccountReadError": {
+    "message": "Google Drive answered $1 when reading the account."
+  },
+  "googleCancelled": {
+    "message": "Google sign-in refused or cancelled."
+  },
+  "googleWindowFailed": {
+    "message": "The Google sign-in window could not complete."
+  },
+  "googleBraveHint": {
+    "message": "In Brave, turn on “Allow Google login for extensions” (brave://settings/extensions), then try again."
+  },
+  "googleRenew": {
+    "message": "Google sign-in needs renewing: click “Reconnect”."
+  },
+  "csvEmpty": {
+    "message": "Empty or invalid CSV"
+  },
+  "csvColumnsMissing": {
+    "message": "'Count' / 'Name' columns not found in the CSV — unexpected format."
+  },
+  "deckNoLongerBuilt": {
+    "message": "This deck is no longer marked as built."
+  },
+  "backupNotOurs": {
+    "message": "This file is not a Moxfield Stock Manager backup."
+  },
+  "backupVersionUnsupported": {
+    "message": "Unsupported backup version: $1."
+  },
+  "backupMissingParts": {
+    "message": "Corrupted backup: stock or built decks missing."
+  },
+  "backupBadStockEntry": {
+    "message": "Corrupted backup: invalid stock entry."
+  },
+  "backupBadDeck": {
+    "message": "Corrupted backup: invalid built deck."
+  },
+  "driveHttpError": {
+    "message": "Google Drive answered $1: $2"
+  },
+  "unknownMessageType": {
+    "message": "Unknown message type: $1"
+  },
+  "cardmarketWantsUrl": {
+    "message": "https://www.cardmarket.com/en/Magic/Wants"
+  },
+  "extensionReloaded": {
+    "message": "The extension was reloaded in the meantime — refresh this page (F5) and try again."
+  },
+  "unknownError": {
+    "message": "Unknown error"
+  },
+  "printingWarningTitle_one": {
+    "message": "In your collection but not in the right printing for this deck ($1 card)"
+  },
+  "printingWarningTitle_other": {
+    "message": "In your collection but not in the right printing for this deck ($1 cards)"
+  },
+  "printingWarningHint": {
+    "message": "build blocked, fix or remove these lines before confirming:"
+  },
+  "shortageTitle_one": {
+    "message": "Not enough stock for $1 card:"
+  },
+  "shortageTitle_other": {
+    "message": "Not enough stock for $1 cards:"
+  },
+  "shortageItem": {
+    "message": "$1 — you have $2, need $3 ($4 missing)"
+  },
+  "shortageIn": {
+    "message": "in: $1"
+  },
+  "shortageShort": {
+    "message": "$1 ($2 missing)"
+  },
+  "cardmarketCopyButton": {
+    "message": "Copy the missing cards for Cardmarket"
+  },
+  "clipboardCopyFailed": {
+    "message": "Could not copy the list to the clipboard."
+  },
+  "cardmarketCopied_one": {
+    "message": "$1 card copied — on Cardmarket, open a wants list, add a deck list and paste."
+  },
+  "cardmarketCopied_other": {
+    "message": "$1 cards copied — on Cardmarket, open a wants list, add a deck list and paste."
+  },
+  "basicLandWrongEdition": {
+    "message": "$1 — different printing from your collection"
+  },
+  "basicLandTitle": {
+    "message": "Basic lands to check ($1)"
+  },
+  "basicLandHint": {
+    "message": "does not prevent confirming:"
+  },
+  "cardCountBase": {
+    "message": "$1 in total ($2)"
+  },
+  "cardCount_one": {
+    "message": "$1 card"
+  },
+  "cardCount_other": {
+    "message": "$1 cards"
+  },
+  "distinctNames_one": {
+    "message": "$1 distinct name"
+  },
+  "distinctNames_other": {
+    "message": "$1 distinct names"
+  },
+  "cardCountMismatch": {
+    "message": "$1 — ⚠️ the site shows $2: check the list before confirming"
+  },
+  "pageNoCards": {
+    "message": "no cards detected on the page."
+  },
+  "pageCardsDetected_one": {
+    "message": "$1 card detected on the page"
+  },
+  "pageCardsDetected_other": {
+    "message": "$1 cards detected on the page"
+  },
+  "pageTotalNotFound": {
+    "message": "$1, but the total shown by Moxfield (“N main deck”) was not found."
+  },
+  "pageTotalMismatch": {
+    "message": "$1, while Moxfield shows $2."
+  },
+  "deckChecking": {
+    "message": "Checking the list…"
+  },
+  "deckCannotCheck": {
+    "message": "Could not check whether the list changed since the deck was built: $1"
+  },
+  "deckSuspectSummary_one": {
+    "message": "See what was detected ($1 difference from the build)"
+  },
+  "deckSuspectSummary_other": {
+    "message": "See what was detected ($1 differences from the build)"
+  },
+  "deckUnchanged": {
+    "message": "The list hasn't changed since the deck was built ($1)."
+  },
+  "deckChangedTitle": {
+    "message": "The list changed on Moxfield since the deck was built ($1):"
+  },
+  "deckUpdateHint": {
+    "message": "“$1” adjusts the stock for these cards only."
+  },
+  "deckUpdateBlocked": {
+    "message": "Not enough stock or different printing: fix it first (see above)."
+  },
+  "overlayTitleUnbuild": {
+    "message": "Unbuild this deck"
+  },
+  "overlayTitleBuild": {
+    "message": "Mark this deck as physically built"
+  },
+  "overlayBuiltIntro": {
+    "message": "This deck is currently marked as built. Unbuilding it returns the cards it uses to the stock."
+  },
+  "overlayIntro": {
+    "message": "List detected automatically from the page — check/fix it before confirming (one card per line, \"QTY Name\"). If it is empty or incomplete, click Moxfield's “Copy” button, then “$1”."
+  },
+  "pasteFromClipboard": {
+    "message": "Paste from clipboard"
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "confirmBuild": {
+    "message": "Confirm the build"
+  },
+  "updateBuild": {
+    "message": "Update the build"
+  },
+  "buttonBuild": {
+    "message": "Mark as physically built"
+  },
+  "buttonBuiltOutdated": {
+    "message": "Physically built — the list changed since the deck was built (click to update)"
+  },
+  "buttonBuilt": {
+    "message": "Physically built (click to unbuild)"
+  },
+  "buttonAvailableShort": {
+    "message": "$1/$2 available"
+  },
+  "clipboardEmpty": {
+    "message": "Clipboard empty or format not recognized — paste manually with Ctrl+V."
+  },
+  "updateBlocked": {
+    "message": "Can't update — not enough stock or different printing."
+  },
+  "updateDone": {
+    "message": "Build updated, stock adjusted for the changed cards."
+  },
+  "noCardsRecognized": {
+    "message": "No cards recognized in the list — check the format (QTY Name)."
+  },
+  "buildBlockedWrongEdition": {
+    "message": "Can't build — different printing from your collection for: $1"
+  },
+  "buildBlockedShortage": {
+    "message": "Can't build — not enough stock: $1"
+  },
+  "unbuildDone": {
+    "message": "Deck unbuilt, cards returned to the stock."
+  },
+  "buildDone": {
+    "message": "Deck marked as built, cards taken out of the stock."
+  }
+}
