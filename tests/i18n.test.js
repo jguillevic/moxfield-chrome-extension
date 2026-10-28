@@ -73,7 +73,7 @@ test("manifest : nom et description traduits, dans les limites de Chrome", () =>
   assert.deepEqual([...new Set(used)].sort(), ["__MSG_extDescription__", "__MSG_extName__"]);
   for (const lang of LANGS) {
     const messages = loadMessages(lang);
-    assert.ok(messages.extName.message.length <= 45, `${lang} : nom trop long`);
+    assert.ok(messages.extName.message.length <= 75, `${lang} : nom trop long (75 caractères au plus)`);
     assert.ok(messages.extDescription.message.length <= 132, `${lang} : description trop longue`);
   }
 });
