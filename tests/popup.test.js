@@ -362,7 +362,23 @@ test("historique : détail tronqué signalé", async (t) => {
 
 // --- Rapports d'erreurs ---
 
-test("rapports d'erreurs : case cochée par défaut, décochable", async (t) => {
+test("rapports d'erreurs : accord demandé en haut du popup tant que pas de réponse", async (t) => {
+  let enabled = null;
+  const popup = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({ enabled: false }),
+    GET_ERROR_REPORTS: () => ({ ok: true, enabled, configured: true }),
+    SET_ERROR_REPORTS: (msg) => ((enabled = msg.payload.enabled), { ok: true, enabled, configured: true }),
+  });
+  t.after(popup.close);
+  await settle();
+  assert.equal(popup.$("error-reports-consent").hidden, false);
+  popup.$("error-reports-decline").click();
+  await settle();
+  assert.deepEqual(popup.sent.find((m) => m.type === "SET_ERROR_REPORTS").payload, { enabled: false });
+  assert.equal(popup.$("error-reports-consent").hidden, true, "réponse donnée : question retirée");
+});
+
+test("rapports d'erreurs : choix déjà fait, pas de question ; case décochable", async (t) => {
   let enabled = true;
   const popup = openPopup({
     GET_COLLECTION_STATUS: collectionStatus({ enabled: false }),
@@ -371,7 +387,7 @@ test("rapports d'erreurs : case cochée par défaut, décochable", async (t) => 
   });
   t.after(popup.close);
   await settle();
-  assert.ok(!popup.sent.some((m) => m.type === "GET_ERROR_REPORTS"), "section repliée : rien demandé");
+  assert.equal(popup.$("error-reports-consent").hidden, true);
   popup.$("error-reports-details").open = true;
   popup.$("error-reports-details").dispatchEvent(new popup.win.Event("toggle"));
   await settle();

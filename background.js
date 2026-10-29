@@ -75,14 +75,22 @@ async function recordHistory(state, entry) {
 // DSN du projet Sentry qui reçoit les erreurs de toutes les installations
 // (vide : aucun envoi). Pas un secret, elle ne permet que d'envoyer.
 const SENTRY_DSN = "https://40773adedc23e5995ac79439fb0f356e@o4512265832103936.ingest.de.sentry.io/4512265848225872";
-// { enabled: false } si l'utilisateur a coupé l'envoi (actif par défaut),
-// log : limitation du nombre d'envois (cf. allow).
+// enabled : true / false selon le choix de l'utilisateur (choiceAt : date
+// de ce choix), null tant qu'il n'a pas répondu — rien ne part alors : le
+// Chrome Web Store exige un accord explicite pour des données qui ne
+// servent pas directement à la fonctionnalité. log : limitation du nombre
+// d'envois (cf. allow).
 const ERROR_REPORTS_KEY = "moxfieldStockManagerErrorReports";
 const errorReports = createErrorReports({ dsn: SENTRY_DSN, fetch: (...args) => fetch(...args) });
 
 async function getErrorReportsMeta() {
   const data = await chrome.storage.local.get(ERROR_REPORTS_KEY);
-  return { enabled: true, ...data[ERROR_REPORTS_KEY] };
+  const meta = { ...data[ERROR_REPORTS_KEY] };
+  // Avant la demande d'accord, l'envoi était actif par défaut et
+  // « enabled: true » pouvait être enregistré sans que l'utilisateur ait
+  // rien choisi : seul un choix daté compte.
+  meta.enabled = meta.choiceAt ? meta.enabled === true : null;
+  return meta;
 }
 
 async function updateErrorReportsMeta(patch) {
@@ -100,7 +108,7 @@ function reportError(where, error, extra) {
   const run = errorReportQueue.then(async () => {
     if (!errorReports.configured || (error && error.expected)) return false;
     const meta = await getErrorReportsMeta();
-    if (!meta.enabled) return false;
+    if (meta.enabled !== true) return false;
     const report = {
       where,
       message: (error && error.message) || String(error),
@@ -136,7 +144,7 @@ function causeOf(e) {
 }
 
 async function handleSetErrorReports({ enabled }) {
-  const meta = await updateErrorReportsMeta({ enabled: Boolean(enabled) });
+  const meta = await updateErrorReportsMeta({ enabled: Boolean(enabled), choiceAt: Date.now() });
   return { ok: true, enabled: meta.enabled, configured: errorReports.configured };
 }
 

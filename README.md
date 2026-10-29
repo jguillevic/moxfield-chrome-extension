@@ -324,8 +324,12 @@ en cas de conflit : rien ne s'y perd).
   réseau coupé) ni les refus expliqués à l'écran (stock insuffisant…).
 - Une même erreur part au plus une fois par heure, et 20 rapports au plus
   par jour et par PC.
-- Actif par défaut ; pour le couper : popup, section **Rapports d'erreurs**,
-  décocher la case.
+- **Rien ne part sans ton accord** : à l'ouverture du popup, la question
+  « Aider à corriger les bugs ? » reste affichée en haut tant que tu n'as
+  pas répondu. Tu peux changer d'avis à tout moment : popup, section
+  **Rapports d'erreurs**, case à cocher. (Les versions précédentes
+  envoyaient les rapports par défaut : la question est posée une fois à
+  tout le monde.)
 - Le message d'erreur est dans la langue du navigateur (cf. « Langue »).
 - Pour le mainteneur : les rapports arrivent dans le projet Sentry dont la
   DSN est renseignée dans `SENTRY_DSN` (`background.js`). Sans DSN, rien
@@ -481,9 +485,23 @@ clés `clé_one` et `clé_other`), ou par un attribut `data-i18n` dans
 `popup.html`. Valeurs insérées en `$1`…`$9`, jamais collées l'une à
 l'autre. `tests/i18n.test.js` signale une clé oubliée dans une langue.
 
+- `tests/package.test.js` : paquet pour le Chrome Web Store
+  (`scripts/package.js`) — manifest sans `"key"`, présence et intégrité de
+  tous les fichiers utilisés par l'extension, ni tests ni outillage, paquet
+  identique d'une construction à l'autre.
+
 Non couverts : la synchro Google Drive, le reste du popup, la fenêtre de
 montage (hors ses textes en anglais), l'intégration à la barre d'actions de
 Moxfield, et la qualité des traductions elles-mêmes (relecture humaine).
+
+### Publier sur le Chrome Web Store
+
+`npm run package` produit `dist/moxfield-stock-manager-<version>.zip`
+(fichiers de l'extension seulement, manifest sans `"key"`, que le Store
+refuse). La marche à suivre complète (compte, identifiant de l'extension et
+connexion Google, textes de la fiche, justification des permissions) est
+dans [`docs/chrome-web-store.md`](docs/chrome-web-store.md), et la politique
+de confidentialité dans [`PRIVACY.md`](PRIVACY.md).
 
 ## Crédits
 

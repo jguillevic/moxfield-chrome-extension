@@ -49,6 +49,10 @@ joue des proxies ou d'autres formats.
 
 ## Livré
 
+- Préparation de la publication sur le Chrome Web Store : paquet
+  (`npm run package`), politique de confidentialité, marche à suivre et
+  textes de la fiche ; rapports d'erreurs envoyés seulement avec l'accord
+  de l'utilisateur — octobre 2026.
 - Traduction : extension en français et en anglais, selon la langue du
   navigateur — octobre 2026.
 - Tableau de bord du popup : exemplaires possédés, libres, dans des decks,

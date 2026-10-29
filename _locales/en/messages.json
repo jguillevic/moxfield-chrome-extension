@@ -670,5 +670,14 @@
   },
   "buildDone": {
     "message": "Deck marked as built, cards taken out of the stock."
+  },
+  "errorReportsConsentTitle": {
+    "message": "Help fix bugs?"
+  },
+  "errorReportsAccept": {
+    "message": "Yes, send reports"
+  },
+  "errorReportsDecline": {
+    "message": "No thanks"
   }
 }

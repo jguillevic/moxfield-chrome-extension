@@ -515,10 +515,14 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
 });
 
 // --- Rapports d'erreurs (cf. reportError dans background.js) ---
+// Rien ne part avant un accord explicite (enabled null tant que
+// l'utilisateur n'a pas répondu) : la question reste en haut du popup
+// jusqu'à sa réponse.
 async function renderErrorReports() {
   const { enabled, configured } = await send("GET_ERROR_REPORTS");
+  document.getElementById("error-reports-consent").hidden = !(configured && enabled === null);
   const checkbox = document.getElementById("error-reports-enabled");
-  checkbox.checked = enabled;
+  checkbox.checked = enabled === true;
   checkbox.disabled = !configured;
   document.getElementById("error-reports-state").textContent = configured
     ? ""
@@ -534,6 +538,13 @@ document.getElementById("error-reports-enabled").addEventListener("change", asyn
   renderErrorReports();
 });
 
+for (const [id, enabled] of [["error-reports-accept", true], ["error-reports-decline", false]]) {
+  document.getElementById(id).addEventListener("click", async () => {
+    await send("SET_ERROR_REPORTS", { enabled });
+    renderErrorReports();
+  });
+}
+
 // Un changement venant de Drive (ou d'un onglet Moxfield) met le popup à jour.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
@@ -548,6 +559,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 refresh();
 renderCollection();
+renderErrorReports();
 renderSync().then(() => {
   if (syncMeta.enabled) send("SYNC_NOW"); // récupère tout de suite les changements d'un autre PC
 });

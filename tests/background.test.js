@@ -16,6 +16,7 @@ const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
 const STORAGE_KEY = "moxfieldStockManagerState";
 const COLLECTION_KEY = "moxfieldStockManagerCollection";
 const SYNC_KEY = "moxfieldStockManagerSync";
+const ERROR_REPORTS_KEY = "moxfieldStockManagerErrorReports";
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
 const CHROME = { userAgent: UA, userAgentData: { brands: [{ brand: "Google Chrome", version: "141" }], platform: "Windows" } };
 const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", version: "141" }], platform: "Linux" }, brave: {} };
@@ -25,7 +26,9 @@ const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", versi
 // options.cookies : cookies de moxfield.com (session ouverte par défaut).
 // options.drive : fausse API Google Drive, (url, options) => réponse.
 // options.sentryDsn : DSN des rapports d'erreurs (aucun envoi sinon) ; les
-// rapports reçus par le faux Sentry sont dans sentry (événements).
+// rapports reçus par le faux Sentry sont dans sentry (événements). Avec une
+// DSN, l'utilisateur a accepté l'envoi, sauf options.errorReportsMeta
+// (réglage enregistré, ex. null : pas encore répondu).
 // options.authError : erreur levée par chrome.identity.getAuthToken
 // (ex. Brave, qui ne l'implémente pas).
 // options.navigator : navigateur (Google Chrome par défaut ; cf. BRAVE).
@@ -36,6 +39,8 @@ const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", versi
 function loadBackground(initialState, options = {}) {
   const storage = {};
   if (initialState) storage[STORAGE_KEY] = initialState;
+  const errorReportsMeta = "errorReportsMeta" in options ? options.errorReportsMeta : options.sentryDsn && { enabled: true, choiceAt: 1 };
+  if (errorReportsMeta) storage[ERROR_REPORTS_KEY] = errorReportsMeta;
   const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
   let onMessage = null;
   const alarmListeners = [];
@@ -915,11 +920,37 @@ test("rapports coupés par l'utilisateur, ou pas de DSN : rien ne part", async (
   assert.equal(off.sentry.length, 0);
   assert.deepEqual(await off.send({ type: "GET_ERROR_REPORTS" }), { ok: true, enabled: false, configured: true });
 
-  const noDsn = loadBackground();
+  const noDsn = loadBackground(undefined, { errorReportsMeta: { enabled: true, choiceAt: 1 } });
   assert.deepEqual(await noDsn.send({ type: "GET_ERROR_REPORTS" }), { ok: true, enabled: true, configured: false });
   await noDsn.send({ type: "TOGGLE_DECK_BUILT" });
   await waitReports();
   assert.equal(noDsn.sentry.length, 0);
+});
+
+// Le Chrome Web Store exige un accord explicite : rien ne part tant que
+// l'utilisateur n'a pas répondu.
+test("rapports d'erreurs : rien ne part avant l'accord de l'utilisateur", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN, errorReportsMeta: null });
+  assert.deepEqual(await bg.send({ type: "GET_ERROR_REPORTS" }), { ok: true, enabled: null, configured: true });
+  await bg.send({ type: "TOGGLE_DECK_BUILT" });
+  await waitReports();
+  assert.equal(bg.sentry.length, 0, "pas encore répondu");
+
+  await bg.send({ type: "SET_ERROR_REPORTS", payload: { enabled: true } });
+  assert.deepEqual(await bg.send({ type: "GET_ERROR_REPORTS" }), { ok: true, enabled: true, configured: true });
+  await bg.send({ type: "TOGGLE_DECK_BUILT" });
+  await waitReports();
+  assert.equal(bg.sentry.length, 1, "accepté");
+});
+
+// Avant la demande d'accord, l'envoi était actif par défaut et le journal
+// d'envoi enregistrait « enabled: true » sans choix de l'utilisateur.
+test("rapports d'erreurs : l'ancien réglage par défaut ne vaut pas accord", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN, errorReportsMeta: { enabled: true, log: { sent: {} } } });
+  assert.equal((await bg.send({ type: "GET_ERROR_REPORTS" })).enabled, null);
+  await bg.send({ type: "TOGGLE_DECK_BUILT" });
+  await waitReports();
+  assert.equal(bg.sentry.length, 0);
 });
 
 test("erreur d'une page (deck, popup) : rapportée par le service worker", async () => {

@@ -670,5 +670,14 @@
   },
   "buildDone": {
     "message": "Deck marqué comme monté, stock décrémenté."
+  },
+  "errorReportsConsentTitle": {
+    "message": "Aider à corriger les bugs ?"
+  },
+  "errorReportsAccept": {
+    "message": "Oui, envoyer les rapports"
+  },
+  "errorReportsDecline": {
+    "message": "Non merci"
   }
 }

@@ -88,9 +88,16 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
   l'infobulle ouverte disparaît).
 - Erreur inattendue (bug, réponse anormale) : la rapporter
   (`reportError` dans le service worker, message `REPORT_ERROR` depuis une
-  page). Jamais l'état, les decks ni l'adresse mail dans un rapport ; pas
-  de rapport pour une situation normale (pas connecté à Moxfield, réseau
-  coupé) ni pour un refus expliqué à l'utilisateur.
+  page). Rien ne part sans l'accord explicite de l'utilisateur. Jamais
+  l'état, les decks ni l'adresse mail dans un rapport ; pas de rapport pour
+  une situation normale (pas connecté à Moxfield, réseau coupé) ni pour un
+  refus expliqué à l'utilisateur.
+- Publication sur le Chrome Web Store : `npm run package` (cf.
+  `docs/chrome-web-store.md`). Le paquet ne prend que les fichiers `.js`,
+  `.html`, `.css` de la racine, `icons/` et `_locales/` : un fichier de
+  l'extension rangé ailleurs n'y serait pas.
+- Nouvelle permission, ou nouvelle donnée lue ou envoyée : mettre à jour
+  `PRIVACY.md` et les justifications de `docs/chrome-web-store.md`.
 - Styles injectés : variables CSS posées sur nos seuls éléments racines
   (`.msm-*`), variantes sombres via `prefers-color-scheme`.
 - Toute icône tierce est créditée dans le README (section « Crédits »).
