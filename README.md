@@ -172,9 +172,13 @@ contenu du CSV. Même effet qu'une récupération automatique.
   liste les différences (`+1 Counterspell (0 → 1)`, `−1 Rhystic Study (1 → 0)`)
   et propose **« Mettre à jour le montage »**, qui n'ajuste le stock que pour
   les cartes modifiées. Mêmes contrôles qu'au montage, sur les seules cartes
-  ajoutées : stock insuffisant ou version différente bloquent la mise à
-  jour (le stock disponible compte les exemplaires déjà dans ce deck), les
-  terrains de base ne font qu'un avertissement.
+  ajoutées : stock insuffisant, version différente ou déjà utilisée bloquent
+  la mise à jour (le stock disponible compte les exemplaires déjà dans ce
+  deck), les terrains de base ne font qu'un avertissement.
+  - Une carte dont tu as seulement **changé la version** sur Moxfield compte
+    aussi comme une modification (`↻ Steam Vents (version changée)`) : le
+    deck n'utilise plus le même exemplaire physique. Le stock ne bouge pas,
+    mais la nouvelle version est vérifiée puis enregistrée.
   - Le constat est aussi mémorisé : dans le popup, le deck porte un badge
     orange **« Modifié »** (détail des différences et date du constat au
     survol), et l'en-tête « Decks montés » indique combien le sont. Le badge
@@ -183,10 +187,11 @@ contenu du CSV. Même effet qu'une récupération automatique.
     visite** de la page du deck : une modification faite ailleurs (autre
     appareil, onglet fermé tout de suite) n'est connue qu'à la visite
     suivante.
-- **Priorité des deux contrôles ci-dessous : le stock d'abord.** Une carte
+- **Priorité des trois contrôles ci-dessous : le stock d'abord.** Une carte
   dont le stock est insuffisant (même partiellement) n'apparaît que dans
-  « Stock insuffisant », jamais dans « Version différente » — la version
-  n'est vérifiée qu'une fois le stock déjà suffisant pour cette carte.
+  « Stock insuffisant », jamais dans « Version différente » ni dans
+  « Version déjà utilisée » — la version n'est vérifiée qu'une fois le stock
+  déjà suffisant pour cette carte.
 - **Stock insuffisant** (encadré rouge, bloquant) : liste les cartes dont le
   stock disponible ne suffirait pas si ce deck était monté — y compris une
   carte totalement absente du stock. Dans ce cas, **le montage est bloqué**
@@ -208,8 +213,39 @@ contenu du CSV. Même effet qu'une récupération automatique.
   cette carte. Cette détection utilise l'indicateur de collection natif de
   Moxfield ; elle ne fonctionne que via le scraping automatique, pas via un
   collage manuel depuis le presse-papiers.
+- **Version déjà utilisée par un autre deck monté** (encadré rouge,
+  bloquant) : tu possèdes la carte en plusieurs éditions, il t'en reste un
+  exemplaire libre, mais pas dans la version que ce deck demande — celle-là
+  est déjà dans un autre deck monté. Exemple : Steam Vents possédée une fois
+  en GRN et une fois en RNA ; un deck monté utilise la GRN, un second deck
+  demande lui aussi la GRN → refusé, alors que le stock par nom dit qu'il en
+  reste une. L'encadré indique le deck qui détient cette version et les
+  éditions que tu possèdes (`dans : Niv-Mizzet (1) · tu possèdes : GRN 257
+  ×1, RNA 257 ×1`). Pour débloquer : choisis sur Moxfield, pour ce deck, la
+  version encore libre, ou démonte l'autre deck. La pastille du bouton
+  compte ces cartes parmi les bloquantes.
+  - L'extension enregistre pour cela, au montage, la version de chaque
+    carte du deck (lue sur la page). Les **decks montés avant cette
+    fonctionnalité** n'en ont pas : ouvre une fois la page de chacun, les
+    versions sont complétées toutes seules (si la liste n'a pas changé
+    depuis le montage). Tant que ce n'est pas fait, leurs cartes ne sont pas
+    vues comme « déjà utilisées ».
+  - Sur la page d'un deck, l'extension demande aussi à Moxfield l'**édition
+    exacte** de chaque version (un appel en fond, avec ta session Moxfield,
+    comme pour la collection) : chaque édition est alors comptée à part.
+    Steam Vents possédée deux fois en GRN et une fois en RNA, la RNA dans un
+    deck monté : un second deck qui demande la RNA est refusé, un deck qui
+    demande la GRN passe. Les decks déjà montés reçoivent l'édition de
+    leurs versions à la prochaine visite de leur page. Si Moxfield ne
+    répond pas (pas connecté, deck privé d'un autre compte), le contrôle
+    se fait quand même, par recoupement (cf. « Limites connues »).
+  - Le détail de ta collection par édition arrive avec la prochaine
+    récupération de la collection (automatique, ou **« Récupérer
+    maintenant »** dans le popup).
+  - Comme pour la version différente, ce contrôle ne fonctionne qu'avec la
+    liste détectée sur la page, pas avec une liste collée.
 - **Terrains de base** (Plains, Island, Swamp, Mountain, Forest) : exclus des
-  deux blocages ci-dessus, puisqu'en pratique on en a toujours assez et que
+  blocages ci-dessus, puisqu'en pratique on en a toujours assez et que
   leur édition n'a jamais d'importance. Un encadré jaune séparé
   **« Terrains de base à vérifier »** les liste à titre indicatif s'il en
   manque ou si l'édition diffère, mais **n'empêche jamais** de valider le
@@ -375,7 +411,30 @@ en cas de conflit : rien ne s'y perd).
   (F5) les onglets Moxfield déjà ouverts : sinon l'ancienne version de
   l'extension y reste active mais déconnectée (un message te le rappelle).
 - Le stock est agrégé par **nom de carte**, toutes éditions/finitions
-  confondues (pas de distinction par set ou par version foil).
+  confondues : les quantités affichées ne distinguent ni le set ni le foil.
+  Seul le contrôle « Version déjà utilisée » regarde les éditions : la page
+  d'un deck ne donne que le code Moxfield de la version, la collection une
+  édition et un numéro, et c'est un appel à Moxfield (celui que fait le
+  site en ouvrant un deck) qui relie les deux. Conséquences :
+  - la finition (foil ou non) et la langue ne sont pas distinguées : une
+    même édition possédée en foil et en normal compte pour deux exemplaires
+    de la même version. C'est voulu pour l'instant : le foil d'une carte
+    est rarement tenu à jour dans un deck, le distinguer refuserait des
+    montages à tort ;
+  - sans réponse de Moxfield (pas connecté, deck privé d'un autre compte,
+    appel modifié par Moxfield), ou pour un deck monté dont la page n'a pas
+    été rouverte depuis, le contrôle procède par **recoupement** : il
+    vérifie seulement que les versions utilisées par les decks montés
+    peuvent se répartir sur les éditions possédées. Avec des éditions en
+    quantités inégales (une en x2, une en x1), il ne sait pas laquelle est
+    demandée : le doute profite au montage, une version possédée en x1
+    peut alors être montée deux fois ;
+  - même repli si l'édition donnée par Moxfield pour le deck ne se retrouve
+    pas à l'identique dans la collection ;
+  - cet appel n'a pas pu être essayé hors du navigateur pendant le
+    développement (réponse réelle capturée à la main, novembre 2026) ;
+  - les quantités libres ne sont pas affichées par édition (cf.
+    `ROADMAP.md`).
 - La récupération automatique de la collection reproduit les appels que
   fait le site Moxfield (pas d'API publique) : s'ils changent, elle échoue
   avec un message dans le popup, et l'import manuel du CSV reste
@@ -409,7 +468,7 @@ npm test
 - `tests/fixtures/*.html` : une page par vue (Text, Condensed Text, Visual Grid, Visual Spoiler, Visual
   Stacks, Visual Stacks (Split)), reproduisant la structure réelle de
   Moxfield avec le même deck de 7 cartes, et les pièges déjà rencontrés
-  (cartes double face, foil, quantité > 1, tuile en double après une
+  (cartes double face, foil, quantité > 1, version de chaque carte, tuile en double après une
   modification, restes cachés d'une autre vue, images de l'aperçu latéral).
 - **Ajouter une vraie page** (recommandé quand Moxfield change quelque
   chose) : sur la page du deck, DevTools → Elements → clic droit sur
@@ -426,8 +485,10 @@ Lancés par le même `npm test`, et automatiquement sur GitHub à chaque push
 sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.yml`) :
 
 - `tests/deck-checks.test.js` : contrôles d'une liste par rapport au stock
-  (`deck-checks.js`) — stock insuffisant, version différente, terrains de
-  base, mise à jour d'un deck monté, faisabilité affichée sur le bouton,
+  (`deck-checks.js`) — stock insuffisant, version différente, version déjà
+  utilisée par un autre deck monté (contrôle exact par édition et repli par
+  recoupement), terrains de base, mise à jour d'un deck
+  monté, faisabilité affichée sur le bouton,
   lecture d'une liste collée.
 - `tests/background.test.js` : gestion du stock par le service worker
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
@@ -437,19 +498,25 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   de la collection (import, alarme horaire, récupération après une
   modification de la collection sur Moxfield, relance dès la connexion à
   Moxfield, erreurs, cartes non couvertes), stock envoyé à la page d'un deck, collection de 50 000
-  cartes.
+  cartes, détail de la collection par édition, versions des decks montés
+  (complétées, jamais remplacées, édition ajoutée après coup), éditions
+  d'un deck lues par l'API (erreurs rapportées ou non).
 - `tests/history.test.js` : historique (`history.js`) — ajout, limite de
   200 entrées, détail limité à 200 cartes par entrée, fusion, différences
-  de listes, libellés.
+  de listes (changement de version compris), libellés.
 - `tests/moxfield-collection.test.js` : dialogue avec Moxfield
   (`moxfield-collection.js`, réponses simulées) — appels et jetons, session
-  absente ou expirée, refus, réseau coupé, changement de l'API.
+  absente ou expirée, refus, réseau coupé, changement de l'API ; éditions
+  des cartes d'un deck (réponse de l'API réduite dans
+  `tests/fixtures/api/deck.json`, jeton réutilisé quelques minutes, deck
+  introuvable).
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
   de test avec un faux `chrome`) — sections « Collection Moxfield » et
   « Historique » et « Rapports d'erreurs » (lien de connexion à Moxfield
   compris), chiffres clés (exemplaires possédés, libres, dans des decks),
   affichage du stock (tableau limité, filtre, total possédé d'une carte),
-  erreurs rapportées.
+  changement de version d'une carte (badge « Modifié », historique), erreurs
+  rapportées.
 - `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
   — DSN, masquage des jetons et adresses mail, limitation des envois,
   navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur
@@ -469,8 +536,14 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   faisabilité affichée, recalcul en direct quand la page ou le stock
   change, tolérance à une liste brièvement incohérente, erreurs
   rapportées (contrôle de la page, sauf extension rechargée ou service
-  worker injoignable ; erreurs de l'extension mais pas du site), bouton et
-  fenêtre de montage en anglais.
+  worker injoignable ; erreurs de l'extension mais pas du site), montage
+  refusé quand une carte est déjà prise par un autre deck monté (ou sa
+  version, alors qu'il en reste une d'une autre édition) et accepté quand
+  tout est en stock libre, versions enregistrées au montage, complétées sur
+  un deck monté qui n'en a pas, deck signalé modifié quand une version
+  change, éditions demandées au service worker (montage refusé pour une
+  édition possédée en x1 déjà montée, repli sans réponse, pas de demande
+  répétée), bouton et fenêtre de montage en anglais.
 - `tests/i18n.test.js` : traductions (`i18n.js`, `_locales/`) — mêmes
   clés et mêmes valeurs insérées dans chaque langue, pas de « $ » que Chrome
   refuserait, pluriels complets, nom et description du manifest, toute clé
@@ -490,7 +563,8 @@ clés `clé_one` et `clé_other`), ou par un attribut `data-i18n` dans
 l'autre. `tests/i18n.test.js` signale une clé oubliée dans une langue.
 
 Non couverts : la synchro Google Drive, le reste du popup, la fenêtre de
-montage (hors ses textes en anglais), l'intégration à la barre d'actions de
+montage (hors refus pour stock insuffisant ou version déjà utilisée, mise à
+jour après un changement de version et textes en anglais), l'intégration à la barre d'actions de
 Moxfield, et la qualité des traductions elles-mêmes (relecture humaine).
 
 ## Crédits

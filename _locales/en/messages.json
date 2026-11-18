@@ -413,6 +413,33 @@
   "blockingWrongEdition_other": {
     "message": "$1 in another printing"
   },
+  "blockingVersionTaken_one": {
+    "message": "$1 whose printing is already in another deck"
+  },
+  "blockingVersionTaken_other": {
+    "message": "$1 whose printing is already in another deck"
+  },
+  "availabilityVersionTaken": {
+    "message": "printing already used by another built deck: $1"
+  },
+  "versionWarningTitle_one": {
+    "message": "Printing already used by another built deck ($1 card)"
+  },
+  "versionWarningTitle_other": {
+    "message": "Printing already used by another built deck ($1 cards)"
+  },
+  "versionWarningHint": {
+    "message": "build blocked, pick on Moxfield a printing you still own, or unbuild the other deck:"
+  },
+  "versionOwned": {
+    "message": "you own: $1"
+  },
+  "buildBlockedVersionTaken": {
+    "message": "Can't build — printing already used by another built deck for: $1"
+  },
+  "diffVersionChanged": {
+    "message": "printing changed"
+  },
   "availabilityCount": {
     "message": "$1/$2 cards available in the free stock, excluding basic lands"
   },
@@ -454,6 +481,12 @@
   },
   "moxfieldNotCollectionCsv": {
     "message": "not a collection CSV"
+  },
+  "moxfieldNotDeck": {
+    "message": "not a deck description"
+  },
+  "moxfieldDeckUnavailable": {
+    "message": "Deck not found or private on Moxfield."
   },
   "googleAccountReadError": {
     "message": "Google Drive answered $1 when reading the account."
@@ -615,7 +648,7 @@
     "message": "“$1” adjusts the stock for these cards only."
   },
   "deckUpdateBlocked": {
-    "message": "Not enough stock or different printing: fix it first (see above)."
+    "message": "Not enough stock, different printing or printing already used: fix it first (see above)."
   },
   "overlayTitleUnbuild": {
     "message": "Unbuild this deck"
@@ -657,7 +690,7 @@
     "message": "Clipboard empty or format not recognized — paste manually with Ctrl+V."
   },
   "updateBlocked": {
-    "message": "Can't update — not enough stock or different printing."
+    "message": "Can't update — not enough stock, different printing or printing already used."
   },
   "updateDone": {
     "message": "Build updated, stock adjusted for the changed cards."

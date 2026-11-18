@@ -15,7 +15,7 @@ README).
 | 4 | **Liste de cartes à sortir / ranger** — cases à cocher triées par couleur, type ou édition, au montage et au démontage. | Moyen | Sert à chaque montage physique. |
 | 5 | **Transfert entre decks** — prendre les cartes manquantes dans un deck monté et marquer celui-ci comme incomplet. | Moyen | Évite d'acheter une carte qui dort dans un autre deck ; la fenêtre indique déjà où elle est. |
 | 6 | **Détection des decks montés modifiés sans les ouvrir** — via l'API des decks, à chaque récupération. | Moyen | Désormais faisable (la session Moxfield est réutilisable en tâche de fond) ; se combine avec le n°2. |
-| 7 | **Stock par édition et finition** (édition, foil, langue). | Élevé | Structurant : modèle de données, migration, synchro Drive. Les données sont déjà dans le CSV récupéré. Rendrait le n°1 inutile. |
+| 7 | **Stock par finition et langue, quantités libres par édition dans le popup.** | Moyen | Le contrôle « version déjà utilisée » compte maintenant chaque édition à part (API du deck). Restent la finition (l'API du deck la donne, mais le foil d'un deck est rarement tenu à jour : risque de refus à tort), la langue (absente de l'API du deck) et l'affichage par édition. Rendrait le n°1 inutile. |
 | 8 | **Prix des cartes manquantes** — via l'API Scryfall (prix EUR, gratuite, sans clé), avec le total. | Faible | Aide à décider si un deck vaut l'achat ; complète l'export Cardmarket. |
 | 9 | **Liste d'achats cumulée** — les manques de plusieurs decks en une seule liste Cardmarket, sans doublons. | Faible | Une seule commande pour plusieurs decks ; plus utile avec le n°2. |
 | 10 | **Montage partiel** — monter en attendant des cartes commandées, décomptées à leur arrivée. | Moyen | Cas fréquent en attente de commande. |
@@ -49,6 +49,15 @@ joue des proxies ou d'autres formats.
 
 ## Livré
 
+- Version déjà utilisée, contrôle exact par édition : l'édition et le numéro
+  de chaque version d'un deck sont lus par l'API de Moxfield
+  (`/v3/decks/all/<id>`) et rapprochés de la collection ; le recoupement
+  ne sert plus que de repli — novembre 2026.
+- Version déjà utilisée par un autre deck monté : montage refusé quand la
+  version demandée n'est plus libre, même s'il reste un exemplaire d'une
+  autre édition ; versions des decks montés et détail de la collection par
+  édition enregistrés ; changement de version d'un deck monté signalé —
+  novembre 2026.
 - Traduction : extension en français et en anglais, selon la langue du
   navigateur — octobre 2026.
 - Tableau de bord du popup : exemplaires possédés, libres, dans des decks,

@@ -28,6 +28,8 @@ const MAX_CHANGES_IN_TOOLTIP = 10;
 // "+1 Elvish Mystic, −1 Stitcher's Supplier, et 3 autres".
 function formatChanges(changes) {
   const items = changes.slice(0, MAX_CHANGES_IN_TOOLTIP).map((c) => {
+    // Seule la version (impression) a changé, pas la quantité.
+    if (c.version) return `↻ ${c.name}`;
     const delta = c.to - c.from;
     return `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${c.name}`;
   });
@@ -271,6 +273,7 @@ document.getElementById("stock-only-in-decks").addEventListener("change", refres
 // Libellés calculés par le service worker (cf. handleGetHistory). Construit
 // seulement section dépliée, comme le stock.
 function formatChangeLine(c) {
+  if (c.version) return `↻ ${c.name} (${t("diffVersionChanged")})`;
   const delta = c.to - c.from;
   return `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${c.name} (${c.from} → ${c.to})`;
 }

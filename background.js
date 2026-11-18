@@ -1,7 +1,14 @@
 // background.js — service worker (MV3)
 // Source de vérité unique pour le state : chrome.storage.local
-//   stock       : { [normalizedName]: { name: string, qty: number } }
-//   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty}], builtAt: number,
+//   stock       : { [normalizedName]: { name: string, qty: number, printings?: [{set, cn, qty}] } }
+//     qty : exemplaires libres ; printings : exemplaires POSSÉDÉS par édition,
+//     seulement pour une carte possédée en plusieurs éditions (cf.
+//     parseCollectionCSV).
+//   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty, versions?}], builtAt: number,
+//     versions : [{code, qty, set?, cn?}], impressions Moxfield lues sur la
+//     page au montage (cf. ownedVersionOf dans deck-scraper.js) ; set et cn :
+//     édition et numéro donnés par l'API du deck quand elle a répondu (cf.
+//     GET_DECK_PRINTINGS), comme dans printings.
 //                   updatedAt?: number,
 //                   pageChanges?: [{name, from, to}], pageCheckedAt?: number } }
 //     pageChanges : différences constatées sur la page Moxfield du deck par
@@ -143,6 +150,12 @@ async function handleSetErrorReports({ enabled }) {
 // --- Parsing CSV export Moxfield ---
 // Header connu : Count,Tradelist Count,Name,Edition,Condition,Language,Foil,Tags,Last Modified,Collector Number,Alter,Proxy,Purchase Price
 // On agrège par nom de carte (toutes éditions/finish confondues) : le stock physique est géré au nom de carte, pas à l'édition près.
+// Le détail par édition (Edition + Collector Number, toutes finitions,
+// langues et états confondus) n'est gardé que pour les cartes possédées en
+// plusieurs éditions : il sert à refuser qu'une même version parte dans
+// deux decks montés (cf. computeVersionConflicts dans deck-checks.js). Avec
+// une seule édition, le stock par nom suffit — et sur une grosse collection
+// (30 000 noms), garder le détail de tout doublerait la taille de l'état.
 function parseCSVLine(line) {
   const cells = [];
   let cur = "";
@@ -177,7 +190,11 @@ function parseCollectionCSV(csvText) {
     throw new Error(i18n.t("csvColumnsMissing"));
   }
 
+  const editionIdx = header.indexOf("edition");
+  const numberIdx = header.indexOf("collector number");
+
   const aggregated = {};
+  const editions = new Map(); // nom normalisé → Map("édition|numéro" → { set, cn, qty })
   for (let i = 1; i < lines.length; i++) {
     const cells = parseCSVLine(lines[i]);
     const rawName = (cells[nameIdx] || "").trim();
@@ -186,6 +203,19 @@ function parseCollectionCSV(csvText) {
     const key = normalizeName(rawName);
     if (!aggregated[key]) aggregated[key] = { name: rawName, qty: 0 };
     aggregated[key].qty += rawCount;
+    if (editionIdx === -1 || rawCount <= 0) continue;
+    const set = (cells[editionIdx] || "").trim().toLowerCase();
+    const cn = numberIdx === -1 ? "" : (cells[numberIdx] || "").trim().toLowerCase();
+    if (!set) continue;
+    if (!editions.has(key)) editions.set(key, new Map());
+    const byEdition = editions.get(key);
+    const editionKey = `${set}|${cn}`;
+    if (!byEdition.has(editionKey)) byEdition.set(editionKey, { set, cn, qty: 0 });
+    byEdition.get(editionKey).qty += rawCount;
+  }
+  for (const [key, byEdition] of editions) {
+    if (byEdition.size < 2) continue;
+    aggregated[key].printings = [...byEdition.values()].sort((a, b) => a.set.localeCompare(b.set) || a.cn.localeCompare(b.cn));
   }
   return aggregated;
 }
@@ -215,6 +245,17 @@ function collectionFromState(state) {
     +1
   );
   return collection;
+}
+
+// Le détail par édition a-t-il changé entre le stock et une collection ?
+// Les quantités par nom peuvent rester les mêmes (une édition échangée
+// contre une autre, ou premier passage depuis que ce détail existe) : il
+// faut quand même l'enregistrer.
+function printingsChanged(stock, collection) {
+  const same = (a, b) => JSON.stringify((a && a.printings) || null) === JSON.stringify((b && b.printings) || null);
+  for (const key of Object.keys(collection)) if (!same(stock[key], collection[key])) return true;
+  for (const key of Object.keys(stock)) if (stock[key].printings && !collection[key]) return true;
+  return false;
 }
 
 async function handleImportCSV(csvText) {
@@ -295,6 +336,46 @@ async function handleUpdateBuiltDeck({ deckId, deckName, url, cards }) {
   const state = await getState();
   if (!state.builtDecks[deckId]) throw new Error(i18n.t("deckNoLongerBuilt"));
   await updateDeck(state, { deckId, deckName, url, cards });
+  await setState(state);
+  return { ok: true };
+}
+
+// Versions lues sur la page d'un deck monté qui n'en avait pas (monté avant
+// leur suivi, ou depuis une liste collée) :
+// { [nom normalisé]: [{code, qty, set?, cn?}] }.
+// Ne complète que les cartes sans version, ou les mêmes versions (codes et
+// quantités) auxquelles il manque l'édition — jamais une autre version que
+// celle enregistrée (un changement de version passe par la mise à jour du
+// montage, avec ses contrôles). Ni le stock ni la liste du deck ne
+// changent : pas d'entrée dans l'historique. N'écrit que si quelque chose
+// change — chaque écriture part sur Drive.
+async function handleSetDeckVersions({ deckId, versions }) {
+  const state = await getState();
+  const deck = state.builtDecks[deckId];
+  if (!deck || !versions) return { ok: true, ignored: true };
+  const edition = (value) => (typeof value === "string" ? value.slice(0, 20) : "");
+  const sameVersions = (a, b) => JSON.stringify(a.map((v) => [v.code, v.qty]).sort()) === JSON.stringify(b.map((v) => [v.code, v.qty]).sort());
+  let changed = false;
+  for (const card of deck.cards) {
+    const found = versions[normalizeName(card.name)];
+    if (!Array.isArray(found) || found.length === 0) continue;
+    const clean = found
+      .filter((v) => v && typeof v.code === "string" && Number.isInteger(v.qty) && v.qty > 0)
+      .map((v) => (edition(v.set) ? { code: v.code, qty: v.qty, set: edition(v.set), cn: edition(v.cn) } : { code: v.code, qty: v.qty }));
+    if (clean.length === 0 || clean.reduce((n, v) => n + v.qty, 0) > card.qty) continue;
+    const known = card.versions || [];
+    if (known.length > 0) {
+      const gain = clean.some((v) => v.set && known.some((k) => k.code === v.code && !k.set));
+      if (!gain || !sameVersions(known, clean)) continue;
+      // Une édition déjà enregistrée n'est pas retirée par une page qui ne
+      // l'a pas (encore) lue.
+      card.versions = clean.map((v) => (v.set ? v : known.find((k) => k.code === v.code)));
+    } else {
+      card.versions = clean;
+    }
+    changed = true;
+  }
+  if (!changed) return { ok: true, unchanged: true };
   await setState(state);
   return { ok: true };
 }
@@ -931,11 +1012,13 @@ async function fetchCollection() {
     const state = await getState();
     const changes = computeCollectionDiff(collectionFromState(state), collection);
     const patch = { lastSuccessAt: Date.now(), lastError: null };
-    if (changes.length > 0) {
+    if (changes.length > 0 || printingsChanged(state.stock, collection)) {
       state.stock = stockFromCollection(collection, state.builtDecks);
-      await recordHistory(state, { type: "collection", source: "fetch", changes });
+      if (changes.length > 0) {
+        await recordHistory(state, { type: "collection", source: "fetch", changes });
+        Object.assign(patch, { lastChanges: changes, lastChangesAt: Date.now() });
+      }
       await setState(state);
-      Object.assign(patch, { lastChanges: changes, lastChangesAt: Date.now() });
     }
     await updateCollectionMeta(patch);
     return { ok: true, changes };
@@ -956,6 +1039,26 @@ function fetchCollectionNow() {
   const run = collectionQueue.then(fetchCollection);
   collectionQueue = run.catch(() => {});
   return run;
+}
+
+// Édition et numéro des impressions d'un deck ({ [code Moxfield]: { set, cn } }),
+// demandés par la page du deck pour le contrôle « version déjà utilisée »
+// (cf. computeVersionConflicts dans deck-checks.js). Sans réponse, la page
+// se replie sur le recoupement : pas connecté, réseau coupé, deck privé
+// d'un autre compte sont des situations normales, non rapportées.
+const EXPECTED_DECK_PRINTINGS_ERRORS = ["not-logged-in", "network", "deck-unavailable"];
+
+async function handleGetDeckPrintings({ deckId }) {
+  if (typeof deckId !== "string" || !/^[\w-]{1,64}$/.test(deckId)) return { ok: false, code: "deck-unavailable" };
+  const run = collectionQueue.then(() => moxfieldCollection.fetchDeckPrintings(deckId));
+  collectionQueue = run.catch(() => {});
+  try {
+    return { ok: true, printings: await run };
+  } catch (e) {
+    const code = e.code || "unknown";
+    if (!EXPECTED_DECK_PRINTINGS_ERRORS.includes(code)) reportError("moxfield-deck", e, { code });
+    return { ok: false, error: e.message || String(e), code };
+  }
 }
 
 async function fetchCollectionIfDue() {
@@ -1087,6 +1190,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "SET_DECK_PAGE_CHANGES":
           sendResponse(await handleSetDeckPageChanges(msg.payload));
+          break;
+        case "GET_DECK_PRINTINGS":
+          sendResponse(await handleGetDeckPrintings(msg.payload || {}));
+          break;
+        case "SET_DECK_VERSIONS":
+          sendResponse(await handleSetDeckVersions(msg.payload));
           break;
         case "UPDATE_BUILT_DECK":
           sendResponse(await handleUpdateBuiltDeck(msg.payload));

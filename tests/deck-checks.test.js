@@ -158,8 +158,10 @@ test("computeDeckAvailability : deck montable", () => {
     blocking: 0,
     missingCount: 0,
     wrongEditionCount: 0,
+    versionTakenCount: 0,
     shortages: [],
     wrongEdition: [],
+    versionTaken: [],
     basicShortages: [],
   });
 });
@@ -266,4 +268,189 @@ test("availabilityLabel : longues listes tronquées", () => {
   const label = availabilityLabel(computeDeckAvailability(cards, {}));
   assert.ok(label.includes("Carte 8 (1), … (+2)"), label);
   assert.ok(!label.includes("Carte 9"), label);
+});
+
+// --- Version déjà utilisée par un autre deck monté ---
+
+const { buildVersionUsage, computeVersionConflicts } = checks;
+
+// Steam Vents possédée en deux éditions, un exemplaire de chaque : 2 au
+// total. free : exemplaires encore libres.
+function steamVentsStock(free, printings = [{ set: "grn", cn: "257", qty: 1 }, { set: "rna", cn: "257", qty: 1 }]) {
+  return { "steam vents": { name: "Steam Vents", qty: free, printings } };
+}
+
+const builtWith = (versions, extra = {}) => ({
+  a: { name: "Deck A", cards: [{ name: "Steam Vents", qty: versions.reduce((n, v) => n + v.qty, 0), versions, ...extra }] },
+});
+
+test("buildVersionUsage : versions des decks montés, sauf deck exclu et cartes hors stock", () => {
+  const decks = {
+    ...builtWith([{ code: "AAAAA", qty: 1 }]),
+    b: { name: "Deck B", cards: [{ name: "steam vents", qty: 1, versions: [{ code: "BBBBB", qty: 1 }] }, { name: "Sol Ring", qty: 1 }] },
+    c: { name: "Deck C", cards: [{ name: "Steam Vents", qty: 1, versions: [{ code: "CCCCC", qty: 1 }], excludedFromStock: true }] },
+  };
+  assert.deepEqual([...buildVersionUsage(decks)], [
+    ["steam vents", [{ code: "AAAAA", qty: 1, deck: "Deck A" }, { code: "BBBBB", qty: 1, deck: "Deck B" }]],
+  ]);
+  assert.deepEqual([...buildVersionUsage(decks, "a").get("steam vents")], [{ code: "BBBBB", qty: 1, deck: "Deck B" }]);
+});
+
+test("version déjà utilisée : même version demandée par un second deck, possédée une seule fois", () => {
+  // Cas constaté en vrai (novembre 2026) : un terrain possédé en x1 dans
+  // deux éditions, utilisé deux fois dans la même.
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]));
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] };
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(1), usage), [
+    {
+      name: "Steam Vents",
+      qty: 1,
+      decks: [{ name: "Deck A", qty: 1 }],
+      owned: [{ set: "grn", cn: "257", qty: 1 }, { set: "rna", cn: "257", qty: 1 }],
+    },
+  ]);
+});
+
+test("version déjà utilisée : l'autre version reste montable", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]));
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "BBBBB", qty: 1 }] };
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(1), usage), []);
+});
+
+test("version déjà utilisée : rien sans détail par édition, sans version lue ou sans autre deck", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]));
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] };
+  // Une seule édition possédée : le stock par nom suffit.
+  assert.deepEqual(computeVersionConflicts([card], { "steam vents": { name: "Steam Vents", qty: 1 } }, usage), []);
+  // Liste collée : version inconnue.
+  assert.deepEqual(computeVersionConflicts([{ name: "Steam Vents", qty: 1 }], steamVentsStock(1), usage), []);
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(2), new Map()), []);
+});
+
+test("version déjà utilisée : éditions en quantités inégales, le doute profite au montage", () => {
+  const stock = steamVentsStock(2, [{ set: "grn", cn: "257", qty: 2 }, { set: "rna", cn: "257", qty: 1 }]);
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]));
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] };
+  assert.deepEqual(computeVersionConflicts([card], stock, usage), [], "la version peut être celle possédée en x2");
+  // Troisième exemplaire de la même version : plus aucune édition ne le couvre.
+  const usage3 = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 2 }]));
+  assert.equal(computeVersionConflicts([card], { "steam vents": { ...stock["steam vents"], qty: 1 } }, usage3).length, 1);
+});
+
+test("version déjà utilisée : plus de versions différentes que d'éditions possédées", () => {
+  const decks = {
+    ...builtWith([{ code: "AAAAA", qty: 1 }]),
+    b: { name: "Deck B", cards: [{ name: "Steam Vents", qty: 1, versions: [{ code: "BBBBB", qty: 1 }] }] },
+  };
+  const stock = steamVentsStock(1, [{ set: "grn", cn: "257", qty: 2 }, { set: "rna", cn: "257", qty: 1 }]);
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "CCCCC", qty: 1 }] };
+  const [conflict] = computeVersionConflicts([card], stock, buildVersionUsage(decks));
+  assert.deepEqual(conflict.decks, [], "aucun deck ne détient cette version précise");
+});
+
+test("version déjà utilisée : priorité au stock insuffisant et à la version différente", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]));
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] };
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(0), usage), [], "stock insuffisant d'abord");
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(1), usage, new Set(["steam vents"])), [], "version différente d'abord");
+});
+
+test("computeDeckAvailability : version déjà utilisée comptée dans les cartes bloquantes", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]));
+  const cards = [
+    { name: "Steam Vents", qty: 1, printingStatus: "full", versions: [{ code: "AAAAA", qty: 1 }] },
+    { name: "Sol Ring", qty: 1, printingStatus: "full", versions: [{ code: "SSSSS", qty: 1 }] },
+  ];
+  const stock = { ...steamVentsStock(1), ...stockOf({ "Sol Ring": 1 }) };
+  const a = computeDeckAvailability(cards, stock, undefined, usage);
+  assert.equal(a.blocking, 1);
+  assert.equal(a.versionTakenCount, 1);
+  assert.deepEqual(a.versionTaken, ["Steam Vents"]);
+  assert.equal(blockingSummary(a), "1 carte bloque le montage : 1 dont la version est déjà dans un autre deck");
+  assert.match(availabilityLabel(a), /version déjà utilisée par un autre deck monté : Steam Vents/);
+  // Sans les versions des decks montés : rien ne bloque.
+  assert.equal(computeDeckAvailability(cards, stock).blocking, 0);
+});
+
+test("evaluateDeckUpdate : changement de version vers une version déjà prise, bloqué", () => {
+  // Le deck mis à jour détient la version B ; un autre deck détient la A.
+  const deck = { cards: [{ name: "Steam Vents", qty: 1, versions: [{ code: "BBBBB", qty: 1 }] }] };
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]));
+  const changes = [{ name: "Steam Vents", from: 1, to: 1, version: true }];
+  const toTaken = [{ name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] }];
+  const check = evaluateDeckUpdate(changes, deck, steamVentsStock(0), new Set(), toTaken, usage);
+  assert.equal(check.blocked, true);
+  assert.deepEqual(check.versionTaken.map((c) => c.name), ["Steam Vents"]);
+  assert.deepEqual(check.shortages, [], "l'exemplaire du deck lui est rendu d'abord");
+
+  const toFree = [{ name: "Steam Vents", qty: 1, versions: [{ code: "CCCCC", qty: 1 }] }];
+  assert.equal(evaluateDeckUpdate(changes, deck, steamVentsStock(0), new Set(), toFree, usage).blocked, false);
+});
+
+test("evaluateDeckUpdate : changement vers une version non possédée, bloqué comme version différente", () => {
+  const deck = { cards: [{ name: "Steam Vents", qty: 1, versions: [{ code: "BBBBB", qty: 1 }] }] };
+  const changes = [{ name: "Steam Vents", from: 1, to: 1, version: true }];
+  const check = evaluateDeckUpdate(changes, deck, steamVentsStock(1), new Set(["steam vents"]), [{ name: "Steam Vents", qty: 1, versions: [] }]);
+  assert.deepEqual(check.wrongEdition, ["Steam Vents"]);
+  assert.equal(check.blocked, true);
+});
+
+// --- Contrôle exact : versions dont l'API du deck a donné l'édition ---
+
+const GRN = { set: "grn", cn: "257" };
+const RNA = { set: "rna", cn: "257" };
+// GRN possédée en x2, RNA en x1 : le cas que le recoupement ne tranche pas.
+const UNEQUAL = [{ ...GRN, qty: 2 }, { ...RNA, qty: 1 }];
+
+test("buildVersionUsage : édition et numéro transmis quand ils sont connus", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1, ...RNA }]));
+  assert.deepEqual(usage.get("steam vents"), [{ code: "AAAAA", qty: 1, deck: "Deck A", set: "rna", cn: "257" }]);
+});
+
+test("contrôle exact : éditions en quantités inégales, l'édition possédée en x1 n'est pas montée deux fois", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1, ...RNA }]));
+  const stock = steamVentsStock(2, UNEQUAL);
+  // Même édition sous un autre code (ex. autre langue) : le recoupement y
+  // verrait deux versions différentes.
+  const again = { name: "Steam Vents", qty: 1, versions: [{ code: "BBBBB", qty: 1, ...RNA }] };
+  assert.deepEqual(computeVersionConflicts([again], stock, usage), [
+    { name: "Steam Vents", qty: 1, decks: [{ name: "Deck A", qty: 1 }], owned: UNEQUAL },
+  ]);
+  const other = { name: "Steam Vents", qty: 2, versions: [{ code: "CCCCC", qty: 2, ...GRN }] };
+  assert.deepEqual(computeVersionConflicts([other], stock, usage), [], "l'autre édition est libre, en x2");
+});
+
+test("contrôle exact : même code que l'autre deck, édition possédée en x2", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1, ...GRN }]));
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1, ...GRN }] };
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(2, UNEQUAL), usage), []);
+  const two = { name: "Steam Vents", qty: 2, versions: [{ code: "AAAAA", qty: 2, ...GRN }] };
+  assert.equal(computeVersionConflicts([two], steamVentsStock(2, UNEQUAL), usage).length, 1, "trois exemplaires demandés pour deux possédés");
+});
+
+test("contrôle exact : repli sur le recoupement dès qu'une édition manque", () => {
+  const stock = steamVentsStock(2, UNEQUAL);
+  const asked = { name: "Steam Vents", qty: 1, versions: [{ code: "BBBBB", qty: 1, ...RNA }] };
+  // L'autre deck n'a pas son édition (monté avant, API pas lue) : il peut
+  // détenir l'une ou l'autre, le doute profite au montage.
+  assert.deepEqual(computeVersionConflicts([asked], stock, buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]))), []);
+  // Édition absente de la collection (collection pas à jour, code d'édition
+  // différent entre l'API et le CSV) : on ne conclut rien de plus.
+  const unknownSet = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1, set: "gpt", cn: "1" }]));
+  assert.deepEqual(computeVersionConflicts([asked], stock, unknownSet), []);
+  // Même code que l'autre deck, dont seule la page connaît l'édition : sans
+  // repli, l'exemplaire de l'autre deck ne serait pas compté.
+  const sameCode = { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1, ...RNA }] };
+  assert.equal(computeVersionConflicts([sameCode], steamVentsStock(1), buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1 }]))).length, 1);
+  // Le recoupement continue de refuser ce qu'il refusait.
+  const same = { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] };
+  assert.equal(computeVersionConflicts([same], steamVentsStock(1), buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1, ...GRN }]))).length, 1);
+});
+
+test("contrôle exact : édition demandée au-delà du possédé sans autre deck en cause, pas de refus", () => {
+  // Page et collection en désaccord (collection pas encore récupérée) : ce
+  // n'est pas une version « déjà utilisée ».
+  const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1, ...GRN }]));
+  const card = { name: "Steam Vents", qty: 2, versions: [{ code: "BBBBB", qty: 2, ...RNA }] };
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(2, UNEQUAL), usage), []);
 });

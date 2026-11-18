@@ -59,7 +59,7 @@
   const CONTEXT_INVALIDATED_MESSAGE = t("extensionReloaded");
 
   // Lecture de la liste du deck sur la page : voir deck-scraper.js.
-  const { normalizeName, scrapeCardsGuess, getSiteDeclaredTotal, completeCardNames, computeDeckDiff } =
+  const { normalizeName, scrapeCardsGuess, getSiteDeclaredTotal, completeCardNames, computeDeckDiff, versionsToRecord } =
     createDeckScraper(window);
 
   // Contrôles de la liste par rapport au stock : voir deck-checks.js.
@@ -68,6 +68,8 @@
     buildWrongEditionSet,
     computeWrongEditionCards,
     computeShortages,
+    buildVersionUsage,
+    computeVersionConflicts,
     parseCardsText,
     evaluateDeckUpdate,
     computeDeckAvailability,
@@ -92,6 +94,102 @@
     el.innerHTML =
       `<strong>🚫 ${escapeHtml(tn("printingWarningTitle", names.length))}</strong> — ${escapeHtml(t("printingWarningHint"))}<ul>` +
       names.map((n) => `<li>${escapeHtml(n)}</li>`).join("") +
+      "</ul>";
+  }
+
+  // Versions (impressions Moxfield) des cartes de la liste détectée, par nom
+  // normalisé (cf. ownedVersionOf dans deck-scraper.js) : la zone de texte
+  // de la fenêtre ne porte que « QTE Nom ». Vide si la liste vient du
+  // presse-papiers.
+  let lastVersions = new Map();
+
+  function rememberVersions(cards) {
+    lastVersions = new Map(cards.filter((c) => c.versions && c.versions.length > 0).map((c) => [normalizeName(c.name), c.versions]));
+  }
+
+  // Liste de la zone de texte, complétée des versions détectées. Quantité
+  // modifiée à la main : on ne sait plus quelle version est concernée, la
+  // carte est enregistrée sans version.
+  function withVersions(cards) {
+    return cards.map(({ name, qty }) => {
+      const versions = lastVersions.get(normalizeName(name));
+      const known = versions && versions.reduce((n, v) => n + v.qty, 0) <= qty;
+      return known ? { name, qty, versions } : { name, qty };
+    });
+  }
+
+  // Édition et numéro des impressions (code Moxfield → { set, cn }), donnés
+  // par l'API du deck via le service worker (GET_DECK_PRINTINGS) : la page
+  // ne porte que le code, la collection que l'édition. Un code désigne
+  // toujours la même impression : ce qui est appris est gardé tant que
+  // l'onglet vit. Sans réponse (pas connecté, réseau), les versions restent
+  // sans édition et le contrôle se replie sur le recoupement (cf.
+  // computeVersionConflicts dans deck-checks.js).
+  const printingsByCode = new Map();
+  // Dernière demande : les mêmes codes inconnus ne sont pas redemandés avant
+  // ce délai (chaque demande renouvelle la session Moxfield côté service
+  // worker, et la page est contrôlée toutes les 3 secondes).
+  const PRINTINGS_RETRY_MS = 5 * 60 * 1000;
+  let printingsAsked = { key: null, at: 0 };
+  let printingsRequest = null;
+
+  // Demande les éditions des versions pas encore connues ; résout à true si
+  // de nouvelles ont été apprises. Ne lève jamais : sans elles, les
+  // contrôles se font par recoupement.
+  function loadPrintings(deckId, cards) {
+    const unknown = new Set();
+    for (const c of cards) for (const v of c.versions || []) if (!printingsByCode.has(v.code)) unknown.add(v.code);
+    if (unknown.size === 0) return Promise.resolve(false);
+    if (printingsRequest) return printingsRequest;
+    const key = deckId + ":" + [...unknown].sort().join(",");
+    if (key === printingsAsked.key && Date.now() - printingsAsked.at < PRINTINGS_RETRY_MS) return Promise.resolve(false);
+    printingsAsked = { key, at: Date.now() };
+    printingsRequest = (async () => {
+      try {
+        const res = await chrome.runtime.sendMessage({ type: "GET_DECK_PRINTINGS", payload: { deckId } });
+        if (!res || !res.ok || !res.printings) return false;
+        let added = false;
+        for (const [code, printing] of Object.entries(res.printings)) {
+          if (printingsByCode.has(code) || !printing || typeof printing.set !== "string" || !printing.set) continue;
+          printingsByCode.set(code, { set: printing.set, cn: typeof printing.cn === "string" ? printing.cn : "" });
+          added = true;
+        }
+        return added;
+      } catch (e) {
+        return false; // extension rechargée ou service worker injoignable
+      } finally {
+        printingsRequest = null;
+      }
+    })();
+    return printingsRequest;
+  }
+
+  // Liste dont les versions portent leur édition, quand elle est connue.
+  function withPrintings(cards) {
+    return cards.map((c) => {
+      if (!c.versions || !c.versions.some((v) => printingsByCode.has(v.code))) return c;
+      return { ...c, versions: c.versions.map((v) => (printingsByCode.has(v.code) ? { ...v, ...printingsByCode.get(v.code) } : v)) };
+    });
+  }
+
+  // Version déjà prise par un autre deck monté (cf. computeVersionConflicts
+  // dans deck-checks.js) : bloque le montage, comme la version différente.
+  function renderVersionWarning(el, conflicts) {
+    if (conflicts.length === 0) {
+      el.style.display = "none";
+      el.innerHTML = "";
+      return;
+    }
+    const item = (c) => {
+      const details = [];
+      if (c.decks.length > 0) details.push(t("shortageIn", c.decks.map((d) => `${d.name} (${d.qty})`).join(", ")));
+      details.push(t("versionOwned", c.owned.map((p) => `${p.set.toUpperCase()} ${p.cn} ×${p.qty}`).join(", ")));
+      return `<li>${escapeHtml(c.name)} · <strong>${escapeHtml(details.join(" · "))}</strong></li>`;
+    };
+    el.style.display = "block";
+    el.innerHTML =
+      `<strong>🚫 ${escapeHtml(tn("versionWarningTitle", conflicts.length))}</strong> — ${escapeHtml(t("versionWarningHint"))}<ul>` +
+      conflicts.map(item).join("") +
       "</ul>";
   }
 
@@ -133,7 +231,7 @@
   // lui reviennent).
   async function getStockAndDeckUsage(cards, excludeDeckId = null) {
     const context = await getDeckContext(cards, excludeDeckId);
-    if (!context) return { stockMap: {}, deckUsage: new Map(), builtDecks: {} };
+    if (!context) return { stockMap: {}, deckUsage: new Map(), versionUsage: new Map(), builtDecks: {} };
     const deckUsage = new Map();
     for (const [deckId, deck] of Object.entries(context.builtDecks)) {
       if (deckId === excludeDeckId) continue;
@@ -144,7 +242,12 @@
         deckUsage.get(key).push({ name: deck.name, qty: card.qty });
       }
     }
-    return { stockMap: context.stock, deckUsage, builtDecks: context.builtDecks };
+    return {
+      stockMap: context.stock,
+      deckUsage,
+      versionUsage: buildVersionUsage(context.builtDecks, excludeDeckId),
+      builtDecks: context.builtDecks,
+    };
   }
 
   function renderShortageWarning(el, shortages, deckUsage = new Map()) {
@@ -287,6 +390,13 @@
 
   function renderDeckDiff(changes) {
     const items = changes.map((c) => {
+      // Même quantité, autre version (impression) que celle du montage.
+      if (c.version) {
+        return (
+          `<li><span class="msm-diff-delta">↻</span> ${escapeHtml(c.name)} ` +
+          `<span class="msm-diff-detail">(${escapeHtml(t("diffVersionChanged"))})</span></li>`
+        );
+      }
       const added = c.to > c.from;
       const delta = added ? `+${c.to - c.from}` : `−${c.from - c.to}`;
       return (
@@ -312,13 +422,16 @@
       await new Promise((resolve) => setTimeout(resolve, 300));
       detection = scrapeDeckListWithCheck();
     }
-    const { stockMap, deckUsage, builtDecks } = await getStockAndDeckUsage(detection.cards, deckId);
+    const [{ stockMap, deckUsage, versionUsage, builtDecks }] = await Promise.all([
+      getStockAndDeckUsage(detection.cards, deckId),
+      loadPrintings(deckId, detection.cards),
+    ]);
     const deck = builtDecks[deckId];
     if (!deck) {
       changesEl.innerHTML = "";
       return null;
     }
-    const pageCards = completeCardNames(detection.cards, Object.values(stockMap), deck.cards);
+    const pageCards = withPrintings(completeCardNames(detection.cards, Object.values(stockMap), deck.cards));
     if (!detection.reliable) {
       // Écarts entre la liste détectée (non fiable) et le montage : aide à
       // comprendre d'où vient l'erreur de détection (doublons, quantités mal
@@ -342,7 +455,7 @@
     }
 
     lastWrongEditionNames = buildWrongEditionSet(scraped);
-    const check = evaluateDeckUpdate(changes, deck, stockMap, lastWrongEditionNames);
+    const check = evaluateDeckUpdate(changes, deck, stockMap, lastWrongEditionNames, scraped, versionUsage);
     changesEl.innerHTML =
       '<div class="msm-changes">' +
       `<strong>${escapeHtml(t("deckChangedTitle", since))}</strong>` +
@@ -350,6 +463,7 @@
       `<p>${escapeHtml(t("deckUpdateHint", t("updateBuild")))}</p></div>`;
     renderShortageWarning(overlay.querySelector("#msm-shortage-warning"), check.shortages, deckUsage);
     renderPrintingWarning(overlay.querySelector("#msm-printing-warning"), check.wrongEdition);
+    renderVersionWarning(overlay.querySelector("#msm-version-warning"), check.versionTaken);
     renderBasicLandNotice(overlay.querySelector("#msm-basic-land-warning"), check.basicWrongEdition, check.basicShortages);
 
     const updateBtn = overlay.querySelector("#msm-update");
@@ -357,7 +471,7 @@
     updateBtn.disabled = check.blocked;
     if (check.blocked) updateBtn.title = t("deckUpdateBlocked");
     overlay.querySelector("#msm-confirm").classList.remove("msm-primary");
-    return scraped.map(({ name, qty }) => ({ name, qty }));
+    return scraped.map(({ name, qty, versions }) => (versions && versions.length > 0 ? { name, qty, versions } : { name, qty }));
   }
 
   // Icône de l'extension (déclarée dans web_accessible_resources). getURL
@@ -389,6 +503,7 @@
             ? `<p>${escapeHtml(t("overlayBuiltIntro"))}</p>
                <div id="msm-deck-changes"></div>
                <div id="msm-printing-warning" class="msm-shortage-warning" style="display:none"></div>
+               <div id="msm-version-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-shortage-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-basic-land-warning" class="msm-info-warning" style="display:none"></div>`
             : `<p>${escapeHtml(t("overlayIntro", t("pasteFromClipboard")))}</p>
@@ -397,6 +512,7 @@
                <div id="msm-blocking-summary" class="msm-card-count msm-card-count-mismatch" hidden></div>
                <textarea id="msm-cards-textarea" rows="12" placeholder="1 Sol Ring&#10;1 Sidisi, Brood Tyrant&#10;..."></textarea>
                <div id="msm-printing-warning" class="msm-shortage-warning" style="display:none"></div>
+               <div id="msm-version-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-shortage-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-basic-land-warning" class="msm-info-warning" style="display:none"></div>`
         }
@@ -550,6 +666,26 @@
     }
   }
 
+  // Deck monté sans versions enregistrées (monté avant leur suivi, ou depuis
+  // une liste collée) : celles de la page lui sont ajoutées, sans quoi ses
+  // cartes ne seraient jamais vues comme « déjà utilisées » ailleurs. Une
+  // seule fois par constat, comme reportPageChanges.
+  let lastRecordedVersions = null;
+
+  function recordDeckVersions(deckId, versions) {
+    const key = deckId + ":" + JSON.stringify(versions);
+    if (key === lastRecordedVersions) return;
+    lastRecordedVersions = key;
+    const retryLater = () => {
+      lastRecordedVersions = null;
+    };
+    try {
+      chrome.runtime.sendMessage({ type: "SET_DECK_VERSIONS", payload: { deckId, versions } }).catch(retryLater);
+    } catch (e) {
+      retryLater();
+    }
+  }
+
   // Contrôle en fond de la liste de la page : deck monté modifié depuis le
   // montage, ou faisabilité d'un deck pas encore monté. immediate : contrôle
   // déclenché par un changement de la page ou du stock, sans attendre
@@ -580,6 +716,11 @@
         return;
       }
       unreliableSince = 0;
+      // Éditions des versions, sans attendre la réponse (jusqu'à plusieurs
+      // secondes) : le constat est refait dès qu'elles arrivent.
+      loadPrintings(deckId, detection.cards).then((added) => {
+        if (added && deckId === currentDeckId) checkDeckStatus(deckId, true);
+      });
       // Pas safeSendMessage : après un rechargement de l'extension, ce
       // contrôle en fond afficherait son toast toutes les 3 secondes.
       const context = await getDeckContext(detection.cards, deckId, (m) => chrome.runtime.sendMessage(m));
@@ -587,10 +728,14 @@
       const stockMap = context.stock;
       const deck = context.builtDecks[deckId];
       if (deck) {
-        const scraped = completeCardNames(detection.cards, Object.values(stockMap), deck.cards);
+        const scraped = withPrintings(completeCardNames(detection.cards, Object.values(stockMap), deck.cards));
         const changes = computeDeckDiff(deck.cards, scraped);
         reportPageChanges(deckId, changes);
         const outdated = changes.length > 0;
+        // Liste identique au montage : seul cas où les versions de la page
+        // sont à coup sûr celles du montage.
+        const missingVersions = outdated ? null : versionsToRecord(deck.cards, scraped);
+        if (missingVersions) recordDeckVersions(deckId, missingVersions);
         if (outdated !== btnOutdated || btnAvailability) {
           btnOutdated = outdated;
           btnAvailability = null;
@@ -598,8 +743,10 @@
         }
       } else {
         const availability = computeDeckAvailability(
-          completeCardNames(detection.cards, Object.values(stockMap)),
-          stockMap
+          withPrintings(completeCardNames(detection.cards, Object.values(stockMap))),
+          stockMap,
+          undefined,
+          buildVersionUsage(context.builtDecks)
         );
         // Redessiner seulement si le constat change : sinon l'infobulle
         // ouverte au survol disparaîtrait toutes les 3 secondes.
@@ -772,18 +919,20 @@
       const textarea = overlay.querySelector("#msm-cards-textarea");
       const warningEl = overlay.querySelector("#msm-shortage-warning");
       const printingWarningEl = overlay.querySelector("#msm-printing-warning");
+      const versionWarningEl = overlay.querySelector("#msm-version-warning");
       const basicLandWarningEl = overlay.querySelector("#msm-basic-land-warning");
       const cardCountEl = overlay.querySelector("#msm-card-count");
       const blockingSummaryEl = overlay.querySelector("#msm-blocking-summary");
       const siteDeclaredTotal = getSiteDeclaredTotal();
 
       const updateWarnings = async () => {
-        const cards = parseCardsText(textarea.value);
+        const cards = withVersions(parseCardsText(textarea.value));
         renderCardCount(cardCountEl, cards, siteDeclaredTotal);
         if (cards.length === 0) {
           blockingSummaryEl.hidden = true;
           renderShortageWarning(warningEl, []);
           renderPrintingWarning(printingWarningEl, []);
+          renderVersionWarning(versionWarningEl, []);
           renderBasicLandNotice(basicLandWarningEl, [], []);
           return;
         }
@@ -791,13 +940,14 @@
         const basicCards = cards.filter((c) => isBasicLand(c.name));
         const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
         // Une seule lecture de l'état, réutilisée pour toutes les zones.
-        const { stockMap, deckUsage } = await getStockAndDeckUsage(cards);
+        const { stockMap, deckUsage, versionUsage } = await getStockAndDeckUsage(cards);
         // Même total que la pastille du bouton (cf. computeDeckAvailability).
-        const summary = blockingSummary(computeDeckAvailability(cards, stockMap, lastWrongEditionNames));
+        const summary = blockingSummary(computeDeckAvailability(cards, stockMap, lastWrongEditionNames, versionUsage));
         blockingSummaryEl.hidden = !summary;
         blockingSummaryEl.textContent = summary ? `🚫 ${summary}.` : "";
         renderShortageWarning(warningEl, computeShortages(nonBasicCards, stockMap), deckUsage);
         renderPrintingWarning(printingWarningEl, computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames));
+        renderVersionWarning(versionWarningEl, computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames));
         renderBasicLandNotice(
           basicLandWarningEl,
           computeWrongEditionCards(basicCards, stockMap, lastWrongEditionNames),
@@ -807,13 +957,16 @@
 
       // Scraping DOM de la page (méthode adaptée à la vue active).
       const scrapedCards = scrapeCardsGuess();
-      const guessed = completeCardNames(scrapedCards, Object.values(await getStockMap(scrapedCards)));
+      const [scrapedStock] = await Promise.all([getStockMap(scrapedCards), loadPrintings(deckId, scrapedCards)]);
+      const guessed = withPrintings(completeCardNames(scrapedCards, Object.values(scrapedStock)));
       if (guessed.length > 0) {
         textarea.value = cardsToText(guessed);
         lastWrongEditionNames = buildWrongEditionSet(guessed);
+        rememberVersions(guessed);
       } else {
         // Repli : presse-papiers (pas d'info de version disponible dans du texte brut).
         lastWrongEditionNames = new Set();
+        rememberVersions([]);
         await tryFillFromClipboard(textarea);
       }
       await updateWarnings();
@@ -825,6 +978,7 @@
         if (!ok) toast(t("clipboardEmpty"), true);
         // Un collage manuel remplace la liste détectée : on perd l'info de version.
         lastWrongEditionNames = new Set();
+        rememberVersions([]);
         await updateWarnings();
       });
     }
@@ -836,10 +990,11 @@
         try {
           // Revérifié au clic : le stock a pu changer entre-temps (synchro
           // Drive, autre onglet).
-          const { stockMap, builtDecks } = await getStockAndDeckUsage(updatedCards, deckId);
+          const { stockMap, versionUsage, builtDecks } = await getStockAndDeckUsage(updatedCards, deckId);
           const deck = builtDecks[deckId];
           if (!deck) throw new Error(t("deckNoLongerBuilt"));
-          if (evaluateDeckUpdate(computeDeckDiff(deck.cards, updatedCards), deck, stockMap, lastWrongEditionNames).blocked) {
+          const changes = computeDeckDiff(deck.cards, updatedCards);
+          if (evaluateDeckUpdate(changes, deck, stockMap, lastWrongEditionNames, updatedCards, versionUsage).blocked) {
             toast(t("updateBlocked"), true);
             return;
           }
@@ -865,17 +1020,18 @@
           payload = { deckId, deckName: getDeckName(), url: window.location.href, cards: [], built: false };
         } else {
           const textarea = overlay.querySelector("#msm-cards-textarea");
-          let cards = parseCardsText(textarea.value);
+          const cards = withVersions(parseCardsText(textarea.value));
           if (cards.length === 0) {
             toast(t("noCardsRecognized"), true);
             return;
           }
-          // Deux vérifications bloquantes avant de pouvoir valider : version
-          // différente de ta collection Moxfield (zone 1), puis stock
-          // insuffisant (zone 2) — sauf pour les terrains de base, jamais
-          // bloquants (cf. isBasicLand). Recalculées ici au cas où le texte
-          // a été modifié depuis le dernier passage de updateWarnings.
-          const stockMap = await getStockMap(cards);
+          // Trois vérifications bloquantes avant de pouvoir valider : version
+          // différente de ta collection Moxfield (zone 1), stock insuffisant
+          // (zone 2), puis version déjà prise par un autre deck monté — sauf
+          // pour les terrains de base, jamais bloquants (cf. isBasicLand).
+          // Recalculées ici au cas où le texte a été modifié depuis le
+          // dernier passage de updateWarnings.
+          const { stockMap, versionUsage } = await getStockAndDeckUsage(cards);
           const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
           const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
           if (wrongEdition.length > 0) {
@@ -886,6 +1042,11 @@
           if (shortages.length > 0) {
             const details = shortages.map((s) => t("shortageShort", s.name, s.missing)).join(", ");
             toast(t("buildBlockedShortage", details), true);
+            return;
+          }
+          const versionTaken = computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames);
+          if (versionTaken.length > 0) {
+            toast(t("buildBlockedVersionTaken", versionTaken.map((c) => c.name).join(", ")), true);
             return;
           }
           payload = { deckId, deckName: getDeckName(), url: window.location.href, cards, built: true };

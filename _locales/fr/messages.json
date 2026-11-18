@@ -413,6 +413,33 @@
   "blockingWrongEdition_other": {
     "message": "$1 dans une autre version"
   },
+  "blockingVersionTaken_one": {
+    "message": "$1 dont la version est déjà dans un autre deck"
+  },
+  "blockingVersionTaken_other": {
+    "message": "$1 dont la version est déjà dans un autre deck"
+  },
+  "availabilityVersionTaken": {
+    "message": "version déjà utilisée par un autre deck monté : $1"
+  },
+  "versionWarningTitle_one": {
+    "message": "Version déjà utilisée par un autre deck monté ($1 carte)"
+  },
+  "versionWarningTitle_other": {
+    "message": "Version déjà utilisée par un autre deck monté ($1 cartes)"
+  },
+  "versionWarningHint": {
+    "message": "montage bloqué, choisis sur Moxfield une version que tu possèdes encore, ou démonte l'autre deck :"
+  },
+  "versionOwned": {
+    "message": "tu possèdes : $1"
+  },
+  "buildBlockedVersionTaken": {
+    "message": "Montage impossible — version déjà utilisée par un autre deck monté pour : $1"
+  },
+  "diffVersionChanged": {
+    "message": "version changée"
+  },
   "availabilityCount": {
     "message": "$1/$2 cartes disponibles en stock libre, hors terrains de base"
   },
@@ -454,6 +481,12 @@
   },
   "moxfieldNotCollectionCsv": {
     "message": "pas un CSV de collection"
+  },
+  "moxfieldNotDeck": {
+    "message": "pas la description d'un deck"
+  },
+  "moxfieldDeckUnavailable": {
+    "message": "Deck introuvable ou privé sur Moxfield."
   },
   "googleAccountReadError": {
     "message": "Google Drive a répondu $1 à la lecture du compte."
@@ -615,7 +648,7 @@
     "message": "« $1 » ajuste le stock pour ces seules cartes."
   },
   "deckUpdateBlocked": {
-    "message": "Stock insuffisant ou version différente : corrige d'abord (voir ci-dessus)."
+    "message": "Stock insuffisant, version différente ou déjà utilisée : corrige d'abord (voir ci-dessus)."
   },
   "overlayTitleUnbuild": {
     "message": "Démonter ce deck"
@@ -657,7 +690,7 @@
     "message": "Presse-papiers vide ou format non reconnu — colle manuellement avec Ctrl+V."
   },
   "updateBlocked": {
-    "message": "Mise à jour impossible — stock insuffisant ou version différente."
+    "message": "Mise à jour impossible — stock insuffisant, version différente ou déjà utilisée."
   },
   "updateDone": {
     "message": "Montage mis à jour, stock ajusté pour les cartes modifiées."

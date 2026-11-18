@@ -1,0 +1,101 @@
+{
+  "id": "0000000",
+  "name": "Deck de test",
+  "publicId": "abc123",
+  "format": "commander",
+  "boards": {
+    "mainboard": {
+      "count": 6,
+      "cards": {
+        "u0001": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": { "id": "ZOwRD", "uniqueCardId": "u0001", "set": "rav", "set_name": "Ravnica: City of Guilds", "name": "Golgari Thug", "cn": "87", "lang": "en" }
+        },
+        "u0002": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "foil",
+          "isFoil": true,
+          "isAlter": false,
+          "isProxy": false,
+          "card": { "id": "E0aWJ", "uniqueCardId": "u0002", "set": "PKTK", "set_name": "Khans of Tarkir Promos", "name": "Sidisi, Brood Tyrant", "cn": "199P", "lang": "en" }
+        },
+        "u0003": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": { "id": "xRXAR", "uniqueCardId": "u0003", "set": "mh3", "set_name": "Modern Horizons 3", "name": "Revitalizing Repast // Old-Growth Grove", "cn": "235", "lang": "en" }
+        },
+        "u0004": {
+          "quantity": 3,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": { "id": "SWAMP1", "uniqueCardId": "u0004", "set": "war", "set_name": "War of the Spark", "name": "Swamp", "cn": "256", "lang": "en" },
+          "printingData": [
+            {
+              "id": "SWAMP1",
+              "quantity": 2,
+              "finish": "nonFoil",
+              "hash": "SWAMP1N0",
+              "set": "war",
+              "cn": "256",
+              "card": { "id": "SWAMP1", "uniqueCardId": "u0004", "set": "war", "name": "Swamp", "cn": "256", "lang": "en" }
+            },
+            {
+              "id": "SWAMP2",
+              "quantity": 1,
+              "finish": "foil",
+              "hash": "SWAMP2F0",
+              "set": "pwar",
+              "cn": "WAR-115",
+              "card": { "id": "SWAMP2", "uniqueCardId": "u0004", "set": "pwar", "name": "Swamp", "cn": "WAR-115", "lang": "ja" }
+            }
+          ]
+        }
+      }
+    },
+    "commanders": {
+      "count": 1,
+      "cards": {
+        "u0005": {
+          "quantity": 1,
+          "boardType": "commanders",
+          "finish": "etched",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": { "id": "bIrDs", "uniqueCardId": "u0005", "set": "plst", "set_name": "The List", "name": "Birds of Paradise", "cn": "52★", "lang": "en" }
+        }
+      }
+    },
+    "maybeboard": {
+      "count": 1,
+      "cards": {
+        "u0006": {
+          "quantity": 1,
+          "boardType": "maybeboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": { "id": "mAyBe", "uniqueCardId": "u0006", "set": "c21", "set_name": "Commander 2021", "name": "Sol Ring", "cn": "263", "lang": "en" }
+        }
+      }
+    },
+    "sideboard": { "count": 0, "cards": {} },
+    "companions": { "count": 0, "cards": {} }
+  },
+  "tokens": [],
+  "authorTags": {}
+}

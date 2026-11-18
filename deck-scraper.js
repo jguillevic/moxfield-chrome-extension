@@ -63,6 +63,36 @@ function createDeckScraper(win) {
     return IGNORED_BOARDS.has(boardOf(scopeEl));
   }
 
+  // --- Version (impression) de chaque carte ---
+  // Le marqueur de collection se termine par le code Moxfield de
+  // l'impression choisie dans le deck ("collection_full_1052_mainboard_ZOwRD"
+  // → "ZOwRD"), dans toutes les vues — confirmé via inspection réelle, cf.
+  // tests/fixtures. Sans la finition : une carte foil porte ailleurs le
+  // suffixe "F0" (data-hash "ZOwRDF0"), pas ici. On ne retient le code que
+  // si la version est possédée (marqueur "full") : c'est la seule dont on
+  // sait qu'elle correspond à une ligne de la collection.
+  function ownedVersionOf(scopeEl) {
+    const marker = scopeEl && scopeEl.querySelector('[id^="collection_full_"]');
+    const m = marker && marker.id.match(/^collection_full_\d+_[a-z]+_(.+)$/i);
+    return m ? m[1] : null;
+  }
+
+  // Cumul par nom : quantité, et quantité par version possédée
+  // (versions : [{ code, qty }], vide si aucune n'est connue).
+  function addCard(seen, name, qty, printingStatus, version) {
+    const key = name.toLowerCase();
+    let card = seen.get(key);
+    if (!card) {
+      card = { name, qty: 0, printingStatus, versions: [] };
+      seen.set(key, card);
+    }
+    card.qty += qty;
+    if (!version) return;
+    const known = card.versions.find((v) => v.code === version);
+    if (known) known.qty += qty;
+    else card.versions.push({ code: version, qty });
+  }
+
   // --- Scraping DOM, vue "Text" / "Condensed Text" ---
   // Chaque carte est un <li data-hash="..."> avec un <a href="/cards/...">
   // dont le texte est le nom complet de la carte. La quantité était portée
@@ -107,10 +137,7 @@ function createDeckScraper(win) {
       const qty = findListQty(li);
       const name = (link.textContent || "").replace(/\s+/g, " ").trim();
       if (!name) return;
-      const printingStatus = findCollectionStatusNear(link, li);
-      const key = name.toLowerCase();
-      if (seen.has(key)) seen.get(key).qty += qty;
-      else seen.set(key, { name, qty, printingStatus });
+      addCard(seen, name, qty, findCollectionStatusNear(link, li), ownedVersionOf(li));
     });
     return Array.from(seen.values());
   }
@@ -254,15 +281,12 @@ function createDeckScraper(win) {
         name,
         qty: findQtyNear(img, slot),
         printingStatus: slot ? findCollectionStatusNear(img, slot) : "unknown",
+        version: ownedVersionOf(tile),
         hasMarker,
       });
     });
     const seen = new Map();
-    for (const { name, qty, printingStatus } of tiles.values()) {
-      const key = name.toLowerCase();
-      if (seen.has(key)) seen.get(key).qty += qty;
-      else seen.set(key, { name, qty, printingStatus });
-    }
+    for (const { name, qty, printingStatus, version } of tiles.values()) addCard(seen, name, qty, printingStatus, version);
     return Array.from(seen.values());
   }
 
@@ -307,10 +331,7 @@ function createDeckScraper(win) {
         const m = ((input && input.value) || qtyEl.textContent || "").trim().match(/(\d{1,3})/);
         if (m) qty = parseInt(m[1], 10);
       }
-      const printingStatus = findCollectionStatusNear(card, card);
-      const key = name.toLowerCase();
-      if (seen.has(key)) seen.get(key).qty += qty;
-      else seen.set(key, { name, qty, printingStatus });
+      addCard(seen, name, qty, findCollectionStatusNear(card, card), ownedVersionOf(card));
     });
     return Array.from(seen.values());
   }
@@ -333,7 +354,7 @@ function createDeckScraper(win) {
       if (blocklist.test(name)) continue;
       if (/^\d+$/.test(name)) continue;
       const key = name.toLowerCase();
-      seen.set(key, { name, qty, printingStatus: "unknown" });
+      seen.set(key, { name, qty, printingStatus: "unknown", versions: [] });
     }
     return Array.from(seen.values());
   }
@@ -404,10 +425,23 @@ function createDeckScraper(win) {
     const map = new Map();
     for (const c of cards) {
       const key = normalizeName(c.name);
-      if (map.has(key)) map.get(key).qty += c.qty;
-      else map.set(key, { name: c.name, qty: c.qty });
+      if (!map.has(key)) map.set(key, { name: c.name, qty: 0, versions: [], unread: false });
+      const entry = map.get(key);
+      entry.qty += c.qty;
+      // Marqueur de collection pas (encore) affiché : version illisible.
+      if (c.printingStatus === "unknown") entry.unread = true;
+      for (const v of c.versions || []) {
+        const known = entry.versions.find((x) => x.code === v.code);
+        if (known) known.qty += v.qty;
+        else entry.versions.push({ ...v });
+      }
     }
     return map;
+  }
+
+  // Forme comparable des versions d'une carte, quel que soit leur ordre.
+  function versionsKey(versions) {
+    return versions.map((v) => `${v.code}×${v.qty}`).sort().join(",");
   }
 
   // Cartes double face : les vues visuelles donnent le nom complet
@@ -443,8 +477,37 @@ function createDeckScraper(win) {
       const from = before.has(key) ? before.get(key).qty : 0;
       const to = after.has(key) ? after.get(key).qty : 0;
       if (from !== to) changes.push({ name: (after.get(key) || before.get(key)).name, from, to });
+      // Même quantité mais autre version que celle enregistrée au montage :
+      // le deck n'utilise plus le même exemplaire physique ({ version: true }).
+      // Version jamais enregistrée (deck monté avant ce suivi, liste collée) :
+      // rien à comparer, cf. versionsToRecord. Version illisible sur la page
+      // (rendu en cours) : on ne conclut rien.
+      else if (!after.get(key).unread && before.get(key).versions.length > 0 && versionsKey(before.get(key).versions) !== versionsKey(after.get(key).versions)) {
+        changes.push({ name: after.get(key).name, from, to, version: true });
+      }
     }
     return changes.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Versions à enregistrer dans un deck monté qui n'en a pas encore (monté
+  // avant ce suivi, ou depuis une liste collée) : celles de la page, pour
+  // les cartes dont la quantité n'a pas changé. Et celles, identiques, dont
+  // la page connaît maintenant l'édition (set, donnée par l'API du deck, cf.
+  // content-deck.js) alors que le montage ne l'a pas.
+  // { [nom normalisé]: versions }, null s'il n'y a rien à enregistrer.
+  function versionsToRecord(deckCards, pageCards) {
+    const before = cardsByKey(deckCards);
+    const after = cardsByKey(pageCards);
+    const found = {};
+    for (const [key, card] of before) {
+      const page = after.get(key);
+      if (!page || page.qty !== card.qty || page.versions.length === 0) continue;
+      const editionFound =
+        versionsKey(card.versions) === versionsKey(page.versions) &&
+        page.versions.some((v) => v.set && card.versions.some((k) => k.code === v.code && !k.set));
+      if (card.versions.length === 0 || editionFound) found[key] = page.versions;
+    }
+    return Object.keys(found).length > 0 ? found : null;
   }
 
   return {
@@ -457,6 +520,7 @@ function createDeckScraper(win) {
     frontFaceKey,
     completeCardNames,
     computeDeckDiff,
+    versionsToRecord,
   };
 }
 

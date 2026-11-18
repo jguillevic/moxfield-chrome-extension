@@ -22,6 +22,7 @@ const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", versi
 
 // options.moxfieldCSV : collection renvoyée par le faux Moxfield (CSV), ou
 // une Error à lever ; sans elle, tout appel réseau fait échouer le test.
+// options.moxfieldDeck : réponse (texte JSON) de l'API d'un deck.
 // options.cookies : cookies de moxfield.com (session ouverte par défaut).
 // options.drive : fausse API Google Drive, (url, options) => réponse.
 // options.sentryDsn : DSN des rapports d'erreurs (aucun envoi sinon) ; les
@@ -123,7 +124,11 @@ function loadBackground(initialState, options = {}) {
     counts.fetches++;
     if (options.moxfieldCSV === undefined) throw new Error(`appel réseau inattendu : ${url}`);
     if (options.moxfieldCSV instanceof Error) throw options.moxfieldCSV;
-    const body = url.includes("/token/") ? JSON.stringify({ access_token: "jeton" }) : options.moxfieldCSV;
+    const body = url.includes("/token/")
+      ? JSON.stringify({ access_token: "jeton" })
+      : url.includes("/decks/all/")
+        ? options.moxfieldDeck
+        : options.moxfieldCSV;
     return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
   }
   const navigator = options.navigator || CHROME;
@@ -1240,4 +1245,163 @@ test("historique noté en français, affiché en anglais", async () => {
   assert.match((await historyOf(fr))[0].title, /^Deck « Deck a » monté/);
   const en = loadBackground(fr.raw(), { lang: "en" });
   assert.equal((await historyOf(en))[0].title, "Deck “Deck a” built: 1 card taken out of the free stock");
+});
+
+// --- Détail par édition et versions des decks montés ---
+
+const TWO_EDITIONS_CSV = csv(
+  "1,0,Steam Vents,grn,Near Mint,English,,,2024-01-01,257,False,False,",
+  "1,0,Steam Vents,rna,Near Mint,French,foil,,2024-01-01,257,False,False,",
+  "1,0,Sol Ring,c21,Near Mint,English,,,2024-01-01,263,False,False,",
+  "2,0,Sol Ring,c21,Near Mint,French,foil,,2024-01-01,263,False,False,"
+);
+const STEAM_VENTS_PRINTINGS = [{ set: "grn", cn: "257", qty: 1 }, { set: "rna", cn: "257", qty: 1 }];
+
+test("import CSV : détail par édition gardé seulement pour les cartes possédées en plusieurs éditions", async () => {
+  const bg = loadBackground();
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: TWO_EDITIONS_CSV });
+  const { stock } = await bg.state();
+  assert.deepEqual(stock["steam vents"], { name: "Steam Vents", qty: 2, printings: STEAM_VENTS_PRINTINGS });
+  // Même édition en deux langues et deux finitions : une seule édition.
+  assert.deepEqual(stock["sol ring"], { name: "Sol Ring", qty: 3 });
+});
+
+test("détail par édition : possédé, donc inchangé par un montage, et transmis à la page du deck", async () => {
+  const bg = loadBackground();
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: TWO_EDITIONS_CSV });
+  await build(bg, "a", [{ name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] }]);
+  const res = await bg.send({ type: "GET_DECK_CONTEXT", payload: { deckId: "b", names: ["Steam Vents"] } });
+  assert.deepEqual(res.stock, { "steam vents": { name: "Steam Vents", qty: 1, printings: STEAM_VENTS_PRINTINGS } });
+  assert.deepEqual(res.builtDecks.a.cards, [{ name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] }]);
+});
+
+test("récupération : détail par édition enregistré même si les quantités n'ont pas changé, une seule fois", async () => {
+  // Stock d'avant le suivi des éditions : mêmes quantités, pas de détail.
+  const before = { stock: { "steam vents": { name: "Steam Vents", qty: 2 }, "sol ring": { name: "Sol Ring", qty: 3 } }, builtDecks: {} };
+  const bg = loadBackground(before, { moxfieldCSV: TWO_EDITIONS_CSV });
+  const res = await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.deepEqual(res, { ok: true, changes: [] });
+  assert.deepEqual((await bg.state()).stock["steam vents"].printings, STEAM_VENTS_PRINTINGS);
+  assert.deepEqual(await historyOf(bg), [], "aucune quantité n'a changé : rien dans l'historique");
+
+  const writes = bg.counts.stateWrites;
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.equal(bg.counts.stateWrites, writes, "rien de nouveau : aucune écriture");
+
+  // Une édition échangée contre une autre, quantités identiques.
+  bg.setMoxfieldCSV(TWO_EDITIONS_CSV.replace("Steam Vents,rna", "Steam Vents,gpt"));
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.deepEqual((await bg.state()).stock["steam vents"].printings.map((p) => p.set), ["gpt", "grn"]);
+});
+
+test("versions d'un deck monté : complétées quand elles manquent, jamais remplacées", async () => {
+  const bg = loadBackground();
+  await build(bg, "a", [
+    { name: "Steam Vents", qty: 1 },
+    { name: "Sol Ring", qty: 1, versions: [{ code: "SSSSS", qty: 1 }] },
+    { name: "Swamp", qty: 2 },
+  ]);
+  const versions = {
+    "steam vents": [{ code: "AAAAA", qty: 1 }],
+    "sol ring": [{ code: "TTTTT", qty: 1 }],
+    swamp: [{ code: "SWAMP1", qty: 3 }], // plus d'exemplaires que dans le montage : écarté
+  };
+  const historyBefore = (await historyOf(bg)).length;
+  assert.deepEqual(await bg.send({ type: "SET_DECK_VERSIONS", payload: { deckId: "a", versions } }), { ok: true });
+  assert.deepEqual((await bg.state()).builtDecks.a.cards, [
+    { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] },
+    { name: "Sol Ring", qty: 1, versions: [{ code: "SSSSS", qty: 1 }] },
+    { name: "Swamp", qty: 2 },
+  ]);
+  assert.equal((await historyOf(bg)).length, historyBefore, "ni le stock ni la liste ne changent");
+
+  const writes = bg.counts.stateWrites;
+  assert.deepEqual(await bg.send({ type: "SET_DECK_VERSIONS", payload: { deckId: "a", versions } }), { ok: true, unchanged: true });
+  assert.deepEqual(await bg.send({ type: "SET_DECK_VERSIONS", payload: { deckId: "zzz", versions } }), { ok: true, ignored: true });
+  assert.equal(bg.counts.stateWrites, writes);
+});
+
+test("historique : mise à jour d'un deck dont seule une version a changé", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] }]);
+  await bg.send({
+    type: "UPDATE_BUILT_DECK",
+    payload: { deckId: "a", deckName: "Deck a", url: "", cards: [{ name: "Sol Ring", qty: 1, versions: [{ code: "BBBBB", qty: 1 }] }] },
+  });
+  const [entry] = await historyOf(bg);
+  assert.equal(entry.title, "Montage de « Deck a » mis à jour : 1 carte modifiée");
+  assert.deepEqual(entry.changes, [{ name: "Sol Ring", from: 1, to: 1, version: true }]);
+  const state = await bg.state();
+  assert.equal(state.stock["sol ring"].qty, 1, "le stock ne bouge pas");
+  assert.deepEqual(state.builtDecks.a.cards[0].versions, [{ code: "BBBBB", qty: 1 }]);
+});
+
+// --- Éditions des cartes d'un deck (API du deck) ---
+
+const API_DECK = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "api", "deck.json"), "utf8"));
+
+test("éditions d'un deck : lues par l'API pour la page du deck, sans toucher à l'état", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV, moxfieldDeck: JSON.stringify(API_DECK) });
+  const res = await bg.send({ type: "GET_DECK_PRINTINGS", payload: { deckId: "abc123" } });
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.printings.ZOwRD, { set: "rav", cn: "87" });
+  assert.deepEqual(res.printings.SWAMP2, { set: "pwar", cn: "war-115" });
+  assert.equal(bg.counts.stateWrites, 0);
+
+  const fetches = bg.counts.fetches;
+  assert.equal((await bg.send({ type: "GET_DECK_PRINTINGS", payload: { deckId: "../account" } })).ok, false);
+  assert.equal((await bg.send({ type: "GET_DECK_PRINTINGS" })).ok, false);
+  assert.equal(bg.counts.fetches, fetches, "identifiant invalide : aucun appel");
+});
+
+test("éditions d'un deck : seules les erreurs anormales sont rapportées", async () => {
+  const ask = (bg) => bg.send({ type: "GET_DECK_PRINTINGS", payload: { deckId: "abc123" } });
+  const loggedOut = loadBackground(undefined, { sentryDsn: SENTRY_DSN, moxfieldCSV: "", cookies: [] });
+  assert.equal((await ask(loggedOut)).code, "not-logged-in");
+  const offline = loadBackground(undefined, { sentryDsn: SENTRY_DSN, moxfieldCSV: new TypeError("Failed to fetch") });
+  assert.equal((await ask(offline)).code, "network");
+  await waitReports();
+  assert.equal(loggedOut.sentry.length + offline.sentry.length, 0, "situations normales");
+
+  const changed = loadBackground(undefined, { sentryDsn: SENTRY_DSN, moxfieldCSV: "", moxfieldDeck: '{"cards":[]}' });
+  const res = await ask(changed);
+  assert.equal(res.ok, false);
+  assert.equal(res.code, "api-changed");
+  await waitReports();
+  assert.equal(changed.sentry.length, 1);
+  assert.equal(changed.sentry[0].tags.where, "moxfield-deck");
+  assert.deepEqual(changed.sentry[0].extra, { code: "api-changed" });
+});
+
+test("versions d'un deck monté : édition ajoutée à une version déjà enregistrée, jamais retirée ni déplacée", async () => {
+  const bg = loadBackground();
+  await build(bg, "a", [
+    { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] },
+    { name: "Sol Ring", qty: 1, versions: [{ code: "SSSSS", qty: 1 }] },
+    { name: "Counterspell", qty: 1 },
+    { name: "Island", qty: 2, versions: [{ code: "ISLE1", qty: 1 }, { code: "ISLE2", qty: 1 }] },
+  ]);
+  const versions = {
+    island: [{ code: "ISLE1", qty: 2, set: "war", cn: "253" }], // même quantité, autre répartition
+
+    "steam vents": [{ code: "AAAAA", qty: 1, set: "grn", cn: "257" }],
+    "sol ring": [{ code: "TTTTT", qty: 1, set: "c21", cn: "263" }], // autre version : passe par la mise à jour du montage
+    counterspell: [{ code: "CCCCC", qty: 1, set: "mh2", cn: 267 }],
+  };
+  assert.deepEqual(await bg.send({ type: "SET_DECK_VERSIONS", payload: { deckId: "a", versions } }), { ok: true });
+  const expected = [
+    { name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1, set: "grn", cn: "257" }] },
+    { name: "Sol Ring", qty: 1, versions: [{ code: "SSSSS", qty: 1 }] },
+    { name: "Counterspell", qty: 1, versions: [{ code: "CCCCC", qty: 1, set: "mh2", cn: "" }] },
+    { name: "Island", qty: 2, versions: [{ code: "ISLE1", qty: 1 }, { code: "ISLE2", qty: 1 }] },
+  ];
+  assert.deepEqual((await bg.state()).builtDecks.a.cards, expected);
+
+  // Page qui n'a pas (encore) lu les éditions, ou même constat renvoyé.
+  const writes = bg.counts.stateWrites;
+  const without = { "steam vents": [{ code: "AAAAA", qty: 1 }] };
+  assert.deepEqual(await bg.send({ type: "SET_DECK_VERSIONS", payload: { deckId: "a", versions: without } }), { ok: true, unchanged: true });
+  assert.deepEqual(await bg.send({ type: "SET_DECK_VERSIONS", payload: { deckId: "a", versions } }), { ok: true, unchanged: true });
+  assert.equal(bg.counts.stateWrites, writes);
+  assert.deepEqual((await bg.state()).builtDecks.a.cards, expected);
 });

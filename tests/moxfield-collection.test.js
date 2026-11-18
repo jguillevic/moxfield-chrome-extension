@@ -5,8 +5,14 @@
 // requêtes reçues.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createMoxfieldCollection, computeCollectionDiff } = require("../moxfield-collection.js");
-const { loadI18n } = require("./helpers");
+const fs = require("fs");
+const path = require("path");
+const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings } = require("../moxfield-collection.js");
+const { loadI18n, FIXTURES_DIR } = require("./helpers");
+
+// Réponse de l'API d'un deck : structure observée (novembre 2026), réduite
+// aux champs utiles, avec les codes de la page de test text.html.
+const DECK = JSON.parse(fs.readFileSync(path.join(FIXTURES_DIR, "api", "deck.json"), "utf8"));
 
 const CSV = '"Count","Tradelist Count","Name","Edition"\n"2","0","Sol Ring","c21"\n';
 const LOGGED_IN = [
@@ -25,11 +31,11 @@ function jsonResponse(status, body) {
 }
 
 // overrides : réponse (ou exception) à renvoyer pour une étape donnée
-// ("refresh", "download", "csv").
-function fakeMoxfield({ cookies = LOGGED_IN, overrides = {} } = {}) {
+// ("refresh", "download", "csv", "deck").
+function fakeMoxfield({ cookies = LOGGED_IN, overrides = {}, now } = {}) {
   const requests = [];
   const fetch = async (url, options = {}) => {
-    const step = url.includes("/token/refresh") ? "refresh" : url.includes("/token/download") ? "download" : "csv";
+    const step = url.includes("/token/refresh") ? "refresh" : url.includes("/token/download") ? "download" : url.includes("/decks/all/") ? "deck" : "csv";
     requests.push({ step, url, options });
     if (step in overrides) {
       const o = overrides[step];
@@ -38,9 +44,10 @@ function fakeMoxfield({ cookies = LOGGED_IN, overrides = {} } = {}) {
     }
     if (step === "refresh") return jsonResponse(200, { access_token: "session-token", token_type: "Bearer", expires_in_minutes: 15 });
     if (step === "download") return jsonResponse(200, { access_token: "export-token", token_type: "Bearer", expires_in_minutes: 1 });
+    if (step === "deck") return jsonResponse(200, DECK);
     return jsonResponse(200, CSV);
   };
-  const client = createMoxfieldCollection({ fetch, getCookies: async () => cookies, i18n: loadI18n() });
+  const client = createMoxfieldCollection({ fetch, getCookies: async () => cookies, i18n: loadI18n(), now });
   return { client, requests };
 }
 
@@ -153,4 +160,76 @@ test("computeCollectionDiff : ajouts, retraits, changements de quantité", () =>
 
 test("computeCollectionDiff : quantité nulle équivaut à une carte absente", () => {
   assert.deepEqual(computeCollectionDiff({ "sol ring": { name: "Sol Ring", qty: 0 } }, {}), []);
+});
+
+// --- Éditions des cartes d'un deck (API du deck) ---
+
+const EXPECTED_PRINTINGS = {
+  ZOwRD: { set: "rav", cn: "87" },
+  E0aWJ: { set: "pktk", cn: "199p" },
+  xRXAR: { set: "mh3", cn: "235" },
+  SWAMP1: { set: "war", cn: "256" },
+  SWAMP2: { set: "pwar", cn: "war-115" },
+  bIrDs: { set: "plst", cn: "52★" },
+  mAyBe: { set: "c21", cn: "263" },
+};
+
+test("extractDeckPrintings : édition et numéro de chaque impression, en minuscules", () => {
+  // Toutes les zones (« Considering » comprise), impressions multiples d'une
+  // même carte (printingData), numéros qui ne sont pas des nombres.
+  assert.deepEqual(extractDeckPrintings(DECK), EXPECTED_PRINTINGS);
+});
+
+test("extractDeckPrintings : réponse qui n'est pas un deck, entrées incomplètes", () => {
+  assert.equal(extractDeckPrintings(null), null);
+  assert.equal(extractDeckPrintings({ message: "Not found" }), null);
+  const partial = { boards: { mainboard: { cards: { a: { card: { id: "AAAAA" } }, b: { quantity: 1 }, c: null, d: { card: { id: "DDDDD", set: "c21" } } } }, attractions: null } };
+  assert.deepEqual(extractDeckPrintings(partial), { DDDDD: { set: "c21", cn: "" } });
+});
+
+test("éditions d'un deck : renouvellement puis lecture du deck, avec le jeton", async () => {
+  const { client, requests } = fakeMoxfield();
+  assert.deepEqual(await client.fetchDeckPrintings("abc123"), EXPECTED_PRINTINGS);
+  assert.deepEqual(requests.map((r) => r.step), ["refresh", "deck"]);
+  const deck = requests[1];
+  assert.equal(deck.url, "https://api2.moxfield.com/v3/decks/all/abc123");
+  assert.equal(deck.options.method, undefined, "simple lecture");
+  assert.equal(deck.options.headers.Authorization, "Bearer session-token");
+});
+
+test("éditions d'un deck : le jeton est réutilisé quelques minutes, jamais pour la collection", async () => {
+  const clock = { now: 1000 };
+  const { client, requests } = fakeMoxfield({ now: () => clock.now });
+  const refreshes = () => requests.filter((r) => r.step === "refresh").length;
+  await client.fetchDeckPrintings("abc123");
+  clock.now += 9 * 60 * 1000;
+  await client.fetchDeckPrintings("def456");
+  assert.equal(refreshes(), 1, "plusieurs decks d'affilée : un seul renouvellement");
+  clock.now += 2 * 60 * 1000;
+  await client.fetchDeckPrintings("abc123");
+  assert.equal(refreshes(), 2, "jeton trop ancien : redemandé");
+  await client.downloadCollectionCSV();
+  assert.equal(refreshes(), 3, "la collection redemande toujours un jeton");
+  await client.fetchDeckPrintings("abc123");
+  assert.equal(refreshes(), 3, "…que la lecture d'un deck peut réutiliser");
+});
+
+test("éditions d'un deck : après un échec, le jeton n'est pas réutilisé", async () => {
+  const overrides = { deck: jsonResponse(401, {}) };
+  const { client, requests } = fakeMoxfield({ overrides });
+  await rejectsWith(client.fetchDeckPrintings("abc123"), "deck-unavailable");
+  delete overrides.deck;
+  await client.fetchDeckPrintings("abc123");
+  assert.equal(requests.filter((r) => r.step === "refresh").length, 2);
+});
+
+test("éditions d'un deck : erreurs", async () => {
+  const failing = (overrides, cookies) => fakeMoxfield({ overrides, cookies }).client.fetchDeckPrintings("abc123");
+  await rejectsWith(failing({ deck: jsonResponse(404, {}) }), "deck-unavailable", /introuvable ou privé/);
+  await rejectsWith(failing({ deck: jsonResponse(403, "<html>") }), "blocked");
+  await rejectsWith(failing({ deck: jsonResponse(500, "") }), "api-changed");
+  await rejectsWith(failing({ deck: jsonResponse(200, "<html>oops</html>") }), "api-changed", /illisible/);
+  await rejectsWith(failing({ deck: jsonResponse(200, { cards: [] }) }), "api-changed", /pas la description d'un deck/);
+  await rejectsWith(failing({ deck: new TypeError("Failed to fetch") }), "network");
+  await rejectsWith(failing({}, [{ name: "_ga", value: "x" }]), "not-logged-in");
 });

@@ -9,6 +9,8 @@
 //   deck-built     { deckId, deckName, url, builtAt, cardCount }
 //   deck-unbuilt   { deckId, deckName, url, cards }
 //   deck-updated   { deckId, deckName, url, changes, changeCount?, previousCards, updatedAt }
+//     changes : { name, from, to }, ou { name, from, to, version: true } pour
+//     une carte dont seule la version (impression) a changé.
 // changeCount : nombre total quand le détail est tronqué (cf. compactEntry).
 //   reset          { builtDecks }
 //   drive-restore  {}
@@ -65,14 +67,18 @@ function createHistory(normalizeName, { tn, t }) {
   }
 
   // Différences de quantités entre deux listes de cartes, par nom (cumulées
-  // si un nom apparaît plusieurs fois), triées : [{ name, from, to }].
+  // si un nom apparaît plusieurs fois), triées : [{ name, from, to }]. Même
+  // quantité mais autre version enregistrée : { name, from, to, version: true }
+  // (même règle que computeDeckDiff dans deck-scraper.js : rien à comparer
+  // si aucune version n'était enregistrée).
   function cardsDiff(fromCards, toCards) {
     const tally = (cards) => {
       const map = new Map();
       for (const c of cards) {
         const key = normalizeName(c.name);
-        const prev = map.get(key);
-        map.set(key, { name: prev ? prev.name : c.name, qty: (prev ? prev.qty : 0) + c.qty });
+        const prev = map.get(key) || { name: c.name, qty: 0, versions: [] };
+        const versions = [...prev.versions, ...(c.versions || []).map((v) => `${v.code}×${v.qty}`)].sort();
+        map.set(key, { name: prev.name, qty: prev.qty + c.qty, versions });
       }
       return map;
     };
@@ -83,6 +89,9 @@ function createHistory(normalizeName, { tn, t }) {
       const from = before.has(key) ? before.get(key).qty : 0;
       const to = after.has(key) ? after.get(key).qty : 0;
       if (from !== to) changes.push({ name: (after.get(key) || before.get(key)).name, from, to });
+      else if (before.get(key).versions.length > 0 && before.get(key).versions.join() !== after.get(key).versions.join()) {
+        changes.push({ name: after.get(key).name, from, to, version: true });
+      }
     }
     return changes.sort((x, y) => x.name.localeCompare(y.name));
   }

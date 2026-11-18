@@ -117,3 +117,18 @@ test("addEntry et mergeHistories : les anciennes grosses entrées sont compacté
   const [merged] = h.mergeHistories([old], []);
   assert.equal(merged.changes.length, 200);
 });
+
+test("cardsDiff : même quantité, autre version enregistrée", () => {
+  const from = [
+    { name: "Sol Ring", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] },
+    { name: "Swamp", qty: 3, versions: [{ code: "S1", qty: 2 }, { code: "S2", qty: 1 }] },
+    { name: "Counterspell", qty: 1 },
+  ];
+  const to = [
+    { name: "Sol Ring", qty: 1, versions: [{ code: "BBBBB", qty: 1 }] },
+    { name: "Swamp", qty: 3, versions: [{ code: "S2", qty: 1 }, { code: "S1", qty: 2 }] },
+    // Aucune version n'était enregistrée : rien à comparer.
+    { name: "Counterspell", qty: 1, versions: [{ code: "CCCCC", qty: 1 }] },
+  ];
+  assert.deepEqual(h.cardsDiff(from, to), [{ name: "Sol Ring", from: 1, to: 1, version: true }]);
+});

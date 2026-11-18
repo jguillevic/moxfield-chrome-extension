@@ -60,6 +60,14 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
   les cartes des decks montés.
 - Le stock est suivi par nom de carte (toutes éditions confondues), stocké
   sous forme normalisée (`normalizeName`).
+- Les éditions ne servent qu'à refuser une version déjà prise par un autre
+  deck monté (`computeVersionConflicts`). Le code Moxfield d'une version
+  (page du deck) et l'édition de la collection (CSV) ne sont reliés que par
+  l'API du deck (`GET_DECK_PRINTINGS`, versions `{code, qty, set, cn}`) :
+  sans elle, ne jamais supposer quel code correspond à quelle édition
+  (repli par recoupement), et dans le doute laisser monter. Finition et
+  langue ne sont pas distinguées. Priorité au stock, puis à la version
+  différente.
 - Terrains de base (Plains, Island, Swamp, Mountain, Forest) : jamais
   bloquants, jamais comptés dans les chiffres de faisabilité, seulement un
   avertissement.

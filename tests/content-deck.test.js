@@ -34,7 +34,9 @@ const FULL_STOCK = stockOf({
 });
 
 // lang : langue du navigateur (français par défaut).
-function openDeckPage(state, lang = "fr") {
+// handle : réponse imposée à un message dès le chargement de la page (cf.
+// page.handle).
+function openDeckPage(state, lang = "fr", handle = null) {
   const html = fs.readFileSync(path.join(FIXTURES_DIR, "text.html"), "utf8");
   const dom = new JSDOM(html, { url: "https://www.moxfield.com/decks/abc123", runScripts: "outside-only" });
   const win = dom.window;
@@ -59,7 +61,7 @@ function openDeckPage(state, lang = "fr") {
     close: () => win.close(),
     sent: [],
     // Réponse imposée à un message (ex. erreur levée), sinon comportement normal.
-    handle: null,
+    handle,
   };
   // Comme le service worker (GET_DECK_CONTEXT) : seulement le stock des
   // cartes demandées (face avant d'une double face comprise) et de celles
@@ -180,6 +182,51 @@ test("la page ne demande que le stock des cartes du deck, jamais l'état complet
   assert.equal(request.payload.deckId, "abc123");
 });
 
+// --- Fenêtre de montage ---
+
+const builds = (page) => page.sent.filter((m) => m.type === "TOGGLE_DECK_BUILT");
+const toasts = (page) => [...page.win.document.querySelectorAll(".msm-toast")].map((el) => el.textContent);
+
+// Ouvre la fenêtre de montage, Birds of Paradise passée dans une version
+// possédée pour que seul le stock puisse bloquer.
+async function openBuildModal(page) {
+  const doc = page.win.document;
+  const marker = doc.querySelector('[id^="collection_pt_"]');
+  marker.id = marker.id.replace("collection_pt_", "collection_full_");
+  await waitFor(() => buttonText(page).includes("dispo"), 2000, "faisabilité affichée");
+  page.button().click();
+  await waitFor(() => doc.querySelector("#msm-card-count") && doc.querySelector("#msm-card-count").textContent, 2000, "fenêtre ouverte");
+  return doc;
+}
+
+test("montage : refusé si une carte possédée en un exemplaire est déjà dans un autre deck monté", async (t) => {
+  // Cas constaté en vrai (novembre 2026) : un terrain possédé en x1, déjà
+  // pris par un deck monté, ne doit pas pouvoir partir dans un second deck.
+  const other = { name: "Autre deck", url: "", cards: [{ name: "Golgari Thug", qty: 1 }], builtAt: 1 };
+  const page = openDeckPage({ stock: { ...FULL_STOCK, "golgari thug": { name: "Golgari Thug", qty: 0 } }, builtDecks: { other } });
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  await waitFor(() => doc.querySelector("#msm-shortage-warning").textContent.includes("Golgari Thug"), 2000, "manque affiché");
+  assert.match(doc.querySelector("#msm-shortage-warning").textContent, /Autre deck \(1\)/, "deck qui détient la carte");
+
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
+  assert.deepEqual(toasts(page), ["Montage impossible — stock insuffisant : Golgari Thug (manque 1)"]);
+  assert.deepEqual(builds(page), [], "deck monté malgré le stock insuffisant");
+});
+
+test("montage : accepté quand tout est en stock libre", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const [{ payload }] = builds(page);
+  assert.equal(payload.built, true);
+  assert.equal(payload.deckId, "abc123");
+  assert.ok(payload.cards.some((c) => c.name === "Golgari Thug" && c.qty === 1));
+});
+
 // --- Rapports d'erreurs ---
 
 const reportsOf = (page) => page.sent.filter((m) => m.type === "REPORT_ERROR").map((m) => m.payload);
@@ -246,4 +293,212 @@ test("navigateur en anglais : bouton et fenêtre de montage en anglais", async (
   assert.equal(doc.querySelector("#msm-modal-title").textContent, "Mark this deck as physically built");
   assert.equal(doc.querySelector("#msm-confirm").textContent, "Confirm the build");
   assert.equal(doc.querySelector("#msm-card-count").textContent, "7 cards in total (5 distinct names)");
+});
+
+// --- Version déjà utilisée par un autre deck monté ---
+
+// Golgari Thug possédée en deux éditions (un exemplaire de chaque), dont un
+// exemplaire déjà dans un autre deck monté, dans la version otherCode. Sur
+// la page de test, le deck la demande dans la version « ZOwRD ».
+function thugInAnotherDeck(otherCode) {
+  const printings = [{ set: "rav", cn: "87", qty: 1 }, { set: "dds", cn: "50", qty: 1 }];
+  return {
+    stock: { ...FULL_STOCK, "golgari thug": { name: "Golgari Thug", qty: 1, printings } },
+    builtDecks: {
+      other: { name: "Autre deck", url: "", cards: [{ name: "Golgari Thug", qty: 1, versions: [{ code: otherCode, qty: 1 }] }], builtAt: 1 },
+    },
+  };
+}
+
+test("montage : refusé si la même version est déjà dans un autre deck monté, alors qu'il reste un exemplaire d'une autre édition", async (t) => {
+  // Cas constaté en vrai (novembre 2026) : un terrain possédé en x1 dans
+  // deux éditions a pu être monté deux fois dans la même version.
+  const page = openDeckPage(thugInAnotherDeck("ZOwRD"));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  assert.match(buttonTitle(page), /1 dont la version est déjà dans un autre deck/, "pastille du bouton");
+  const warning = doc.querySelector("#msm-version-warning");
+  await waitFor(() => warning.textContent.includes("Golgari Thug"), 2000, "version déjà utilisée affichée");
+  assert.match(warning.textContent, /dans : Autre deck \(1\)/);
+  assert.match(warning.textContent, /tu possèdes : RAV 87 ×1, DDS 50 ×1/);
+  assert.equal(doc.querySelector("#msm-shortage-warning").textContent, "", "ce n'est pas un manque de stock");
+  assert.match(doc.querySelector("#msm-blocking-summary").textContent, /1 carte bloque le montage/);
+
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
+  assert.deepEqual(toasts(page), ["Montage impossible — version déjà utilisée par un autre deck monté pour : Golgari Thug"]);
+  assert.deepEqual(builds(page), []);
+});
+
+test("montage : accepté si l'autre deck détient une autre version, les versions sont enregistrées", async (t) => {
+  const page = openDeckPage(thugInAnotherDeck("AUTRE"));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const cards = builds(page)[0].payload.cards;
+  assert.deepEqual(cards.find((c) => c.name === "Golgari Thug"), { name: "Golgari Thug", qty: 1, versions: [{ code: "ZOwRD", qty: 1 }] });
+  assert.deepEqual(cards.find((c) => c.name === "Swamp"), { name: "Swamp", qty: 3, versions: [{ code: "SWAMP1", qty: 3 }] });
+});
+
+test("montage : quantité modifiée à la main, la carte est enregistrée sans version", async (t) => {
+  const page = openDeckPage({ stock: { ...FULL_STOCK, "golgari thug": { name: "Golgari Thug", qty: 2 } }, builtDecks: {} });
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const textarea = doc.querySelector("#msm-cards-textarea");
+  textarea.value = textarea.value.replace("1 Golgari Thug", "2 Golgari Thug").replace("3 Swamp", "2 Swamp");
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const cards = builds(page)[0].payload.cards;
+  // Un exemplaire de plus : sa version est inconnue, celle du premier reste.
+  assert.deepEqual(cards.find((c) => c.name === "Golgari Thug"), { name: "Golgari Thug", qty: 2, versions: [{ code: "ZOwRD", qty: 1 }] });
+  // Un exemplaire de moins : on ne sait plus lesquels restent.
+  assert.deepEqual(cards.find((c) => c.name === "Swamp"), { name: "Swamp", qty: 2 });
+});
+
+// Deck de la page de test tel qu'il serait enregistré au montage.
+const BUILT_CARDS = [
+  { name: "Birds of Paradise", qty: 1 },
+  { name: "Golgari Thug", qty: 1 },
+  { name: "Revitalizing Repast // Old-Growth Grove", qty: 1 },
+  { name: "Sidisi, Brood Tyrant", qty: 1 },
+  { name: "Swamp", qty: 3 },
+];
+const builtDeck = (cards) => ({ abc123: { name: "Deck", url: "", cards, builtAt: 1 } });
+const sentOf = (page, type) => page.sent.filter((m) => m.type === type).map((m) => m.payload);
+
+test("deck monté sans versions enregistrées : celles de la page lui sont ajoutées, une seule fois", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(BUILT_CARDS) });
+  t.after(page.close);
+  await waitFor(() => sentOf(page, "SET_DECK_VERSIONS").length > 0, 2000, "versions envoyées");
+  assert.deepEqual(sentOf(page, "SET_DECK_VERSIONS"), [
+    {
+      deckId: "abc123",
+      versions: {
+        "golgari thug": [{ code: "ZOwRD", qty: 1 }],
+        "revitalizing repast // old-growth grove": [{ code: "xRXAR", qty: 1 }],
+        "sidisi, brood tyrant": [{ code: "E0aWJ", qty: 1 }],
+        swamp: [{ code: "SWAMP1", qty: 3 }],
+      },
+    },
+  ]);
+  // Contrôles suivants (le stock change ailleurs) : pas de nouvel envoi.
+  page.setStock(FULL_STOCK);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(sentOf(page, "SET_DECK_VERSIONS").length, 1);
+  assert.ok(!buttonText(page).includes("⚠️"), "deck pas signalé comme modifié");
+});
+
+test("deck monté : version changée sur Moxfield, signalé comme modifié sans toucher aux versions enregistrées", async (t) => {
+  const cards = BUILT_CARDS.map((c) => (c.name === "Golgari Thug" ? { ...c, versions: [{ code: "ANCIEN", qty: 1 }] } : c));
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  assert.deepEqual(sentOf(page, "SET_DECK_PAGE_CHANGES").pop(), {
+    deckId: "abc123",
+    changes: [{ name: "Golgari Thug", from: 1, to: 1, version: true }],
+  });
+  assert.deepEqual(sentOf(page, "SET_DECK_VERSIONS"), [], "liste différente du montage : rien n'est complété");
+
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-update") && !doc.querySelector("#msm-update").hidden, 3000, "mise à jour proposée");
+  assert.match(doc.querySelector("#msm-deck-changes").textContent, /↻ Golgari Thug \(version changée\)/);
+  doc.querySelector("#msm-update").click();
+  await waitFor(() => sentOf(page, "UPDATE_BUILT_DECK").length > 0, 2000, "mise à jour envoyée");
+  const updated = sentOf(page, "UPDATE_BUILT_DECK")[0].cards;
+  assert.deepEqual(updated.find((c) => c.name === "Golgari Thug"), { name: "Golgari Thug", qty: 1, versions: [{ code: "ZOwRD", qty: 1 }] });
+  assert.deepEqual(updated.find((c) => c.name === "Birds of Paradise"), { name: "Birds of Paradise", qty: 1 });
+});
+
+// --- Éditions données par l'API du deck (GET_DECK_PRINTINGS) ---
+
+// Ce que le service worker répond pour le deck de la page de test.
+const PAGE_PRINTINGS = {
+  ZOwRD: { set: "dds", cn: "50" },
+  xRXAR: { set: "mh3", cn: "235" },
+  E0aWJ: { set: "ktk", cn: "199" },
+  SWAMP1: { set: "war", cn: "256" },
+};
+const printingsAnswer = (answer) => (msg) => (msg.type === "GET_DECK_PRINTINGS" ? answer : undefined);
+
+// Golgari Thug possédée en x2 (RAV) et x1 (DDS), deux exemplaires libres ;
+// l'autre deck monté détient la DDS, sous un autre code que celui de la
+// page. Le recoupement n'y voit que deux versions différentes.
+function thugUnequalEditions() {
+  const printings = [{ set: "dds", cn: "50", qty: 1 }, { set: "rav", cn: "87", qty: 2 }];
+  const taken = [{ code: "AUTRE", qty: 1, set: "dds", cn: "50" }];
+  return {
+    stock: { ...FULL_STOCK, "golgari thug": { name: "Golgari Thug", qty: 2, printings } },
+    builtDecks: { other: { name: "Autre deck", url: "", cards: [{ name: "Golgari Thug", qty: 1, versions: taken }], builtAt: 1 } },
+  };
+}
+
+test("montage : refusé quand l'API du deck montre que l'édition demandée, possédée en x1, est déjà montée", async (t) => {
+  const page = openDeckPage(thugUnequalEditions(), "fr", printingsAnswer({ ok: true, printings: PAGE_PRINTINGS }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const warning = doc.querySelector("#msm-version-warning");
+  await waitFor(() => warning.textContent.includes("Golgari Thug"), 2000, "version déjà utilisée affichée");
+  assert.match(warning.textContent, /dans : Autre deck \(1\)/);
+  assert.match(buttonTitle(page), /1 dont la version est déjà dans un autre deck/, "pastille du bouton");
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
+  assert.deepEqual(toasts(page), ["Montage impossible — version déjà utilisée par un autre deck monté pour : Golgari Thug"]);
+  assert.deepEqual(builds(page), []);
+});
+
+test("montage : sans réponse de l'API du deck, repli sur le recoupement, sans erreur", async (t) => {
+  const page = openDeckPage(thugUnequalEditions(), "fr", printingsAnswer({ ok: false, code: "not-logged-in", error: "Pas connecté" }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const cards = builds(page)[0].payload.cards;
+  assert.deepEqual(cards.find((c) => c.name === "Golgari Thug"), { name: "Golgari Thug", qty: 1, versions: [{ code: "ZOwRD", qty: 1 }] });
+  assert.deepEqual(toasts(page), ["Deck marqué comme monté, stock décrémenté."]);
+  assert.deepEqual(reportsOf(page), []);
+  // Contrôles suivants (le stock change ailleurs) : mêmes versions, pas de
+  // nouvelle demande.
+  const asked = sentOf(page, "GET_DECK_PRINTINGS");
+  assert.deepEqual(asked[0], { deckId: "abc123" });
+  page.setStock({ ...page.state.stock });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(sentOf(page, "GET_DECK_PRINTINGS").length, asked.length, "échec : pas redemandé à chaque contrôle");
+});
+
+test("montage : les versions sont enregistrées avec leur édition, pas redemandée ensuite", async (t) => {
+  const page = openDeckPage(thugInAnotherDeck("AUTRE"), "fr", printingsAnswer({ ok: true, printings: PAGE_PRINTINGS }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  doc.querySelector("#msm-confirm").click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const cards = builds(page)[0].payload.cards;
+  assert.deepEqual(cards.find((c) => c.name === "Golgari Thug"), {
+    name: "Golgari Thug",
+    qty: 1,
+    versions: [{ code: "ZOwRD", qty: 1, set: "dds", cn: "50" }],
+  });
+  assert.deepEqual(cards.find((c) => c.name === "Swamp"), { name: "Swamp", qty: 3, versions: [{ code: "SWAMP1", qty: 3, set: "war", cn: "256" }] });
+  // Contrôles suivants (le stock change ailleurs) : mêmes versions, pas de
+  // nouvelle demande.
+  const asked = sentOf(page, "GET_DECK_PRINTINGS");
+  assert.deepEqual(asked[0], { deckId: "abc123" });
+  page.setStock({ ...page.state.stock });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(sentOf(page, "GET_DECK_PRINTINGS").length, asked.length, "éditions connues : pas redemandées");
+});
+
+test("deck monté avant la lecture des éditions : elles sont ajoutées à ses versions", async (t) => {
+  const cards = BUILT_CARDS.map((c) => (c.name === "Golgari Thug" ? { ...c, versions: [{ code: "ZOwRD", qty: 1 }] } : c));
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRINTINGS }));
+  t.after(page.close);
+  const withEdition = () => sentOf(page, "SET_DECK_VERSIONS").find((p) => p.versions["golgari thug"] && p.versions["golgari thug"][0].set);
+  await waitFor(withEdition, 2000, "éditions envoyées");
+  assert.deepEqual(withEdition().versions["golgari thug"], [{ code: "ZOwRD", qty: 1, set: "dds", cn: "50" }]);
+  // Toutes les éditions de la page sont connues : plus aucune demande.
+  page.setStock({ ...FULL_STOCK });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(sentOf(page, "GET_DECK_PRINTINGS").length, 1);
+  assert.ok(!buttonText(page).includes("⚠️"), "deck pas signalé comme modifié");
 });

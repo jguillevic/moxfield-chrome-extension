@@ -474,3 +474,32 @@ test("navigateur en anglais : popup en anglais, dates comprises", async (t) => {
   await openStock(p);
   assert.deepEqual([...p.$("stock-table").querySelectorAll("th")].map((th) => th.textContent), ["Card", "Free", "Decks"]);
 });
+
+// --- Changement de version (impression) d'une carte ---
+
+test("changement de version seul : affiché sans quantité, dans le badge « Modifié » et l'historique", async (t) => {
+  const versionChange = { name: "Steam Vents", from: 1, to: 1, version: true };
+  const deck = {
+    name: "Niv-Mizzet",
+    url: "https://moxfield.com/decks/a",
+    cards: [{ name: "Steam Vents", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] }],
+    pageChanges: [versionChange, { name: "Sol Ring", from: 0, to: 1 }],
+    pageCheckedAt: new Date(2026, 10, 18, 10, 0).getTime(),
+  };
+  const history = [{ id: "h1", at: deck.pageCheckedAt, otherDevice: false, title: "Montage mis à jour", changes: [versionChange] }];
+  const p = openPopup({
+    GET_STATE: { ok: true, state: { stock: {}, builtDecks: { a: deck } } },
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_HISTORY: { ok: true, entries: history },
+  });
+  t.after(p.close);
+  await settle();
+  const badge = p.$("built-list").querySelector(".badge-changed");
+  assert.match(badge.title, /↻ Steam Vents, \+1 Sol Ring/);
+
+  await openHistory(p);
+  assert.deepEqual(
+    [...p.$("history-list").querySelectorAll("li")].map((li) => li.textContent),
+    ["↻ Steam Vents (version changée)"]
+  );
+});

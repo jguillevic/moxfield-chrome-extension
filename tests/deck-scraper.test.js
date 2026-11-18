@@ -156,3 +156,83 @@ function parseLine(line) {
   const m = line.trim().match(/^(\d+)\s+(.+)$/);
   return { qty: parseInt(m[1], 10), name: m[2].trim() };
 }
+
+// --- Version (impression) de chaque carte ---
+
+for (const view of VIEWS) {
+  test(`${view.name} : version lue pour les cartes possédées dans la version du deck`, () => {
+    const cards = loadPage(view.fixture, view.viewMode).scrapeCardsGuess();
+    const versionsOf = (name) => cards.find((c) => c.name.startsWith(name)).versions;
+    assert.deepEqual(versionsOf("Sidisi"), [{ code: "E0aWJ", qty: 1 }]);
+    // Carte foil : même code que la version normale (le marqueur de
+    // collection ne porte pas le suffixe "F0").
+    assert.deepEqual(versionsOf("Golgari Thug"), [{ code: "ZOwRD", qty: 1 }]);
+    assert.deepEqual(versionsOf("Revitalizing Repast"), [{ code: "xRXAR", qty: 1 }]);
+    assert.deepEqual(versionsOf("Swamp"), [{ code: "SWAMP1", qty: 3 }], "exemplaires cumulés");
+    // Possédée dans une autre version : aucune version retenue.
+    assert.deepEqual(versionsOf("Birds of Paradise"), []);
+  });
+}
+
+test("computeDeckDiff : même quantité, autre version que celle du montage", () => {
+  const { computeDeckDiff } = loadPage("text.html", "table");
+  const built = [
+    { name: "Sol Ring", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] },
+    { name: "Swamp", qty: 3, versions: [{ code: "SWAMP1", qty: 2 }, { code: "SWAMP2", qty: 1 }] },
+    { name: "Counterspell", qty: 1 },
+  ];
+  const page = [
+    { name: "Sol Ring", qty: 1, printingStatus: "full", versions: [{ code: "BBBBB", qty: 1 }] },
+    { name: "Swamp", qty: 3, printingStatus: "full", versions: [{ code: "SWAMP2", qty: 1 }, { code: "SWAMP1", qty: 2 }] },
+    { name: "Counterspell", qty: 1, printingStatus: "full", versions: [{ code: "CCCCC", qty: 1 }] },
+  ];
+  assert.deepEqual(computeDeckDiff(built, page), [{ name: "Sol Ring", from: 1, to: 1, version: true }]);
+  // Passage à une version non possédée : plus aucune version lue.
+  const notOwned = [{ ...page[0], printingStatus: "partial", versions: [] }, page[1], page[2]];
+  assert.deepEqual(computeDeckDiff(built, notOwned), [{ name: "Sol Ring", from: 1, to: 1, version: true }]);
+});
+
+test("computeDeckDiff : version illisible sur la page (rendu en cours), rien de conclu", () => {
+  const { computeDeckDiff } = loadPage("text.html", "table");
+  const built = [{ name: "Sol Ring", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] }];
+  assert.deepEqual(computeDeckDiff(built, [{ name: "Sol Ring", qty: 1, printingStatus: "unknown", versions: [] }]), []);
+});
+
+test("versionsToRecord : versions de la page pour les cartes du montage qui n'en ont pas", () => {
+  const { versionsToRecord } = loadPage("text.html", "table");
+  const built = [
+    { name: "Sol Ring", qty: 1 },
+    { name: "Counterspell", qty: 1, versions: [{ code: "CCCCC", qty: 1 }] },
+    { name: "Swamp", qty: 3 },
+    { name: "Birds of Paradise", qty: 1 },
+  ];
+  const page = [
+    { name: "sol ring", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] },
+    { name: "Counterspell", qty: 1, versions: [{ code: "DDDDD", qty: 1 }] },
+    { name: "Swamp", qty: 4, versions: [{ code: "SWAMP1", qty: 4 }] },
+    { name: "Birds of Paradise", qty: 1, versions: [] },
+  ];
+  // Version déjà enregistrée, quantité différente ou version non lue : rien.
+  assert.deepEqual(versionsToRecord(built, page), { "sol ring": [{ code: "AAAAA", qty: 1 }] });
+  assert.equal(versionsToRecord([built[1]], page), null);
+});
+
+test("versionsToRecord : édition apprise depuis (API du deck) pour une version déjà enregistrée", () => {
+  const { versionsToRecord } = loadPage("text.html", "table");
+  const built = [
+    { name: "Sol Ring", qty: 1, versions: [{ code: "AAAAA", qty: 1 }] },
+    { name: "Counterspell", qty: 1, versions: [{ code: "CCCCC", qty: 1, set: "mh2", cn: "267" }] },
+    { name: "Swamp", qty: 1, versions: [{ code: "SWAMP1", qty: 1 }] },
+    { name: "Island", qty: 2, versions: [{ code: "ISLE1", qty: 1 }, { code: "ISLE2", qty: 1 }] },
+  ];
+  const page = [
+    // Même quantité, mais plus répartie de la même façon entre les versions.
+    { name: "Island", qty: 2, versions: [{ code: "ISLE1", qty: 2, set: "war", cn: "253" }] },
+    { name: "Sol Ring", qty: 1, versions: [{ code: "AAAAA", qty: 1, set: "c21", cn: "263" }] },
+    { name: "Counterspell", qty: 1, versions: [{ code: "CCCCC", qty: 1, set: "mh2", cn: "267" }] },
+    { name: "Swamp", qty: 1, versions: [{ code: "SWAMP2", qty: 1, set: "war", cn: "256" }] },
+  ];
+  // Édition déjà enregistrée, ou autre version que celle du montage : rien.
+  assert.deepEqual(versionsToRecord(built, page), { "sol ring": [{ code: "AAAAA", qty: 1, set: "c21", cn: "263" }] });
+  assert.equal(versionsToRecord(built.slice(1), page), null);
+});
