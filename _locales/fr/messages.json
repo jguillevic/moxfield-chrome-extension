@@ -572,6 +572,21 @@
   "shortageShort": {
     "message": "$1 (manque $2)"
   },
+  "shortagePriceEach": {
+    "message": "$1 ($2 l'unité)"
+  },
+  "shortagePriceTotal": {
+    "message": "Coût des cartes manquantes : $1"
+  },
+  "shortagePricePartial_one": {
+    "message": "Coût des cartes manquantes : au moins $2 ($1 carte sans prix)"
+  },
+  "shortagePricePartial_other": {
+    "message": "Coût des cartes manquantes : au moins $2 ($1 cartes sans prix)"
+  },
+  "shortagePriceSource": {
+    "message": "Prix Cardmarket de la version du deck (la moins chère s'il en utilise plusieurs), donnés par Moxfield."
+  },
   "cardmarketCopyButton": {
     "message": "Copier les cartes manquantes pour Cardmarket"
   },
@@ -709,5 +724,191 @@
   },
   "buildDone": {
     "message": "Deck marqué comme monté, stock décrémenté."
+  },
+  "buildWithProxies": {
+    "message": "Monter avec des proxies"
+  },
+  "updateWithProxies": {
+    "message": "Mettre à jour avec des proxies"
+  },
+  "proxiesHint": {
+    "message": "Les exemplaires manquants sont joués en proxy : ils ne sont pas pris à ton stock, et tu pourras les imprimer."
+  },
+  "buildDoneWithProxies_one": {
+    "message": "Deck monté avec $1 proxy — imprime-le depuis le popup ou cette fenêtre."
+  },
+  "buildDoneWithProxies_other": {
+    "message": "Deck monté avec $1 proxies — imprime-les depuis le popup ou cette fenêtre."
+  },
+  "updateDoneWithProxies_one": {
+    "message": "Montage mis à jour avec $1 nouveau proxy."
+  },
+  "updateDoneWithProxies_other": {
+    "message": "Montage mis à jour avec $1 nouveaux proxies."
+  },
+  "deckProxyInfo_one": {
+    "message": "Ce deck compte $1 proxy."
+  },
+  "deckProxyInfo_other": {
+    "message": "Ce deck compte $1 proxies."
+  },
+  "printProxies": {
+    "message": "Imprimer les proxies"
+  },
+  "printProxiesShort": {
+    "message": "Imprimer"
+  },
+  "deckProxiesList": {
+    "message": "Proxies : $1"
+  },
+  "replaceProxies_one": {
+    "message": "Remplacer $1 proxy"
+  },
+  "replaceProxies_other": {
+    "message": "Remplacer $1 proxies"
+  },
+  "replaceProxiesHint": {
+    "message": "Tu as maintenant la vraie carte en stock libre : elle remplacera le proxy et sera retirée du stock. $1"
+  },
+  "proxiesReplaced_one": {
+    "message": "$1 proxy remplacé par la vraie carte."
+  },
+  "proxiesReplaced_other": {
+    "message": "$1 proxies remplacés par la vraie carte."
+  },
+  "proxiesNothingToReplace": {
+    "message": "Aucun proxy à remplacer : la vraie carte n'est pas (ou plus) en stock libre."
+  },
+  "historyWithProxies": {
+    "message": "$1 (+ $2)"
+  },
+  "proxyCount_one": {
+    "message": "$1 proxy"
+  },
+  "proxyCount_other": {
+    "message": "$1 proxies"
+  },
+  "proxyAdded_one": {
+    "message": "$1 nouveau proxy"
+  },
+  "proxyAdded_other": {
+    "message": "$1 nouveaux proxies"
+  },
+  "historyProxiesReplaced_one": {
+    "message": "Deck « $2 » : $1 proxy remplacé par la vraie carte, retirée du stock libre"
+  },
+  "historyProxiesReplaced_other": {
+    "message": "Deck « $2 » : $1 proxies remplacés par la vraie carte, retirée du stock libre"
+  },
+  "proxiesPageTitle": {
+    "message": "Proxies à imprimer"
+  },
+  "proxiesPageTitleDeck": {
+    "message": "Proxies — $1"
+  },
+  "proxiesPrintHint": {
+    "message": "Imprime à 100 % (taille réelle), sans ajustement à la page. Une carte double face occupe deux emplacements : recto et verso, à glisser dos à dos dans la même pochette."
+  },
+  "proxiesMarkLabel": {
+    "message": "Mention « PROXY » sur les cartes"
+  },
+  "proxiesMarkText": {
+    "message": "PROXY"
+  },
+  "proxiesPrint": {
+    "message": "Imprimer"
+  },
+  "proxiesCredits": {
+    "message": "Images des cartes : Scryfall. Cartes et illustrations © Wizards of the Coast. Pour ton usage personnel uniquement."
+  },
+  "proxiesNone": {
+    "message": "Ce deck n'est plus monté, ou n'a aucun proxy."
+  },
+  "proxiesLoading": {
+    "message": "Recherche des images chez Scryfall…"
+  },
+  "proxiesSummary_one": {
+    "message": "$1 proxy à imprimer sur $2."
+  },
+  "proxiesSummary_other": {
+    "message": "$1 proxies à imprimer sur $2."
+  },
+  "proxiesSheets_one": {
+    "message": "$1 page"
+  },
+  "proxiesSheets_other": {
+    "message": "$1 pages"
+  },
+  "proxiesSomeMissing": {
+    "message": "$1 Image introuvable pour $2 emplacement(s) : le nom de la carte est imprimé à la place."
+  },
+  "proxiesScryfallError": {
+    "message": "Scryfall injoignable pour le moment : seuls les noms des cartes sont affichés. Réessaie plus tard (recharge la page)."
+  },
+  "moxfieldNotEditions": {
+    "message": "la réponse ne contient pas les éditions de la carte"
+  },
+  "moxfieldEditionNotSaved": {
+    "message": "Moxfield n'a pas enregistré l'édition demandée"
+  },
+  "ownedEditionsButton": {
+    "message": "Utiliser mes éditions"
+  },
+  "ownedEditionsHint": {
+    "message": "Change, dans ton deck Moxfield, l'édition de ces cartes pour une édition de ta collection (de préférence une qui n'est prise par aucun autre deck monté), puis recharge la page. Le deck n'est pas monté. Les cartes sans autre édition possédée restent telles quelles."
+  },
+  "ownedEditionsLoading": {
+    "message": "Recherche de tes éditions (collection et deck Moxfield)…"
+  },
+  "ownedEditionsDone_one": {
+    "message": "$1 carte passée sur l'édition de ta collection."
+  },
+  "ownedEditionsDone_other": {
+    "message": "$1 cartes passées sur l'édition de ta collection."
+  },
+  "ownedEditionsFailed_one": {
+    "message": "$1 carte passée, puis arrêt : $2"
+  },
+  "ownedEditionsFailed_other": {
+    "message": "$1 cartes passées, puis arrêt : $2"
+  },
+  "ownedEditionsSkipNotInDeck": {
+    "message": "introuvable dans le deck Moxfield"
+  },
+  "ownedEditionsSkipSeveral": {
+    "message": "plusieurs éditions dans la même ligne du deck, à changer à la main"
+  },
+  "ownedEditionsSkipNoOther": {
+    "message": "aucune autre édition dans ta collection"
+  },
+  "ownedEditionsSkipUnknown": {
+    "message": "l'édition de ta collection est introuvable chez Moxfield"
+  },
+  "ownedEditionsSkipChanged": {
+    "message": "modifiée sur Moxfield entre-temps, pas touchée"
+  },
+  "ownedEditionsZero": {
+    "message": "Aucune carte n'a pu être passée sur une édition de ta collection."
+  },
+  "ownedEditionsCount_one": {
+    "message": "$1 carte possédée dans une autre édition"
+  },
+  "ownedEditionsCount_other": {
+    "message": "$1 cartes possédées dans une autre édition"
+  },
+  "ownedEditionsPlanProgress": {
+    "message": "Recherche des éditions chez Moxfield : $1 / $2"
+  },
+  "ownedEditionsApplyProgress": {
+    "message": "Changement des cartes sur Moxfield : $1 / $2"
+  },
+  "ownedEditionsReloading": {
+    "message": "C'est fait, rechargement de la page…"
+  },
+  "ownedEditionsProgressHint": {
+    "message": "Ne ferme pas cet onglet et ne modifie pas le deck pendant ce temps."
+  },
+  "ownedEditionsSkipNotEnough": {
+    "message": "pas assez d'exemplaires dans une même édition de ta collection pour toute la ligne du deck"
   }
 }

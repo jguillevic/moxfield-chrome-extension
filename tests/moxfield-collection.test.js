@@ -7,12 +7,15 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings } = require("../moxfield-collection.js");
+const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, readCardEditions, editionChangeBody } = require("../moxfield-collection.js");
 const { loadI18n, FIXTURES_DIR } = require("./helpers");
 
 // Réponse de l'API d'un deck : structure observée (novembre 2026), réduite
 // aux champs utiles, avec les codes de la page de test text.html.
 const DECK = JSON.parse(fs.readFileSync(path.join(FIXTURES_DIR, "api", "deck.json"), "utf8"));
+// Éditions d'une carte : structure observée (novembre 2026), valeurs
+// construites pour la carte Golgari Thug du deck de test.
+const EDITIONS = JSON.parse(fs.readFileSync(path.join(FIXTURES_DIR, "api", "card-editions.json"), "utf8"));
 
 const CSV = '"Count","Tradelist Count","Name","Edition"\n"2","0","Sol Ring","c21"\n';
 const LOGGED_IN = [
@@ -35,7 +38,17 @@ function jsonResponse(status, body) {
 function fakeMoxfield({ cookies = LOGGED_IN, overrides = {}, now } = {}) {
   const requests = [];
   const fetch = async (url, options = {}) => {
-    const step = url.includes("/token/refresh") ? "refresh" : url.includes("/token/download") ? "download" : url.includes("/decks/all/") ? "deck" : "csv";
+    const step = url.includes("/token/refresh")
+      ? "refresh"
+      : url.includes("/token/download")
+        ? "download"
+        : url.includes("/decks/all/")
+          ? "deck"
+          : url.includes("/cards/editions/")
+            ? "editions"
+            : url.includes("/v2/decks/")
+              ? "edition-change"
+              : "csv";
     requests.push({ step, url, options });
     if (step in overrides) {
       const o = overrides[step];
@@ -45,6 +58,9 @@ function fakeMoxfield({ cookies = LOGGED_IN, overrides = {}, now } = {}) {
     if (step === "refresh") return jsonResponse(200, { access_token: "session-token", token_type: "Bearer", expires_in_minutes: 15 });
     if (step === "download") return jsonResponse(200, { access_token: "export-token", token_type: "Bearer", expires_in_minutes: 1 });
     if (step === "deck") return jsonResponse(200, DECK);
+    if (step === "editions") return jsonResponse(200, EDITIONS);
+    // Comme Moxfield : l'entrée modifiée, avec la nouvelle impression.
+    if (step === "edition-change") return jsonResponse(200, { card: { id: JSON.parse(options.body).printingData[0].id, uniqueCardId: "u0001" } });
     return jsonResponse(200, CSV);
   };
   const client = createMoxfieldCollection({ fetch, getCookies: async () => cookies, i18n: loadI18n(), now });
@@ -164,14 +180,16 @@ test("computeCollectionDiff : quantité nulle équivaut à une carte absente", (
 
 // --- Éditions des cartes d'un deck (API du deck) ---
 
+// Prix : « eur », ou « eur_foil » pour une impression qui n'existe qu'en
+// foil (SWAMP2) ; aucun sans prix (bIrDs).
 const EXPECTED_PRINTINGS = {
-  ZOwRD: { set: "rav", cn: "87" },
-  E0aWJ: { set: "pktk", cn: "199p" },
-  xRXAR: { set: "mh3", cn: "235" },
-  SWAMP1: { set: "war", cn: "256" },
-  SWAMP2: { set: "pwar", cn: "war-115" },
+  ZOwRD: { set: "rav", cn: "87", eur: 0.15 },
+  E0aWJ: { set: "pktk", cn: "199p", eur: 0.9 },
+  xRXAR: { set: "mh3", cn: "235", eur: 0.1 },
+  SWAMP1: { set: "war", cn: "256", eur: 0.11 },
+  SWAMP2: { set: "pwar", cn: "war-115", eur: 0.8 },
   bIrDs: { set: "plst", cn: "52★" },
-  mAyBe: { set: "c21", cn: "263" },
+  mAyBe: { set: "c21", cn: "263", eur: 1.25 },
 };
 
 test("extractDeckPrintings : édition et numéro de chaque impression, en minuscules", () => {
@@ -185,6 +203,27 @@ test("extractDeckPrintings : réponse qui n'est pas un deck, entrées incomplèt
   assert.equal(extractDeckPrintings({ message: "Not found" }), null);
   const partial = { boards: { mainboard: { cards: { a: { card: { id: "AAAAA" } }, b: { quantity: 1 }, c: null, d: { card: { id: "DDDDD", set: "c21" } } } }, attractions: null } };
   assert.deepEqual(extractDeckPrintings(partial), { DDDDD: { set: "c21", cn: "" } });
+});
+
+test("extractDeckPrintings : prix absents, nuls ou illisibles ignorés", () => {
+  const card = (id, prices) => ({ card: { id, set: "c21", cn: "1", prices } });
+  const deck = {
+    boards: {
+      mainboard: {
+        cards: {
+          a: card("ZERO0", { eur: 0, eur_foil: 0 }),
+          b: card("TEXT0", { eur: "1.50" }),
+          c: card("NULL0", null),
+          d: card("FOIL0", { eur: null, eur_foil: 3.2 }),
+          e: card("BOTH0", { eur: 0.4, eur_foil: 3.2 }),
+        },
+      },
+    },
+  };
+  const eurOf = (code) => extractDeckPrintings(deck)[code].eur;
+  assert.deepEqual(["ZERO0", "TEXT0", "NULL0"].map(eurOf), [undefined, undefined, undefined]);
+  assert.equal(eurOf("FOIL0"), 3.2, "impression qui n'existe qu'en foil");
+  assert.equal(eurOf("BOTH0"), 0.4, "prix non foil d'abord");
 });
 
 test("éditions d'un deck : renouvellement puis lecture du deck, avec le jeton", async () => {
@@ -232,4 +271,97 @@ test("éditions d'un deck : erreurs", async () => {
   await rejectsWith(failing({ deck: jsonResponse(200, { cards: [] }) }), "api-changed", /pas la description d'un deck/);
   await rejectsWith(failing({ deck: new TypeError("Failed to fetch") }), "network");
   await rejectsWith(failing({}, [{ name: "_ga", value: "x" }]), "not-logged-in");
+});
+
+// --- Changement d'édition d'une carte d'un deck ---
+
+test("deckEntries : cartes du deck hors Considering, avec ce qu'il faut pour les modifier", () => {
+  const entries = deckEntries(DECK);
+  assert.deepEqual(entries.map((e) => `${e.board}:${e.name}`), [
+    "mainboard:Golgari Thug",
+    "mainboard:Sidisi, Brood Tyrant",
+    "mainboard:Revitalizing Repast // Old-Growth Grove",
+    "mainboard:Swamp",
+    "commanders:Birds of Paradise",
+  ]);
+  assert.deepEqual(entries[0], {
+    board: "mainboard",
+    uniqueCardId: "u0001",
+    name: "Golgari Thug",
+    quantity: 1,
+    finish: "nonFoil",
+    lang: "en",
+    isAlter: false,
+    isProxy: false,
+    cardId: "ZOwRD",
+    set: "rav",
+    cn: "87",
+    several: false,
+  });
+  assert.equal(entries[1].set, "pktk", "édition en minuscules");
+  assert.equal(entries[3].several, true, "plusieurs impressions dans la même entrée");
+  assert.deepEqual(deckEntries(null), []);
+  assert.deepEqual(deckEntries({ boards: { mainboard: { cards: { x: { card: { id: "A" } } } } } }), [], "entrée sans nom ignorée");
+});
+
+test("readCardEditions : édition, numéro et finitions de chaque impression", () => {
+  assert.deepEqual(readCardEditions(EDITIONS), [
+    { cardId: "ZOwRD", set: "rav", cn: "87", setName: "Ravnica: City of Guilds", finishes: ["nonFoil", "foil"] },
+    { cardId: "GtDds", set: "dds", cn: "50", setName: "Duel Decks: Mind vs. Might", finishes: ["nonFoil"] },
+    { cardId: "GtPrm", set: "prm", cn: "24a", setName: "Magic Online Promos", finishes: ["foil"] },
+  ]);
+  assert.equal(readCardEditions({ data: [] }), null);
+  assert.deepEqual(readCardEditions([{ cardId: "A" }, null]), [], "entrées incomplètes ignorées");
+});
+
+test("editionChangeBody : quantité, langue et drapeaux gardés, finition gardée si possible", () => {
+  const entry = { quantity: 2, finish: "foil", lang: "ja", isAlter: true, isProxy: false };
+  assert.deepEqual(editionChangeBody(entry, { cardId: "NEW01", finishes: ["nonFoil", "foil"] }), {
+    quantity: 2,
+    finish: "foil",
+    printingData: [{ id: "NEW01", quantity: 2, finish: "foil", lang: "ja", isAlter: true, isProxy: false }],
+  });
+  // Édition qui n'existe pas en foil : sa première finition.
+  assert.equal(editionChangeBody(entry, { cardId: "NEW01", finishes: ["nonFoil"] }).finish, "nonFoil");
+  // Finitions inconnues : celle de l'entrée.
+  assert.equal(editionChangeBody(entry, { cardId: "NEW01", finishes: [] }).finish, "foil");
+});
+
+test("éditions d'une carte : appel avec le jeton", async () => {
+  const { client, requests } = fakeMoxfield();
+  assert.equal((await client.fetchCardEditions("u0001")).length, 3);
+  const call = requests.find((r) => r.step === "editions");
+  assert.equal(call.url, "https://api2.moxfield.com/v3/cards/editions/u0001");
+  assert.equal(call.options.headers.Authorization, "Bearer session-token");
+  const changed = fakeMoxfield({ overrides: { editions: jsonResponse(200, { cards: [] }) } });
+  await rejectsWith(changed.client.fetchCardEditions("u0001"), "api-changed");
+});
+
+test("changement d'édition : appel du site, version du deck en en-tête, résultat vérifié", async () => {
+  const { client, requests } = fakeMoxfield();
+  const deck = await client.fetchDeck("abc123");
+  const entry = deckEntries(deck)[0];
+  await client.setDeckCardEdition(deck, entry, { cardId: "GtDds", finishes: ["nonFoil"] });
+  const call = requests.find((r) => r.step === "edition-change");
+  // Impression actuelle de la carte (card.id), pas son uniqueCardId : bug
+  // constaté en vrai (refus 400 « not a printing of »), novembre 2026.
+  assert.equal(call.url, "https://api2.moxfield.com/v2/decks/0000000/cards/mainboard/ZOwRD");
+  assert.equal(call.options.method, "PUT");
+  assert.equal(call.options.headers.Authorization, "Bearer session-token");
+  assert.equal(call.options.headers["x-deck-version"], "6");
+  assert.equal(call.options.headers["x-public-deck-id"], "abc123");
+  assert.equal(call.options.headers["Content-Type"], "application/json");
+  assert.deepEqual(JSON.parse(call.options.body), {
+    quantity: 1,
+    finish: "nonFoil",
+    printingData: [{ id: "GtDds", quantity: 1, finish: "nonFoil", lang: "en", isAlter: false, isProxy: false }],
+  });
+  // Moxfield répond sans la nouvelle impression : pas enregistré.
+  const ignored = fakeMoxfield({ overrides: { "edition-change": jsonResponse(200, { card: { id: "ZOwRD" } }) } });
+  await rejectsWith(ignored.client.setDeckCardEdition(deck, entry, { cardId: "GtDds", finishes: [] }), "api-changed", /pas enregistré/);
+  // Refus (deck d'un autre compte, version périmée…).
+  const refused = fakeMoxfield({ overrides: { "edition-change": jsonResponse(403, {}) } });
+  await rejectsWith(refused.client.setDeckCardEdition(deck, entry, { cardId: "GtDds", finishes: [] }), "blocked");
+  const conflict = fakeMoxfield({ overrides: { "edition-change": jsonResponse(409, {}) } });
+  await rejectsWith(conflict.client.setDeckCardEdition(deck, entry, { cardId: "GtDds", finishes: [] }), "api-changed");
 });

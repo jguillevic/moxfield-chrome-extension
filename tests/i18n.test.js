@@ -80,8 +80,10 @@ test("manifest : nom et description traduits, dans les limites de Chrome", () =>
 
 test("i18n.js chargé avant les scripts qui s'en servent", () => {
   assert.equal(MANIFEST.content_scripts[0].js[0], "i18n.js");
-  const html = SOURCES.find((s) => s.file === "popup.html").text;
-  assert.ok(html.indexOf('src="i18n.js"') < html.indexOf('src="popup.js"'));
+  for (const [page, script] of [["popup.html", "popup.js"], ["proxies.html", "proxies.js"]]) {
+    const html = SOURCES.find((s) => s.file === page).text;
+    assert.ok(html.includes('src="i18n.js"') && html.indexOf('src="i18n.js"') < html.indexOf(`src="${script}"`), page);
+  }
   const background = SOURCES.find((s) => s.file === "background.js").text;
   assert.match(background, /importScripts\("i18n.js"/);
 });
@@ -156,6 +158,13 @@ test("dates au format de la langue", () => {
   assert.equal(loadI18n("fr").formatDateTime(at), "07/10/2026 15:42");
   assert.equal(loadI18n("en").formatDateTime(at), "10/7/26, 3:42 PM");
   assert.equal(loadI18n("fr").formatDay(at), "07/10/2026");
+});
+
+test("prix en euros au format de la langue", () => {
+  // Espaces insécables d’Intl ramenées à des espaces.
+  const plain = (text) => text.replace(/\s/g, " ");
+  assert.equal(plain(loadI18n("fr").formatPrice(1234.5)), "1 234,50 €");
+  assert.equal(loadI18n("en").formatPrice(0.1), "€0.10");
 });
 
 // Content script d'une extension rechargée : chrome.i18n lève.

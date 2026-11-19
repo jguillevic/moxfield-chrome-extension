@@ -118,11 +118,15 @@ contenu du CSV. Même effet qu'une récupération automatique.
 - Va sur la page d'un deck (`moxfield.com/decks/{id}`), y compris en y
   naviguant depuis l'intérieur de Moxfield (le bouton apparaît/disparaît
   dynamiquement selon la page affichée, sans besoin de recharger). Le bouton
-  n'apparaît que :
-  - sur la page du deck elle-même (pas sur ses sous-pages comme
-    `/decks/{id}/history`, ni sur les listes comme `/decks/public`) ;
-  - pour un deck au format **Commander** (badge « Commander » dans l'en-tête
-    du deck).
+  n'apparaît que sur la page du deck elle-même (pas sur ses sous-pages comme
+  `/decks/{id}/history`, ni sur les listes comme `/decks/public`), **quel
+  que soit le format** : Commander, mais aussi les formats de 60 cartes
+  (Modern, Standard, Pioneer...).
+  - Un deck de 60 cartes se monte **avec sa réserve** (sideboard) : ses
+    cartes sont dans la liste détectée, comptées dans le total et retirées
+    du stock comme celles du deck. Une carte présente à la fois dans le
+    deck et dans la réserve apparaît sur une seule ligne, quantités
+    additionnées.
 - Le bouton est une icône **boîte ouverte** (**cercle coché** quand le deck est monté) ajoutée à la
   barre d'actions flottante de Moxfield, en bas à droite, juste après le
   bouton like (cœur). Si cette barre est introuvable, un bouton flottant
@@ -204,6 +208,23 @@ contenu du CSV. Même effet qu'une récupération automatique.
     sur **« Ajouter une Deck List »**, colle la liste, puis lance le Shopping
     Wizard. Les terrains de base et les cartes en « version différente » ne
     sont pas exportés.
+  - **Prix des cartes manquantes** : chaque carte de l'encadré affiche son
+    prix (prix unitaire en plus quand il en manque plusieurs), et la ligne
+    **« 💶 Coût des cartes manquantes »** en donne le total. C'est le prix
+    **Cardmarket** (en euros) de la version utilisée par le deck — la moins
+    chère s'il en utilise plusieurs —, tel que Moxfield le donne en ouvrant
+    le deck. Une carte sans prix connu est signalée (« au moins … », avec
+    le nombre de cartes sans prix) plutôt que comptée pour zéro.
+  - **Monter avec des proxies** : le bouton **« 🃏 Monter avec des
+    proxies »** de cet encadré monte quand même le deck, les exemplaires
+    manquants étant joués en **proxy** (carte imprimée). Seuls les
+    exemplaires qui manquent le sont : avec 1 Sol Ring sur 2, le deck prend
+    le vrai et 1 proxy. Un proxy n'est jamais pris à ton stock, ni rendu au
+    démontage. Une carte en « version différente » ou « version déjà
+    utilisée » bloque toujours : un proxy ne règle pas une question
+    d'édition. Même bouton (**« Mettre à jour avec des proxies »**) pour
+    la mise à jour d'un deck monté ; les proxies déjà en place sont gardés.
+    Voir « Proxies » ci-dessous pour les imprimer et les remplacer.
 - **Version différente de ta collection** (encadré rouge, bloquant) : parmi
   les cartes dont le stock est déjà suffisant, si Moxfield indique que tu la
   possèdes, mais pas dans l'édition/finition précise utilisée par ce deck
@@ -213,6 +234,40 @@ contenu du CSV. Même effet qu'une récupération automatique.
   cette carte. Cette détection utilise l'indicateur de collection natif de
   Moxfield ; elle ne fonctionne que via le scraping automatique, pas via un
   collage manuel depuis le presse-papiers.
+  - **Utiliser mes éditions** : bouton 🔄 de la barre d'actions de
+    Moxfield, juste à gauche du bouton de montage, avec une pastille bleue
+    du nombre de cartes que Moxfield indique possédées dans une autre
+    édition (masqué s'il n'y en a aucune). Un clic change, dans ton deck
+    Moxfield, l'édition de ces cartes pour une édition que tu possèdes — le
+    deck reflète alors ce que tu as vraiment. **Le deck n'est pas monté** :
+    seules les éditions changent, que le deck soit monté ou non. Pas de
+    confirmation : les cartes sont modifiées une à une (comme si tu
+    changeais l'édition à la main sur le site ; visible dans l'historique
+    du deck sur Moxfield, réversible à la main), puis la page est rechargée
+    toute seule, avec le nombre de cartes changées. Pendant ce temps, une
+    fenêtre bloque la page et montre l'avancement (recherche des éditions,
+    puis cartes changées : « 12 / 66 »). Si tu as plusieurs
+    éditions, l'extension prend celle qui n'est pas déjà dans un autre deck
+    monté. **Finition** (colonne « Foil » de ta collection) : une carte que
+    tu as dans l'édition du deck mais dans une autre finition (ex. foil
+    alors que le deck demande la non-foil) garde son édition, et seule sa
+    finition change dans le deck. **Foil d'abord** : si tu as un
+    exemplaire foil, c'est lui qui est choisi, même si tu as aussi la
+    finition du deck ; sinon la finition du deck est gardée si tu l'as,
+    sinon celle que tu possèdes. Entre deux éditions dont tu as autant
+    d'exemplaires libres, celle que tu as en foil passe devant.
+    **Quantité** : une édition n'est choisie que si tu en as assez
+    d'exemplaires pour toute la ligne du deck (ex. 11 Plains) — sinon
+    Moxfield la signalerait toujours. Les cartes sans autre édition ni
+    finition dans ta collection, sans édition qui en couvre la quantité
+    (cas courant des terrains de base, répartis sur plusieurs éditions),
+    ou sur une ligne du deck qui mélange plusieurs éditions, restent telles
+    quelles, et le bouton ne les compte plus sur ce deck jusqu'à la
+    fermeture de l'onglet. Si aucune carte n'a pu être changée, la raison
+    est affichée, sans recharger.
+    Seulement sur tes propres decks (Moxfield refuse sinon), connecté à
+    Moxfield dans ce navigateur. C'est la seule modification que
+    l'extension fait sur Moxfield.
 - **Version déjà utilisée par un autre deck monté** (encadré rouge,
   bloquant) : tu possèdes la carte en plusieurs éditions, il t'en reste un
   exemplaire libre, mais pas dans la version que ce deck demande — celle-là
@@ -250,6 +305,29 @@ contenu du CSV. Même effet qu'une récupération automatique.
   **« Terrains de base à vérifier »** les liste à titre indicatif s'il en
   manque ou si l'édition diffère, mais **n'empêche jamais** de valider le
   montage ; le stock est décompté normalement (peut devenir négatif).
+
+#### Proxies
+
+- Un deck monté avec des proxies affiche leur nombre : badge **« 🃏 3 »**
+  dans la liste « Decks montés » du popup (détail au survol), et
+  **« Ce deck compte 3 proxies »** dans la fenêtre du deck sur Moxfield.
+- **Imprimer** : bouton **« 🖨️ Imprimer »** du popup, ou **« 🖨️ Imprimer
+  les proxies »** dans la fenêtre du deck. Une page s'ouvre avec des
+  planches A4 de 9 cartes au format réel (63 × 88 mm), traits de coupe
+  compris, images de la version du deck (Scryfall). Imprime à **100 %**
+  (taille réelle), sans ajustement à la page ; « Enregistrer au format
+  PDF » dans la fenêtre d'impression du navigateur donne un PDF. Une carte
+  double face occupe deux emplacements (recto et verso, à glisser dos à
+  dos dans la même pochette). La mention **« PROXY »** en bas de chaque
+  carte est activée par défaut ; la case de la page la retire (choix
+  retenu sur ce PC).
+- **Remplacer par la vraie carte** : quand tu ajoutes à ta collection
+  Moxfield une carte jouée en proxy (achat), le popup propose
+  **« Remplacer N proxies »** sur le deck (détail au survol). Rien n'est
+  remplacé sans ce clic : la vraie carte est alors prise au stock libre,
+  comme au montage, et le proxy disparaît.
+- Montage, mise à jour, démontage et remplacement notent les proxies dans
+  l'historique.
 
 ### 3. Consulter le stock
 
@@ -381,8 +459,9 @@ en cas de conflit : rien ne s'y perd).
   fenêtre de montage sur la page d'un deck, messages, historique, nom et
   description dans la liste des extensions. Toute autre langue affiche
   l'anglais.
-- Les dates suivent le format de cette langue, et le bouton Cardmarket
-  ouvre la version du site dans cette langue.
+- Les dates et les prix suivent le format de cette langue (prix toujours en
+  euros), et le bouton Cardmarket ouvre la version du site dans cette
+  langue.
 - L'historique est traduit à l'affichage : une action notée sur un PC en
   français s'affiche en anglais sur un PC en anglais, et inversement.
 
@@ -403,13 +482,18 @@ en cas de conflit : rien ne s'y perd).
   peut casser ; le compteur comparé au total du site permet de s'en rendre
   compte, et le presse-papiers (bouton Copier de Moxfield) reste la
   solution de secours.
-- Le bouton de deck apparaît/disparaît selon l'URL actuelle et la présence
-  du badge « Commander », réévalués par un polling léger (toutes les 500ms)
-  car Moxfield est une SPA — la navigation interne au site ne recharge pas
-  la page, et le badge est affiché après le chargement.
+- Le bouton de deck apparaît/disparaît selon l'URL actuelle, réévaluée par
+  un polling léger (toutes les 500ms) car Moxfield est une SPA — la
+  navigation interne au site ne recharge pas la page.
 - Après avoir rechargé l'extension dans `chrome://extensions`, rafraîchis
   (F5) les onglets Moxfield déjà ouverts : sinon l'ancienne version de
   l'extension y reste active mais déconnectée (un message te le rappelle).
+- **Decks avec réserve** : la lecture de la réserve n'a pas encore été
+  vérifiée sur une vraie page Moxfield (les tests la reconstituent à partir
+  d'une page Commander). Si le compteur de la fenêtre de montage passe en
+  rouge sur un deck de 60 cartes, la détection est à corriger : une copie
+  de la page (cf. « Développement », `tests/fixtures/pages/`) permet de le
+  faire.
 - Le stock est agrégé par **nom de carte**, toutes éditions/finitions
   confondues : les quantités affichées ne distinguent ni le set ni le foil.
   Seul le contrôle « Version déjà utilisée » regarde les éditions : la page
@@ -435,6 +519,34 @@ en cas de conflit : rien ne s'y perd).
     développement (réponse réelle capturée à la main, novembre 2026) ;
   - les quantités libres ne sont pas affichées par édition (cf.
     `ROADMAP.md`).
+- **Prix des cartes manquantes** : indicatifs. Ce sont ceux que Moxfield
+  affiche pour Cardmarket (sans savoir s'il s'agit du prix de tendance ou
+  du prix le plus bas), pour la version du deck, sans tenir compte de la
+  finition (prix foil seulement pour une version qui n'existe qu'en foil),
+  ni de la langue, ni des frais de port. Une autre édition de la même
+  carte peut coûter bien moins cher. Pas de prix sans réponse de Moxfield
+  (pas connecté, réseau), ni pour une liste collée depuis le presse-papiers
+  (rien n'y indique la version).
+- **Utiliser mes éditions** : reproduit les appels que fait le
+  site quand on change l'édition d'une carte (observés en novembre 2026,
+  pas d'API publique) ; s'ils changent, la modification s'arrête avec un
+  message, et les cartes déjà passées sont indiquées. Une ligne du deck
+  qui regroupe plusieurs éditions n'est pas touchée. L'édition de ta
+  collection est retrouvée chez Moxfield par son code et son numéro : une
+  édition notée autrement n'est pas trouvée (carte laissée telle quelle).
+  Les cartes sont modifiées une à une (Moxfield exige la version du deck,
+  qui change à chaque modification) : compter une demi-seconde par carte
+  environ. Le bouton n'existe que dans
+  la barre d'actions de Moxfield : quand elle est introuvable (bouton de
+  montage flottant), il n'est pas affiché. Il se fie à l'indicateur
+  « Partially in collection » de Moxfield, donc pas à une liste collée.
+- **Proxies** : suivis dans l'extension seulement, pas sur Moxfield (le
+  drapeau proxy de Moxfield n'est ni lu ni écrit). Le remplacement par la
+  vraie carte ne vérifie pas son édition (le doute profite au montage). Les
+  images viennent de Scryfall : sans réseau, la planche ne porte que les
+  noms des cartes ; une version que Scryfall ne connaît pas sous le même
+  code est cherchée par son nom (image d'une autre édition). Pour ton usage
+  personnel uniquement.
 - La récupération automatique de la collection reproduit les appels que
   fait le site Moxfield (pas d'API publique) : s'ils changent, elle échoue
   avec un message dans le popup, et l'import manuel du CSV reste
@@ -467,7 +579,9 @@ npm test
 
 - `tests/fixtures/*.html` : une page par vue (Text, Condensed Text, Visual Grid, Visual Spoiler, Visual
   Stacks, Visual Stacks (Split)), reproduisant la structure réelle de
-  Moxfield avec le même deck de 7 cartes, et les pièges déjà rencontrés
+  Moxfield avec le même deck de 7 cartes (Commander, sans réserve : la
+  réserve d'un deck de 60 cartes est reconstituée par les tests, faute de
+  page réelle), et les pièges déjà rencontrés
   (cartes double face, foil, quantité > 1, version de chaque carte, tuile en double après une
   modification, restes cachés d'une autre vue, images de l'aperçu latéral).
 - **Ajouter une vraie page** (recommandé quand Moxfield change quelque
@@ -488,8 +602,12 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   (`deck-checks.js`) — stock insuffisant, version différente, version déjà
   utilisée par un autre deck monté (contrôle exact par édition et repli par
   recoupement), terrains de base, mise à jour d'un deck
-  monté, faisabilité affichée sur le bouton,
-  lecture d'une liste collée.
+  monté, faisabilité affichée sur le bouton, prix des cartes manquantes
+  (version la moins chère, total au centime, cartes sans prix), proxies
+  (exemplaires pris au stock, proxies ajoutés ou gardés, proxies
+  remplaçables, versions tenues par un deck, mise à jour d'un deck qui en a),
+  choix de l'édition de la collection pour un deck, lecture d'une liste
+  collée.
 - `tests/background.test.js` : gestion du stock par le service worker
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
   CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
@@ -500,23 +618,32 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   Moxfield, erreurs, cartes non couvertes), stock envoyé à la page d'un deck, collection de 50 000
   cartes, détail de la collection par édition, versions des decks montés
   (complétées, jamais remplacées, édition ajoutée après coup), éditions
-  d'un deck lues par l'API (erreurs rapportées ou non).
+  d'un deck lues par l'API (erreurs rapportées ou non), proxies (jamais
+  pris au stock ni rendus, valeurs invalides retirées, mise à jour,
+  collection récupérée, remplacement par la vraie carte, page
+  d'impression), passage d'un deck sur les éditions de la collection
+  (proposition sans écriture, application carte par carte avec la version
+  du deck relue avant chacune, carte modifiée entre-temps laissée, arrêt à
+  la première erreur, refus de Moxfield non rapporté, demandes invalides).
 - `tests/history.test.js` : historique (`history.js`) — ajout, limite de
   200 entrées, détail limité à 200 cartes par entrée, fusion, différences
-  de listes (changement de version compris), libellés.
+  de listes (changement de version compris), libellés (proxies compris).
 - `tests/moxfield-collection.test.js` : dialogue avec Moxfield
   (`moxfield-collection.js`, réponses simulées) — appels et jetons, session
   absente ou expirée, refus, réseau coupé, changement de l'API ; éditions
-  des cartes d'un deck (réponse de l'API réduite dans
+  et prix des cartes d'un deck (réponse de l'API réduite dans
   `tests/fixtures/api/deck.json`, jeton réutilisé quelques minutes, deck
-  introuvable).
+  introuvable), changement d'édition d'une carte d'un deck (cartes du deck,
+  éditions d'une carte réduites dans `tests/fixtures/api/card-editions.json`,
+  corps et en-têtes de l'appel, finition, résultat vérifié, refus).
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
   de test avec un faux `chrome`) — sections « Collection Moxfield » et
   « Historique » et « Rapports d'erreurs » (lien de connexion à Moxfield
   compris), chiffres clés (exemplaires possédés, libres, dans des decks),
   affichage du stock (tableau limité, filtre, total possédé d'une carte),
-  changement de version d'une carte (badge « Modifié », historique), erreurs
-  rapportées.
+  changement de version d'une carte (badge « Modifié », historique),
+  proxies des decks montés (nombre, impression, remplacement proposé ou
+  refusé, jamais comptés dans les decks), erreurs rapportées.
 - `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
   — DSN, masquage des jetons et adresses mail, limitation des envois,
   navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur
@@ -543,12 +670,26 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   un deck monté qui n'en a pas, deck signalé modifié quand une version
   change, éditions demandées au service worker (montage refusé pour une
   édition possédée en x1 déjà montée, repli sans réponse, pas de demande
-  répétée), bouton et fenêtre de montage en anglais.
+  répétée), prix des cartes manquantes (montage, mise à jour, total
+  partiel, quantité modifiée à la main, carte absente de la collection ou
+  d'une autre édition, sans réponse de Moxfield), montage et mise à jour
+  avec des proxies (version différente toujours bloquante, proxies du
+  montage gardés), proxies d'un deck monté et leur impression, passage
+  sur les éditions de la collection (proposition, confirmation, annulation,
+  arrêt en cours, erreur), bouton et fenêtre de montage en anglais.
+- `tests/proxies.test.js` : page d'impression des proxies (`proxies.html`
+  + `proxies.js`, Scryfall simulé à partir de vraies réponses réduites
+  dans `tests/fixtures/api/scryfall-cards.json`) — recherche par version
+  puis par nom (face avant seule), recto et verso des cartes double face,
+  paquets de 75 et délai entre deux requêtes, erreurs normales ou
+  rapportées, planches de 9 cartes, impression une fois les images
+  chargées, mention « PROXY », carte introuvable, deck sans proxy, page en
+  anglais.
 - `tests/i18n.test.js` : traductions (`i18n.js`, `_locales/`) — mêmes
   clés et mêmes valeurs insérées dans chaque langue, pas de « $ » que Chrome
   refuserait, pluriels complets, nom et description du manifest, toute clé
-  utilisée par le code existe et toute clé existante sert, pluriels et dates
-  selon la langue, messages illisibles après un rechargement de
+  utilisée par le code existe et toute clé existante sert, pluriels, dates
+  et prix selon la langue, messages illisibles après un rechargement de
   l'extension. Le popup (tous ses textes fixes traduits, popup en anglais)
   et le service worker (erreurs et historique en anglais, historique noté
   dans une langue et affiché dans l'autre) sont testés en anglais dans
@@ -563,12 +704,18 @@ clés `clé_one` et `clé_other`), ou par un attribut `data-i18n` dans
 l'autre. `tests/i18n.test.js` signale une clé oubliée dans une langue.
 
 Non couverts : la synchro Google Drive, le reste du popup, la fenêtre de
-montage (hors refus pour stock insuffisant ou version déjà utilisée, mise à
-jour après un changement de version et textes en anglais), l'intégration à la barre d'actions de
-Moxfield, et la qualité des traductions elles-mêmes (relecture humaine).
+montage (hors refus pour stock insuffisant ou version déjà utilisée, prix
+des cartes manquantes, proxies, mise à jour après un changement de version
+et textes en anglais), l'intégration à la barre d'actions de
+Moxfield, le rendu réel de l'impression (taille des cartes sur papier),
+et la qualité des traductions elles-mêmes (relecture humaine).
 
 ## Crédits
 
 Icônes du bouton de la barre d'actions : [Font Awesome Free](https://fontawesome.com)
-6.7.2 (`box-open`, `circle-check`), sous licence
+6.7.2 (`box-open`, `circle-check`, `arrows-rotate`), sous licence
 [CC BY 4.0](https://fontawesome.com/license/free).
+
+Images des cartes de la page d'impression des proxies :
+[Scryfall](https://scryfall.com) (API publique, sans clé). Cartes et
+illustrations © Wizards of the Coast.

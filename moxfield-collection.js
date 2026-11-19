@@ -30,12 +30,32 @@
 // compris (champ `hash` de printingData). `set` et `cn` sont l'édition et le
 // numéro de l'export CSV de la collection. Exemple réduit :
 // tests/fixtures/api/deck.json.
+//
+// Changement d'édition d'une carte d'un deck (observé dans l'onglet
+// Network, novembre 2026, en changeant l'édition d'une carte sur le site) :
+// - Éditions d'une carte : GET api2…/v3/cards/editions/<uniqueCardId>
+//   (Bearer). uniqueCardId est commun à toutes les éditions d'une carte, et
+//   c'est la clé de l'entrée dans boards.<zone>.cards. Réponse : tableau de
+//   { cardId, uniqueCardId, abbreviation (édition, en minuscules), cn,
+//   name (nom de l'édition), hasNonFoil, hasFoil, hasEtched… }. Exemple
+//   réduit : tests/fixtures/api/card-editions.json.
+// - Changement : PUT api2…/v2/decks/<id interne du deck>/cards/<zone>/<uniqueCardId>
+//   (Bearer), en-têtes x-deck-version (champ `version` du deck) et
+//   x-public-deck-id, corps { quantity, finish, printingData: [{ id: cardId
+//   de la nouvelle édition, quantity, finish, lang, isAlter, isProxy }] }.
+//   Réponse : l'entrée modifiée ({ card: { id… }, finish, printingData… }).
+//   L'id interne du deck (`id` de la réponse du deck) n'est pas celui de
+//   l'adresse de la page (`publicId`).
 
 const MOXFIELD_API2 = "https://api2.moxfield.com/v1/account/token";
 const MOXFIELD_DECK_URL = "https://api2.moxfield.com/v3/decks/all";
+const MOXFIELD_EDITIONS_URL = "https://api2.moxfield.com/v3/cards/editions";
+const MOXFIELD_DECK_WRITE_URL = "https://api2.moxfield.com/v2/decks";
 // Lecture demandée par la page d'un deck, qui attend la réponse pour ses
 // contrôles : on n'attend pas indéfiniment un Moxfield qui ne répond pas.
 const MOXFIELD_DECK_TIMEOUT_MS = 10000;
+// Début de la réponse gardé sur une erreur inattendue (cf. request).
+const MAX_ERROR_RESPONSE_CHARS = 500;
 // L'access_token vaut 15 min. Chaque renouvellement remplace le cookie de
 // session de l'utilisateur : en parcourant plusieurs decks d'affilée, on
 // n'en demande pas un par page.
@@ -91,7 +111,16 @@ function createMoxfieldCollection({ fetch, getCookies, i18n: { t }, now = () => 
     if (res.status === 403 || res.status === 429) {
       throw new MoxfieldError("blocked", t("moxfieldBlocked", res.status));
     }
-    throw unexpected(step, t("moxfieldStatusCode", res.status));
+    const error = unexpected(step, t("moxfieldStatusCode", res.status));
+    // Début de la réponse (ex. motif d'un refus 400), pour le rapport
+    // d'erreur seulement : sans lui, impossible de savoir ce que Moxfield
+    // reproche à la requête. Borné, et jamais affiché.
+    try {
+      error.response = (await res.text()).slice(0, MAX_ERROR_RESPONSE_CHARS);
+    } catch (e) {
+      // corps illisible : le code HTTP suffira
+    }
+    throw error;
   }
 
   function unexpected(step, detail) {
@@ -129,28 +158,64 @@ function createMoxfieldCollection({ fetch, getCookies, i18n: { t }, now = () => 
     return token;
   }
 
-  // Édition et numéro de chaque impression du deck : { [code]: { set, cn } }
-  // (cf. extractDeckPrintings).
-  async function fetchDeckPrintings(publicId) {
+  // Requête avec l'access_token (réutilisé quelques minutes), réponse JSON
+  // lue. Un jeton peut-être refusé n'est pas réutilisé au prochain essai.
+  async function authorizedJson(step, url, init = {}) {
     const accessToken = await getAccessToken(true);
-    const options = { credentials: "include", headers: { Authorization: `Bearer ${accessToken}` } };
+    const options = { ...init, credentials: "include", headers: { ...(init.headers || {}), Authorization: `Bearer ${accessToken}` } };
     if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) options.signal = AbortSignal.timeout(MOXFIELD_DECK_TIMEOUT_MS);
     let res;
     try {
-      res = await request("deck", `${MOXFIELD_DECK_URL}/${encodeURIComponent(publicId)}`, options);
+      res = await request(step, url, options);
     } catch (e) {
-      lastToken = null; // jeton peut-être refusé : le prochain essai en redemande un
+      lastToken = null;
       throw e;
     }
-    let body;
     try {
-      body = await res.json();
+      return await res.json();
     } catch (e) {
-      throw unexpected("deck", t("moxfieldUnreadable"));
+      throw unexpected(step, t("moxfieldUnreadable"));
     }
-    const printings = extractDeckPrintings(body);
-    if (!printings) throw unexpected("deck", t("moxfieldNotDeck"));
-    return printings;
+  }
+
+  // Réponse complète de l'API d'un deck.
+  async function fetchDeck(publicId) {
+    const body = await authorizedJson("deck", `${MOXFIELD_DECK_URL}/${encodeURIComponent(publicId)}`);
+    if (!extractDeckPrintings(body)) throw unexpected("deck", t("moxfieldNotDeck"));
+    return body;
+  }
+
+  // Édition et numéro de chaque impression du deck : { [code]: { set, cn } }
+  // (cf. extractDeckPrintings).
+  async function fetchDeckPrintings(publicId) {
+    return extractDeckPrintings(await fetchDeck(publicId));
+  }
+
+  // Éditions d'une carte (cf. readCardEditions).
+  async function fetchCardEditions(uniqueCardId) {
+    const body = await authorizedJson("editions", `${MOXFIELD_EDITIONS_URL}/${encodeURIComponent(uniqueCardId)}`);
+    const editions = readCardEditions(body);
+    if (!editions) throw unexpected("editions", t("moxfieldNotEditions"));
+    return editions;
+  }
+
+  // Passe une carte du deck sur une autre édition. deck : réponse de
+  // fetchDeck (relue juste avant : sa version doit être la dernière) ;
+  // entry : cf. deckEntries ; edition : cf. readCardEditions. Vérifie que
+  // Moxfield a bien enregistré l'édition demandée. Fin de l'URL : impression
+  // actuelle de la carte (card.id), pas son uniqueCardId — avec ce dernier,
+  // Moxfield le lit comme l'impression d'une autre carte et refuse (400
+  // « Specified printing ID is not a printing of … », constaté en vrai,
+  // novembre 2026).
+  async function setDeckCardEdition(deck, entry, edition) {
+    const url = `${MOXFIELD_DECK_WRITE_URL}/${encodeURIComponent(deck.id)}/cards/${encodeURIComponent(entry.board)}/${encodeURIComponent(entry.cardId)}`;
+    const body = await authorizedJson("edition-change", url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-deck-version": String(deck.version), "x-public-deck-id": deck.publicId },
+      body: JSON.stringify(editionChangeBody(entry, edition)),
+    });
+    if (!body || !body.card || body.card.id !== edition.cardId) throw unexpected("edition-change", t("moxfieldEditionNotSaved"));
+    return body;
   }
 
   async function downloadCollectionCSV() {
@@ -168,21 +233,105 @@ function createMoxfieldCollection({ fetch, getCookies, i18n: { t }, now = () => 
     return text;
   }
 
-  return { findUserId, downloadCollectionCSV, fetchDeckPrintings };
+  return { findUserId, downloadCollectionCSV, fetchDeck, fetchDeckPrintings, fetchCardEditions, setDeckCardEdition };
 }
 
-// Réponse de l'API d'un deck → { [code de l'impression]: { set, cn } }, en
-// minuscules comme le détail par édition du stock (cf. parseCollectionCSV
-// dans background.js). Toutes les zones sont lues, « Considering » comprise :
-// ce n'est qu'une table de correspondance, et un code désigne la même
-// impression partout. Une entrée regroupant plusieurs impressions les
-// détaille dans printingData. null si la réponse n'est pas celle d'un deck.
+// Zones d'un deck qui en font partie (même règle que la page : Considering
+// n'en fait pas partie, cf. CLAUDE.md).
+const IGNORED_BOARDS = new Set(["maybeboard"]);
+
+// Cartes d'un deck (réponse de son API) : [{ board, uniqueCardId, name,
+// quantity, finish, lang, isAlter, isProxy, cardId, set, cn, several }].
+// several : l'entrée regroupe plusieurs impressions (printingData), à ne
+// pas réduire à une seule.
+function deckEntries(deck) {
+  const entries = [];
+  if (!deck || !deck.boards || typeof deck.boards !== "object") return entries;
+  for (const [board, content] of Object.entries(deck.boards)) {
+    if (IGNORED_BOARDS.has(board) || !content || !content.cards) continue;
+    for (const [key, entry] of Object.entries(content.cards)) {
+      const card = entry && entry.card;
+      if (!card || typeof card.name !== "string" || typeof card.id !== "string") continue;
+      entries.push({
+        board,
+        uniqueCardId: typeof card.uniqueCardId === "string" ? card.uniqueCardId : key,
+        name: card.name,
+        quantity: Number.isInteger(entry.quantity) ? entry.quantity : 1,
+        finish: typeof entry.finish === "string" ? entry.finish : "nonFoil",
+        lang: typeof card.lang === "string" ? card.lang : "en",
+        isAlter: Boolean(entry.isAlter),
+        isProxy: Boolean(entry.isProxy),
+        cardId: card.id,
+        set: typeof card.set === "string" ? card.set.toLowerCase() : "",
+        cn: typeof card.cn === "string" ? card.cn.toLowerCase() : "",
+        several: Array.isArray(entry.printingData) && entry.printingData.length > 1,
+      });
+    }
+  }
+  return entries;
+}
+
+// Réponse des éditions d'une carte → [{ cardId, set, cn, setName, finishes }]
+// (édition et numéro en minuscules, comme la collection) ; null si ce n'en
+// est pas une.
+function readCardEditions(body) {
+  if (!Array.isArray(body)) return null;
+  return body
+    .filter((e) => e && typeof e.cardId === "string" && typeof e.abbreviation === "string")
+    .map((e) => ({
+      cardId: e.cardId,
+      set: e.abbreviation.toLowerCase(),
+      cn: typeof e.cn === "string" ? e.cn.toLowerCase() : "",
+      setName: typeof e.name === "string" ? e.name : e.abbreviation,
+      finishes: ["nonFoil", "foil", "etched"].filter((f) => e[`has${f[0].toUpperCase()}${f.slice(1)}`] === true),
+    }));
+}
+
+// Corps du changement d'édition : quantité, langue et drapeaux de l'entrée
+// gardés ; finition demandée (edition.finish : celle que tu possèdes) si
+// l'édition l'a, sinon celle de l'entrée si l'édition l'a, sinon la
+// première qu'elle propose (une édition qui n'existe qu'en foil).
+function editionChangeBody(entry, edition) {
+  const available = (f) => f && (edition.finishes.includes(f) || edition.finishes.length === 0);
+  const finish = available(edition.finish) ? edition.finish : available(entry.finish) ? entry.finish : edition.finishes[0];
+  return {
+    quantity: entry.quantity,
+    finish,
+    printingData: [{ id: edition.cardId, quantity: entry.quantity, finish, lang: entry.lang, isAlter: entry.isAlter, isProxy: entry.isProxy }],
+  };
+}
+
+// Prix en euros d'une impression (card.prices de l'API d'un deck), ou
+// undefined. « eur » est le prix Cardmarket que Moxfield affiche quand
+// Cardmarket est choisi comme source de prix ; « eur_foil » seulement pour
+// une impression qui n'existe qu'en foil (pas de prix « eur ») : la finition
+// n'est pas distinguée (cf. CLAUDE.md, Règles métier).
+function priceOf(prices) {
+  if (!prices || typeof prices !== "object") return undefined;
+  for (const value of [prices.eur, prices.eur_foil]) {
+    // Number.isFinite écarte aussi un prix en texte (« 1.50 ») et null.
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return undefined;
+}
+
+// Réponse de l'API d'un deck → { [code de l'impression]: { set, cn, eur? } },
+// édition et numéro en minuscules comme le détail par édition du stock (cf.
+// parseCollectionCSV dans background.js), eur : prix (cf. priceOf). Toutes
+// les zones sont lues, « Considering » comprise : ce n'est qu'une table de
+// correspondance, et un code désigne la même impression partout. Une entrée
+// regroupant plusieurs impressions les détaille dans printingData, chacune
+// avec son propre prix (structure confirmée via inspection réelle, novembre
+// 2026). null si la réponse n'est pas celle d'un deck.
 function extractDeckPrintings(deck) {
   if (!deck || typeof deck.boards !== "object" || deck.boards === null) return null;
   const printings = {};
   const add = (card) => {
     if (!card || typeof card.id !== "string" || typeof card.set !== "string" || !card.set) return;
-    printings[card.id] = { set: card.set.trim().toLowerCase(), cn: typeof card.cn === "string" ? card.cn.trim().toLowerCase() : "" };
+    const printing = { set: card.set.trim().toLowerCase(), cn: typeof card.cn === "string" ? card.cn.trim().toLowerCase() : "" };
+    const eur = priceOf(card.prices);
+    if (eur !== undefined) printing.eur = eur;
+    printings[card.id] = printing;
   };
   for (const board of Object.values(deck.boards)) {
     for (const entry of Object.values((board && board.cards) || {})) {
@@ -206,4 +355,6 @@ function computeCollectionDiff(before, after) {
   return changes.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-if (typeof module !== "undefined") module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, MoxfieldError };
+if (typeof module !== "undefined") {
+  module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, readCardEditions, editionChangeBody, MoxfieldError };
+}

@@ -1,6 +1,11 @@
 // Textes traduits (cf. i18n.js), posés avant tout affichage.
-const { t, tn, formatDateTime, translateDocument } = createChromeI18n();
+const i18n = createChromeI18n();
+const { t, tn, formatDateTime, translateDocument } = i18n;
 translateDocument(document);
+
+// Règles partagées avec le service worker (cf. deck-checks.js) : mêmes
+// chiffres pour les proxies et le stock partout.
+const { stockQtyOf, proxyCountOf, proxyTotal, replaceableProxies } = createDeckChecks(normalizeName, i18n);
 
 function send(type, payload) {
   return chrome.runtime.sendMessage({ type, payload });
@@ -72,17 +77,58 @@ function renderBuiltDecks(state) {
       badge.title = describePageChanges(deck);
       nameCell.appendChild(badge);
     }
-    const btn = document.createElement("button");
-    btn.className = "secondary";
-    btn.textContent = t("unbuild");
-    btn.addEventListener("click", async () => {
-      await send("TOGGLE_DECK_BUILT", { deckId, deckName: deck.name, url: deck.url, cards: [], built: false });
-      refresh();
-    });
+    const actions = document.createElement("div");
+    actions.className = "deck-actions";
+    const proxies = proxyTotal(deck.cards || []);
+    if (proxies > 0) {
+      const badge = document.createElement("span");
+      badge.className = "badge-proxies";
+      badge.textContent = `🃏 ${proxies}`;
+      badge.title = t("deckProxiesList", formatProxies(deck.cards));
+      nameCell.appendChild(badge);
+      actions.appendChild(actionButton(`🖨️ ${t("printProxiesShort")}`, t("printProxies"), () => send("OPEN_PROXIES_PAGE", { deckId })));
+      // Cartes achetées depuis : la vraie carte peut remplacer le proxy.
+      const replaceable = replaceableProxies(deck, state.stock);
+      if (replaceable.length > 0) {
+        const count = replaceable.reduce((n, r) => n + r.qty, 0);
+        const title = t("replaceProxiesHint", replaceable.map((r) => `${r.name} ×${r.qty}`).join(", "));
+        actions.appendChild(actionButton(tn("replaceProxies", count), title, () => replaceProxies(deckId)));
+      }
+    }
+    actions.appendChild(
+      actionButton(t("unbuild"), "", async () => {
+        await send("TOGGLE_DECK_BUILT", { deckId, deckName: deck.name, url: deck.url, cards: [], built: false });
+        refresh();
+      })
+    );
     row.appendChild(nameCell);
-    row.appendChild(btn);
+    row.appendChild(actions);
     list.appendChild(row);
   }
+}
+
+function actionButton(label, title, onClick) {
+  const btn = document.createElement("button");
+  btn.className = "secondary";
+  btn.textContent = label;
+  if (title) btn.title = title;
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
+// "Sol Ring ×1, Counterspell ×2" (infobulle du badge des proxies).
+function formatProxies(cards) {
+  return cards
+    .filter((c) => proxyCountOf(c) > 0)
+    .map((c) => `${c.name} ×${proxyCountOf(c)}`)
+    .join(", ");
+}
+
+async function replaceProxies(deckId) {
+  const res = await send("REPLACE_PROXIES", { deckId });
+  document.getElementById("built-status").textContent =
+    res && res.ok ? tn("proxiesReplaced", res.replaced.reduce((n, r) => n + r.qty, 0)) : t("errorPrefix", (res && res.error) || t("unknownError"));
+  refresh();
 }
 
 function normalizeName(name) {
@@ -97,18 +143,19 @@ function escapeHtml(str) {
 // (les cartes des decks montés en ont été retirées au montage). On
 // reconstitue l'autre moitié à partir des listes des decks montés. Les
 // cartes marquées excludedFromStock (decks montés avec une ancienne
-// version) n'ont jamais été retirées du stock : on ne les compte pas ici,
-// sinon le total possédé serait faussé.
+// version) et les proxies n'ont jamais été retirés du stock : on ne les
+// compte pas ici, sinon le total possédé serait faussé (cf. stockQtyOf).
 function buildDeckUsage(builtDecks) {
   const usage = new Map();
   for (const [deckId, deck] of Object.entries(builtDecks)) {
     for (const card of deck.cards || []) {
-      if (card.excludedFromStock) continue;
+      const qty = stockQtyOf(card);
+      if (qty === 0) continue;
       const key = normalizeName(card.name);
       if (!usage.has(key)) usage.set(key, { name: card.name, total: 0, decks: [] });
       const u = usage.get(key);
-      u.total += card.qty;
-      u.decks.push({ deckId, name: deck.name, url: deck.url, qty: card.qty });
+      u.total += qty;
+      u.decks.push({ deckId, name: deck.name, url: deck.url, qty });
     }
   }
   return usage;

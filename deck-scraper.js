@@ -63,6 +63,29 @@ function createDeckScraper(win) {
     return IGNORED_BOARDS.has(boardOf(scopeEl));
   }
 
+  // Doublons de rendu : Moxfield laisse parfois en double le nœud d'une
+  // entrée (même data-hash) sans le détruire. Mais une même impression peut
+  // aussi être jouée dans deux zones — deck et réserve (sideboard) d'un deck
+  // de 60 cartes : ce sont alors deux entrées, à compter toutes les deux. Le
+  // data-hash identique dans deux zones est confirmé via inspection réelle
+  // pour Considering ; pour la réserve, c'est une hypothèse (aucune page
+  // réelle avec réserve dans tests/fixtures à ce jour).
+  // Renvoie une fonction (hash, zone) → true si l'entrée a déjà été vue.
+  // Zone illisible (marqueur absent) : on ne sait pas, traité comme doublon.
+  function createDuplicateFilter() {
+    const boardsByHash = new Map();
+    return (hash, board) => {
+      const boards = boardsByHash.get(hash);
+      if (!boards) {
+        boardsByHash.set(hash, new Set([board]));
+        return false;
+      }
+      if (board === null || boards.has(null) || boards.has(board)) return true;
+      boards.add(board);
+      return false;
+    };
+  }
+
   // --- Version (impression) de chaque carte ---
   // Le marqueur de collection se termine par le code Moxfield de
   // l'impression choisie dans le deck ("collection_full_1052_mainboard_ZOwRD"
@@ -77,16 +100,30 @@ function createDeckScraper(win) {
     return m ? m[1] : null;
   }
 
-  // Cumul par nom : quantité, et quantité par version possédée
-  // (versions : [{ code, qty }], vide si aucune n'est connue).
-  function addCard(seen, name, qty, printingStatus, version) {
+  // Code de l'impression choisie dans le deck, que tu la possèdes ou non :
+  // sert seulement au prix des cartes manquantes, qui justement ne sont
+  // souvent pas possédées (ownedVersionOf n'en donne alors aucun). Même
+  // forme de marqueur pour "pt" et "no" (confirmé via inspection réelle :
+  // cf. tests/fixtures pour "pt", prix affichés sur un vrai deck pour "no",
+  // novembre 2026 — aucune page avec "no" dans tests/fixtures à ce jour).
+  function printingCodeOf(scopeEl) {
+    const marker = scopeEl && scopeEl.querySelector('[id^="collection_full_"], [id^="collection_pt_"], [id^="collection_no_"]');
+    const m = marker && marker.id.match(/^collection_(?:full|pt|no)_\d+_[a-z]+_(.+)$/i);
+    return m ? m[1] : null;
+  }
+
+  // Cumul par nom : quantité, quantité par version possédée (versions :
+  // [{ code, qty }], vide si aucune n'est connue), et codes des impressions
+  // du deck, possédées ou non (printingCodes, cf. printingCodeOf).
+  function addCard(seen, name, qty, printingStatus, version, printingCode = null) {
     const key = name.toLowerCase();
     let card = seen.get(key);
     if (!card) {
-      card = { name, qty: 0, printingStatus, versions: [] };
+      card = { name, qty: 0, printingStatus, versions: [], printingCodes: [] };
       seen.set(key, card);
     }
     card.qty += qty;
+    if (printingCode && !card.printingCodes.includes(printingCode)) card.printingCodes.push(printingCode);
     if (!version) return;
     const known = card.versions.find((v) => v.code === version);
     if (known) known.qty += qty;
@@ -122,7 +159,7 @@ function createDeckScraper(win) {
   function scrapeCardsFromList() {
     const links = Array.from(document.querySelectorAll('a.table-deck-row-link[href^="/cards/"]')).filter(isVisible);
     const seen = new Map();
-    const seenRowKeys = new Set();
+    const isDuplicate = createDuplicateFilter();
     links.forEach((link) => {
       const li = link.closest("li");
       if (!li) return;
@@ -130,14 +167,11 @@ function createDeckScraper(win) {
       // Considering peut porter le même data-hash dans les deux zones.
       if (isIgnoredBoard(li)) return;
       const rowKey = li.getAttribute("data-hash");
-      if (rowKey) {
-        if (seenRowKeys.has(rowKey)) return; // doublon de rendu de la même ligne : ignoré
-        seenRowKeys.add(rowKey);
-      }
+      if (rowKey && isDuplicate(rowKey, boardOf(li))) return; // doublon de rendu de la même ligne : ignoré
       const qty = findListQty(li);
       const name = (link.textContent || "").replace(/\s+/g, " ").trim();
       if (!name) return;
-      addCard(seen, name, qty, findCollectionStatusNear(link, li), ownedVersionOf(li));
+      addCard(seen, name, qty, findCollectionStatusNear(link, li), ownedVersionOf(li), printingCodeOf(li));
     });
     return Array.from(seen.values());
   }
@@ -239,11 +273,12 @@ function createDeckScraper(win) {
   // au milieu de "id6", "id8"...) sans toujours retirer les anciennes —
   // dédoublonner sur l'id complet comptait alors ces cartes deux fois
   // La partie stable est "legal-<code>" (impression, suffixe "F0" si foil) :
-  // Moxfield regroupe toujours une même impression en une seule entrée, et
-  // un deck Commander n'a pas la même impression dans deux zones jouées (la
-  // zone Considering est écartée avant, cf. IGNORED_BOARDS). La zone n'entre
-  // pas dans la clé, pour qu'une tuile périmée privée de son marqueur de
-  // collection soit quand même reconnue comme doublon.
+  // Moxfield regroupe toujours une même impression en une seule entrée par
+  // zone (la zone Considering est écartée avant, cf. IGNORED_BOARDS). Une
+  // même impression peut être dans le deck et dans la réserve : la zone est
+  // comparée à part (cf. scrapeCardsFromImages), pas mise dans cette clé,
+  // pour qu'une tuile périmée privée de son marqueur de collection soit
+  // quand même reconnue comme doublon.
   function slotStableKey(wrapperId) {
     return wrapperId.replace(/^id\d+-/, "");
   }
@@ -275,18 +310,26 @@ function createDeckScraper(win) {
       const tile = img.parentElement.parentElement;
       if (isIgnoredBoard(tile)) return; // zone Considering : pas une carte du deck
       const hasMarker = Boolean(tile && tile.querySelector('[id^="collection_"]'));
-      const previous = tiles.get(slotKey);
-      if (previous && (previous.hasMarker || !hasMarker)) return; // doublon DOM périmé : ignoré
-      tiles.set(slotKey, {
+      // Sans marqueur, la zone est inconnue : la tuile n'est gardée que si
+      // l'entrée n'a encore aucune tuile, et cède sa place à la première
+      // qui porte un marqueur.
+      const board = boardOf(tile);
+      const pending = tiles.get(slotKey);
+      const zoneKey = board ? `${slotKey}|${board}` : slotKey;
+      if (!board && (pending || [...tiles.keys()].some((k) => k.startsWith(`${slotKey}|`)))) return; // doublon DOM périmé : ignoré
+      if (tiles.has(zoneKey) && (tiles.get(zoneKey).hasMarker || !hasMarker)) return; // doublon DOM périmé : ignoré
+      if (board && pending && !pending.hasMarker) tiles.delete(slotKey);
+      tiles.set(zoneKey, {
         name,
         qty: findQtyNear(img, slot),
         printingStatus: slot ? findCollectionStatusNear(img, slot) : "unknown",
         version: ownedVersionOf(tile),
+        printingCode: printingCodeOf(tile),
         hasMarker,
       });
     });
     const seen = new Map();
-    for (const { name, qty, printingStatus, version } of tiles.values()) addCard(seen, name, qty, printingStatus, version);
+    for (const { name, qty, printingStatus, version, printingCode } of tiles.values()) addCard(seen, name, qty, printingStatus, version, printingCode);
     return Array.from(seen.values());
   }
 
@@ -305,14 +348,11 @@ function createDeckScraper(win) {
   function scrapeCardsFromDecklistCards() {
     const cardEls = Array.from(document.querySelectorAll("div.decklist-card[data-hash]")).filter(isVisible);
     const seen = new Map();
-    const seenHashes = new Set();
+    const isDuplicate = createDuplicateFilter();
     cardEls.forEach((card) => {
       if (isIgnoredBoard(card)) return; // zone Considering, avant le dédoublonnage (cf. scrapeCardsFromList)
       const hash = card.getAttribute("data-hash");
-      if (hash) {
-        if (seenHashes.has(hash)) return; // doublon de rendu de la même entrée : ignoré
-        seenHashes.add(hash);
-      }
+      if (hash && isDuplicate(hash, boardOf(card))) return; // doublon de rendu de la même entrée : ignoré
       const nameEl = card.querySelector(".decklist-card-phantomsearch");
       let name = nameEl ? (nameEl.textContent || "").trim() : "";
       if (!name) return;
@@ -331,7 +371,7 @@ function createDeckScraper(win) {
         const m = ((input && input.value) || qtyEl.textContent || "").trim().match(/(\d{1,3})/);
         if (m) qty = parseInt(m[1], 10);
       }
-      addCard(seen, name, qty, findCollectionStatusNear(card, card), ownedVersionOf(card));
+      addCard(seen, name, qty, findCollectionStatusNear(card, card), ownedVersionOf(card), printingCodeOf(card));
     });
     return Array.from(seen.values());
   }

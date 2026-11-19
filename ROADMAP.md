@@ -9,31 +9,31 @@ README).
 
 | Rang | Fonctionnalité | Effort | Pourquoi |
 |---|---|---|---|
-| 1 | **Accepter une autre version** — monter malgré une édition différente, par carte ou pour toute la liste : la carte est décomptée normalement, l'avertissement devient informatif (comme pour les terrains de base). | Faible | Bloque des decks réels (27 cartes sur un deck testé), alors que le stock est suivi par nom : physiquement, on a bien la carte. |
+| 1 | **Monter avec N proxies depuis le bouton principal** — remplacer « Confirmer le montage » par « Monter avec N proxies » quand des cartes bloquent ; proposer aussi le proxy pour une carte d'une autre édition (son remplacement ne doit alors être proposé que quand la bonne édition arrive dans la collection, pas avec l'exemplaire de l'autre édition déjà en stock). | Faible | Demandé. « Utiliser mes éditions » règle déjà la plupart des cartes d'une autre édition, sans proxy à imprimer. |
 | 2 | **Faisabilité de tous mes decks** — lister ses decks Moxfield dans le popup avec, pour chacun, monté / montable / nombre de cartes bloquantes, via l'API (session déjà réutilisée pour la collection). Remplace l'idée « faisabilité mémorisée des decks consultés » et la pastille sur les listes de decks. | Moyen | Répond à « que puis-je monter ? » sans ouvrir chaque deck ; réutilise `computeDeckAvailability`. Appels de l'API des decks à capturer d'abord. |
 | 3 | **Annuler depuis l'historique** — « Remonter » un deck démonté, « Démonter » un deck monté, « Revenir à la liste précédente » après une mise à jour, « Remonter les decks » après une réinitialisation ; mêmes contrôles de stock qu'au montage, une seule fois, et seulement si le deck est resté dans l'état produit. Les actions sur la collection restent non annulables (Moxfield fait référence). | Moyen | Rattraper une erreur sur les decks montés. Les entrées enregistrent déjà les données nécessaires. Écarté de la première version de l'historique. |
 | 4 | **Liste de cartes à sortir / ranger** — cases à cocher triées par couleur, type ou édition, au montage et au démontage. | Moyen | Sert à chaque montage physique. |
 | 5 | **Transfert entre decks** — prendre les cartes manquantes dans un deck monté et marquer celui-ci comme incomplet. | Moyen | Évite d'acheter une carte qui dort dans un autre deck ; la fenêtre indique déjà où elle est. |
 | 6 | **Détection des decks montés modifiés sans les ouvrir** — via l'API des decks, à chaque récupération. | Moyen | Désormais faisable (la session Moxfield est réutilisable en tâche de fond) ; se combine avec le n°2. |
 | 7 | **Stock par finition et langue, quantités libres par édition dans le popup.** | Moyen | Le contrôle « version déjà utilisée » compte maintenant chaque édition à part (API du deck). Restent la finition (l'API du deck la donne, mais le foil d'un deck est rarement tenu à jour : risque de refus à tort), la langue (absente de l'API du deck) et l'affichage par édition. Rendrait le n°1 inutile. |
-| 8 | **Prix des cartes manquantes** — via l'API Scryfall (prix EUR, gratuite, sans clé), avec le total. | Faible | Aide à décider si un deck vaut l'achat ; complète l'export Cardmarket. |
-| 9 | **Liste d'achats cumulée** — les manques de plusieurs decks en une seule liste Cardmarket, sans doublons. | Faible | Une seule commande pour plusieurs decks ; plus utile avec le n°2. |
-| 10 | **Montage partiel** — monter en attendant des cartes commandées, décomptées à leur arrivée. | Moyen | Cas fréquent en attente de commande. |
-| 11 | **Emplacement physique** — classeur, boîte ou page de chaque carte, repris dans la liste à sortir (n°4). | Moyen | Gain de temps réel, mais saisie initiale. |
-| 12 | **Proxies** — cartes jouées en proxy, non décomptées du stock. | Faible | Selon la pratique de jeu. |
-| 13 | **Différences avant import CSV manuel** — montrer ce qui change avant d'écraser le stock. | Faible | Moins utile depuis la récupération automatique (qui montre déjà les changements et les cartes non couvertes) : l'import manuel n'est plus qu'un secours. |
-| 14 | **Cartes les plus partagées** — présentes dans plusieurs decks montés ou envisagés. | Faible | Savoir quoi acheter en double ; usage occasionnel. |
-| 15 | **Doublons libres échangeables** — avec export pour échange ou vente. | Faible | Usage occasionnel. |
-| 16 | **Export du stock libre** — CSV ou format d'import Moxfield. | Faible | Usage occasionnel. |
-| 17 | **Formats autres que Commander** — surtout la réserve des decks de 60 cartes. | Moyen | Seulement si d'autres formats sont joués. |
-| 18 | **Stock partagé entre plusieurs personnes** — dossier Drive commun, qui a monté quoi. | Élevé | Gros chantier (droits, conflits) pour un besoin incertain. |
+| 8 | **Liste d'achats cumulée** — les manques de plusieurs decks en une seule liste Cardmarket, sans doublons, avec le coût total. | Faible | Une seule commande pour plusieurs decks ; plus utile avec le n°2. |
+| 9 | **Proxies déclarés sur Moxfield** — lire le drapeau proxy que Moxfield permet de poser sur une carte d'un deck (`isProxy` dans l'API du deck) et la monter d'office en proxy. | Faible | Évite de déclarer deux fois la même chose ; l'API du deck est déjà lue. |
+| 10 | **Emplacement physique** — classeur, boîte ou page de chaque carte, repris dans la liste à sortir (n°4). | Moyen | Gain de temps réel, mais saisie initiale. |
+| 11 | **Différences avant import CSV manuel** — montrer ce qui change avant d'écraser le stock. | Faible | Moins utile depuis la récupération automatique (qui montre déjà les changements et les cartes non couvertes) : l'import manuel n'est plus qu'un secours. |
+| 12 | **Cartes les plus partagées** — présentes dans plusieurs decks montés ou envisagés. | Faible | Savoir quoi acheter en double ; usage occasionnel. |
+| 13 | **Doublons libres échangeables** — avec export pour échange ou vente. | Faible | Usage occasionnel. |
+| 14 | **Export du stock libre** — CSV ou format d'import Moxfield. | Faible | Usage occasionnel. |
+| 15 | **Stock partagé entre plusieurs personnes** — dossier Drive commun, qui a monté quoi. | Élevé | Gros chantier (droits, conflits) pour un besoin incertain. |
 
-Rangs susceptibles de bouger : le n°7 passe en tête si distinguer foil et
-éditions dans le stock physique compte ; les n°12 et 17 remontent si l'on
-joue des proxies ou d'autres formats.
+Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
+éditions dans le stock physique compte.
 
 ## Questions ouvertes
 
+- **Réserve des decks de 60 cartes** : lecture non vérifiée sur une vraie
+  page (marqueur `collection_…_sideboard_…`, même `data-hash` qu'une
+  entrée du deck pour une même version : supposés par analogie avec
+  Considering). Enregistrer une page réelle dans `tests/fixtures/`.
 - **Pastille de faisabilité** : afficher un pourcentage de cartes
   disponibles (ex. « 34 % ») plutôt que le nombre de cartes bloquantes ?
   Le « − » devant le nombre a été écarté.
@@ -49,6 +49,22 @@ joue des proxies ou d'autres formats.
 
 ## Livré
 
+- Passer un deck sur les éditions de la collection : les cartes possédées
+  dans une autre édition sont changées dans le deck Moxfield en un clic
+  (bouton « Utiliser mes éditions » de la barre d'actions, à gauche du
+  bouton de montage ; page rechargée toute seule, deck pas monté), pour que le deck reflète ce que tu as
+  vraiment ; première écriture de l'extension sur Moxfield — novembre 2026.
+- Proxies : monter (ou mettre à jour) un deck malgré un stock insuffisant,
+  les exemplaires manquants joués en proxy, jamais pris au stock ; planches
+  A4 à imprimer (images Scryfall, mention « PROXY » désactivable) ;
+  remplacement par la vraie carte proposé dès qu'elle est en stock libre.
+  Remplace aussi l'idée « montage partiel » — novembre 2026.
+- Prix des cartes manquantes : prix Cardmarket (en euros) de la version du
+  deck, donné par l'API de Moxfield déjà appelée pour les éditions, à côté
+  de chaque carte manquante, avec le total — novembre 2026.
+- Tous les formats : le bouton n'est plus réservé aux decks Commander ; un
+  deck de 60 cartes se monte avec sa réserve, une même version pouvant être
+  dans le deck et dans la réserve — novembre 2026.
 - Version déjà utilisée, contrôle exact par édition : l'édition et le numéro
   de chaque version d'un deck sont lus par l'API de Moxfield
   (`/v3/decks/all/<id>`) et rapprochés de la collection ; le recoupement

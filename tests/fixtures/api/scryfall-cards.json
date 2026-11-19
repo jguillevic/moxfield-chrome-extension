@@ -1,0 +1,90 @@
+[
+  {
+    "object": "card",
+    "name": "Golgari Thug",
+    "set": "rav",
+    "collector_number": "87",
+    "layout": "normal",
+    "image_uris": {
+      "normal": "https://cards.scryfall.io/normal/front/8/7/87c39e21-3e2f-4cbf-9f99-69e977924a73.jpg?1783943669",
+      "large": "https://cards.scryfall.io/large/front/8/7/87c39e21-3e2f-4cbf-9f99-69e977924a73.jpg?1783943669",
+      "png": "https://cards.scryfall.io/png/front/8/7/87c39e21-3e2f-4cbf-9f99-69e977924a73.png?1783943669"
+    }
+  },
+  {
+    "object": "card",
+    "name": "Delver of Secrets // Insectile Aberration",
+    "set": "inr",
+    "collector_number": "60",
+    "layout": "transform",
+    "card_faces": [
+      {
+        "object": "card_face",
+        "name": "Delver of Secrets",
+        "image_uris": {
+          "normal": "https://cards.scryfall.io/normal/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "large": "https://cards.scryfall.io/large/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "png": "https://cards.scryfall.io/png/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.png?1783908173"
+        }
+      },
+      {
+        "object": "card_face",
+        "name": "Insectile Aberration",
+        "image_uris": {
+          "normal": "https://cards.scryfall.io/normal/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "large": "https://cards.scryfall.io/large/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "png": "https://cards.scryfall.io/png/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.png?1783908173"
+        }
+      }
+    ]
+  },
+  {
+    "object": "card",
+    "name": "Revitalizing Repast // Old-Growth Grove",
+    "set": "mh3",
+    "collector_number": "256",
+    "layout": "modal_dfc",
+    "card_faces": [
+      {
+        "object": "card_face",
+        "name": "Revitalizing Repast",
+        "image_uris": {
+          "normal": "https://cards.scryfall.io/normal/front/0/3/03522b6b-31ec-4126-8885-5dbb2248688b.jpg?1783911227",
+          "large": "https://cards.scryfall.io/large/front/0/3/03522b6b-31ec-4126-8885-5dbb2248688b.jpg?1783911227",
+          "png": "https://cards.scryfall.io/png/front/0/3/03522b6b-31ec-4126-8885-5dbb2248688b.png?1783911227"
+        }
+      },
+      {
+        "object": "card_face",
+        "name": "Old-Growth Grove",
+        "image_uris": {
+          "normal": "https://cards.scryfall.io/normal/back/0/3/03522b6b-31ec-4126-8885-5dbb2248688b.jpg?1783911227",
+          "large": "https://cards.scryfall.io/large/back/0/3/03522b6b-31ec-4126-8885-5dbb2248688b.jpg?1783911227",
+          "png": "https://cards.scryfall.io/png/back/0/3/03522b6b-31ec-4126-8885-5dbb2248688b.png?1783911227"
+        }
+      }
+    ]
+  },
+  {
+    "object": "card",
+    "name": "Fire // Ice",
+    "set": "dmr",
+    "collector_number": "215",
+    "layout": "split",
+    "image_uris": {
+      "normal": "https://cards.scryfall.io/normal/front/1/8/18303862-4726-4136-814f-157aa7006579.jpg?1783918420",
+      "large": "https://cards.scryfall.io/large/front/1/8/18303862-4726-4136-814f-157aa7006579.jpg?1783918420",
+      "png": "https://cards.scryfall.io/png/front/1/8/18303862-4726-4136-814f-157aa7006579.png?1783918420"
+    },
+    "card_faces": [
+      {
+        "object": "card_face",
+        "name": "Fire"
+      },
+      {
+        "object": "card_face",
+        "name": "Ice"
+      }
+    ]
+  }
+]

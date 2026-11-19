@@ -132,3 +132,16 @@ test("cardsDiff : même quantité, autre version enregistrée", () => {
   ];
   assert.deepEqual(h.cardsDiff(from, to), [{ name: "Sol Ring", from: 1, to: 1, version: true }]);
 });
+
+test("describe : proxies (montage, démontage, mise à jour, remplacement)", () => {
+  const built = { type: "deck-built", deckName: "Zethi", cardCount: 96, proxyCount: 3 };
+  assert.equal(h.describe(built), "Deck « Zethi » monté : 96 cartes retirées du stock libre (+ 3 proxies)");
+  const unbuilt = { type: "deck-unbuilt", deckName: "Zethi", cards: [{ name: "Sol Ring", qty: 2, proxyQty: 1 }], cardCount: 1, proxyCount: 1 };
+  assert.equal(h.describe(unbuilt), "Deck « Zethi » démonté : 1 carte rendue au stock (+ 1 proxy)");
+  // Démontage d'avant les proxies : nombre calculé sur la liste.
+  assert.equal(h.describe({ type: "deck-unbuilt", deckName: "Zethi", cards: [{ name: "Sol Ring", qty: 2 }] }), "Deck « Zethi » démonté : 2 cartes rendues au stock");
+  const updated = { type: "deck-updated", deckName: "Zethi", changes: [{ name: "Sol Ring", from: 1, to: 2 }], proxiesAdded: 1 };
+  assert.equal(h.describe(updated), "Montage de « Zethi » mis à jour : 1 carte modifiée (+ 1 nouveau proxy)");
+  const replaced = { type: "proxies-replaced", deckName: "Zethi", cards: [{ name: "Sol Ring", qty: 2 }] };
+  assert.equal(h.describe(replaced), "Deck « Zethi » : 2 proxies remplacés par la vraie carte, retirée du stock libre");
+});

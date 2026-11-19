@@ -2,6 +2,7 @@
    (popup.css). Les variables sont posées sur nos seuls éléments racines pour
    ne rien changer au reste de la page. */
 .msm-overlay,
+.msm-progress-overlay,
 .msm-toast,
 .msm-floating-btn {
   --msm-surface: #ffffff;
@@ -25,6 +26,7 @@
 
 @media (prefers-color-scheme: dark) {
   .msm-overlay,
+  .msm-progress-overlay,
   .msm-toast,
   .msm-floating-btn {
     --msm-surface: #1f2229;
@@ -134,6 +136,22 @@
 
 .msm-avail-badge.msm-avail-ok {
   background: #1f8a4c;
+}
+
+/* « Utiliser mes éditions » : nombre de cartes possédées dans une autre
+   édition (information, pas un blocage : pas de rouge). */
+.msm-avail-badge.msm-editions-badge {
+  background: #2f6fd6;
+}
+
+.msm-editions-bar-btn {
+  margin-right: 10px;
+}
+
+/* Écriture sur Moxfield en cours. */
+.msm-editions-bar-btn.msm-busy {
+  opacity: 0.5;
+  cursor: progress;
 }
 
 /* --- Toasts --- */
@@ -374,6 +392,20 @@
   color: inherit;
 }
 
+/* Prix des cartes manquantes : chiffres alignés, total détaché de la liste. */
+.msm-shortage-warning .msm-price {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.msm-shortage-warning .msm-price-total {
+  margin: 6px 0 0;
+  color: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: help;
+}
+
 /* Différences entre la page et le montage. */
 .msm-diff {
   max-height: 180px;
@@ -404,5 +436,68 @@
 }
 
 .msm-diff-detail {
+  color: var(--msm-text-muted);
+}
+
+/* --- « Utiliser mes éditions » : fenêtre bloquante pendant le traitement --- */
+
+.msm-progress-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 18, 0.6);
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  line-height: 1.4;
+  cursor: progress;
+}
+
+.msm-progress-modal {
+  width: 420px;
+  color: var(--msm-text);
+}
+
+.msm-progress-modal h2 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.msm-progress-text {
+  margin: 0 0 10px;
+}
+
+.msm-progress-bar {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--msm-accent-soft);
+}
+
+.msm-progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--msm-accent-fill);
+  transition: width 0.2s ease;
+}
+
+/* Étape de durée inconnue : bande qui défile. */
+.msm-progress-indeterminate .msm-progress-fill {
+  position: absolute;
+  width: 35%;
+  animation: msm-progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes msm-progress-slide {
+  from { left: -35%; }
+  to { left: 100%; }
+}
+
+.msm-progress-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
   color: var(--msm-text-muted);
 }

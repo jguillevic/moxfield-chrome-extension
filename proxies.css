@@ -1,0 +1,218 @@
+/* Page d'impression des proxies : planches A4 de 3 × 3 cartes au format
+   réel (63 × 88 mm), traits de coupe en bordure de chaque carte. À l'écran,
+   les planches sont présentées comme des feuilles ; à l'impression, seule
+   la planche reste. */
+
+:root {
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --border: #e3e5ea;
+  --text: #1d2130;
+  --text-muted: #6b7080;
+  --accent-fill: #5b4fd6;
+  --accent-fill-hover: #4c41c0;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171c;
+    --surface: #1f2229;
+    --border: #333844;
+    --text: #e8eaf0;
+    --text-muted: #9aa0ae;
+    --accent-fill: #5f54e0;
+    --accent-fill-hover: #6f65ec;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 16px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+h1 {
+  margin: 2px 0 4px;
+  font-size: 20px;
+}
+
+#status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.mark-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+button.primary {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent-fill);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-fill-hover);
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+#sheets {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 24px 16px;
+}
+
+/* Une feuille A4 ; les cartes centrées, collées les unes aux autres pour
+   que chaque trait de coupe serve aux deux cartes voisines. */
+.sheet {
+  display: grid;
+  grid-template-columns: repeat(3, 63mm);
+  grid-auto-rows: 88mm;
+  align-content: center;
+  justify-content: center;
+  width: 210mm;
+  height: 297mm;
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.slot {
+  position: relative;
+  width: 63mm;
+  height: 88mm;
+  overflow: hidden;
+  outline: 0.1mm solid #9aa0ae;
+  background: #ffffff;
+}
+
+.slot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Carte sans image (introuvable chez Scryfall, réseau coupé) : son nom, pour
+   ne pas perdre sa place sur la planche. */
+.slot-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6mm;
+  color: #1d2130;
+  font-size: 12pt;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Mention « PROXY » : discrète, en bas de la carte, sur le cadre. */
+.proxy-mark {
+  position: absolute;
+  bottom: 1.2mm;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 1.5mm;
+  border-radius: 1mm;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font-size: 6pt;
+  font-weight: 700;
+  letter-spacing: 0.3mm;
+}
+
+.no-mark .proxy-mark {
+  display: none;
+}
+
+.credits {
+  padding: 0 24px 24px;
+  text-align: center;
+}
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  .toolbar,
+  .credits {
+    display: none;
+  }
+
+  #sheets {
+    display: block;
+    padding: 0;
+  }
+
+  /* 1 mm de moins que la feuille : un arrondi au-delà de 297 mm ajouterait
+     une page blanche après chaque planche. */
+  .sheet {
+    height: 296mm;
+    box-shadow: none;
+    break-after: page;
+  }
+
+  .sheet:last-child {
+    break-after: auto;
+  }
+}

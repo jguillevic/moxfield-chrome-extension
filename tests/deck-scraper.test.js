@@ -236,3 +236,84 @@ test("versionsToRecord : édition apprise depuis (API du deck) pour une version 
   assert.deepEqual(versionsToRecord(built, page), { "sol ring": [{ code: "AAAAA", qty: 1, set: "c21", cn: "263" }] });
   assert.equal(versionsToRecord(built.slice(1), page), null);
 });
+
+// --- Réserve (sideboard) : decks de 60 cartes ---
+// Aucune page réelle avec réserve n'a encore été enregistrée : la réserve
+// est reconstituée à partir de l'entrée « 3 Swamp » du deck de test, recopiée
+// dans la zone sideboard comme Moxfield le fait pour Considering (même
+// impression, même data-hash, marqueur de collection au nom de la zone).
+function addSideboardSwamps(scraper) {
+  const doc = scraper.document;
+  const markers = [...doc.querySelectorAll('[id^="collection_full_"][id$="_mainboard_SWAMP1"]')];
+  assert.ok(markers.length > 0, "entrée Swamp introuvable dans la page de test");
+  for (const marker of markers) {
+    let entry = marker.closest("li, div.decklist-card");
+    if (!entry) {
+      // Vues en tuiles : la tuile est le grand-parent de l'image.
+      const img = [...doc.querySelectorAll('img.img-card[alt="Swamp"]')].find((i) => i.parentElement.parentElement.contains(marker));
+      entry = img.parentElement.parentElement;
+    }
+    const copy = entry.cloneNode(true);
+    const copyMarker = copy.querySelector('[id^="collection_full_"]');
+    copyMarker.id = copyMarker.id.replace("_mainboard_", "_sideboard_");
+    // Compteur de rendu propre à chaque tuile (cf. slotStableKey).
+    for (const el of copy.querySelectorAll('[id^="id"]')) el.id = el.id.replace(/^id(\d+)-/, (m, n) => `id9${n}-`);
+    entry.after(copy);
+  }
+  const side = [...doc.querySelectorAll("footer div")].find((el) => /sideboard/.test(el.textContent));
+  side.textContent = "3 sideboard";
+}
+
+for (const view of VIEWS) {
+  test(`${view.name} : même version dans le deck et dans la réserve, les deux sont comptées`, () => {
+    const scraper = loadPage(view.fixture, view.viewMode);
+    addSideboardSwamps(scraper);
+    const cards = scraper.scrapeCardsGuess();
+    assert.deepEqual(cards.find((c) => c.name === "Swamp").versions, [{ code: "SWAMP1", qty: 6 }]);
+    assert.equal(scraper.getSiteDeclaredTotal(), 10, "deck + réserve");
+    assert.equal(totalOf(cards), 10);
+  });
+}
+
+test("Text : un doublon de rendu dans la même zone ne compte toujours qu'une fois", () => {
+  const scraper = loadPage("text.html", "table");
+  const row = scraper.document.querySelector('li[data-hash="SWAMP1"]');
+  row.after(row.cloneNode(true));
+  // Doublon privé de son marqueur de collection : zone inconnue.
+  const bare = row.cloneNode(true);
+  bare.querySelector('[id^="collection_"]').remove();
+  row.after(bare);
+  assert.equal(totalOf(scraper.scrapeCardsGuess()), 7);
+});
+
+test("Visual Stacks : tuile périmée sans marqueur, écartée même avec la carte en réserve", () => {
+  const scraper = loadPage("stacks.html", "stacks");
+  addSideboardSwamps(scraper);
+  const img = scraper.document.querySelector('img.img-card[alt="Swamp"]');
+  const tile = img.parentElement.parentElement;
+  const stale = tile.cloneNode(true);
+  stale.querySelector('[id^="collection_"]').remove();
+  tile.before(stale); // rencontrée avant les vraies tuiles
+  tile.parentElement.append(stale.cloneNode(true)); // et après
+  assert.equal(totalOf(scraper.scrapeCardsGuess()), 10);
+});
+
+// --- Codes des impressions du deck, possédées ou non (prix) ---
+for (const view of VIEWS) {
+  test(`${view.name} : code de l'impression lu quel que soit le marqueur de collection`, () => {
+    const scraper = loadPage(view.fixture, view.viewMode);
+    // Golgari Thug absente de la collection, Sidisi possédée dans une autre
+    // édition : plus de version possédée, mais le code reste lisible.
+    for (const marker of scraper.document.querySelectorAll('[id^="collection_full_"]')) {
+      if (marker.id.endsWith("_ZOwRD")) marker.id = marker.id.replace("collection_full_", "collection_no_");
+      if (marker.id.endsWith("_E0aWJ")) marker.id = marker.id.replace("collection_full_", "collection_pt_");
+    }
+    const cards = scraper.scrapeCardsGuess();
+    const byName = (name) => cards.find((c) => c.name === name);
+    assert.deepEqual(byName("Golgari Thug").printingCodes, ["ZOwRD"]);
+    assert.deepEqual(byName("Golgari Thug").versions, [], "pas une version possédée");
+    assert.deepEqual(byName("Sidisi, Brood Tyrant").printingCodes, ["E0aWJ"]);
+    assert.deepEqual(byName("Sidisi, Brood Tyrant").versions, []);
+    assert.deepEqual(byName("Swamp").printingCodes, ["SWAMP1"], "possédée : toujours lue");
+  });
+}

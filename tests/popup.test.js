@@ -11,7 +11,8 @@ const { fakeGetMessage } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
 const HTML = fs.readFileSync(path.join(ROOT, "popup.html"), "utf8");
-const SCRIPTS = ["i18n.js", "popup.js"].map((f) => fs.readFileSync(path.join(ROOT, f), "utf8"));
+// Scripts dans l'ordre de popup.html : le test charge ce que charge le popup.
+const SCRIPTS = [...HTML.matchAll(/<script src="([^"]+)"/g)].map(([, f]) => fs.readFileSync(path.join(ROOT, f), "utf8"));
 
 const EMPTY_STATE = { stock: {}, builtDecks: {} };
 const SYNC_OFF = { enabled: false };
@@ -502,4 +503,85 @@ test("changement de version seul : affiché sans quantité, dans le badge « Mod
     [...p.$("history-list").querySelectorAll("li")].map((li) => li.textContent),
     ["↻ Steam Vents (version changée)"]
   );
+});
+
+// --- Proxies des decks montés ---
+
+// Zethi : 2 Sol Ring dont 1 proxy, Counterspell en proxy ; 1 Sol Ring et
+// 1 Counterspell libres (achetés depuis le montage).
+const PROXY_STATE = {
+  stock: {
+    "sol ring": { name: "Sol Ring", qty: 1 },
+    counterspell: { name: "Counterspell", qty: 1 },
+  },
+  builtDecks: {
+    a: {
+      name: "Zethi",
+      url: "https://moxfield.com/decks/a",
+      cards: [
+        { name: "Sol Ring", qty: 2, proxyQty: 1 },
+        { name: "Counterspell", qty: 2, proxyQty: 2 },
+      ],
+    },
+    b: { name: "Sidisi", url: "https://moxfield.com/decks/b", cards: [{ name: "Sol Ring", qty: 1 }] },
+  },
+};
+
+const deckRow = (p, name) => [...p.$("built-list").querySelectorAll(".deck-row")].find((r) => r.textContent.includes(name));
+const buttonsOf = (row) => [...row.querySelectorAll("button")];
+
+test("proxies : nombre par deck, impression, remplacement proposé quand la vraie carte est libre", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: PROXY_STATE }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  const zethi = deckRow(p, "Zethi");
+  const badge = zethi.querySelector(".badge-proxies");
+  assert.equal(badge.textContent, "🃏 3");
+  assert.equal(badge.title, "Proxies : Sol Ring ×1, Counterspell ×2");
+  assert.deepEqual(buttonsOf(zethi).map((b) => b.textContent), ["🖨️ Imprimer", "Remplacer 2 proxies", "Démonter"]);
+  assert.match(buttonsOf(zethi)[1].title, /Sol Ring ×1, Counterspell ×1/);
+  // Deck sans proxy : seulement « Démonter ».
+  const sidisi = deckRow(p, "Sidisi");
+  assert.equal(sidisi.querySelector(".badge-proxies"), null);
+  assert.deepEqual(buttonsOf(sidisi).map((b) => b.textContent), ["Démonter"]);
+
+  buttonsOf(zethi)[0].click();
+  await settle();
+  assert.deepEqual(p.sent.filter((m) => m.type === "OPEN_PROXIES_PAGE").map((m) => m.payload), [{ deckId: "a" }]);
+
+  p.handlers.REPLACE_PROXIES = { ok: true, replaced: [{ name: "Sol Ring", qty: 1 }, { name: "Counterspell", qty: 1 }] };
+  buttonsOf(zethi)[1].click();
+  await settle();
+  assert.deepEqual(p.sent.filter((m) => m.type === "REPLACE_PROXIES").map((m) => m.payload), [{ deckId: "a" }]);
+  assert.equal(p.$("built-status").textContent, "2 proxies remplacés par la vraie carte.");
+});
+
+test("proxies : remplacement refusé, raison affichée", async (t) => {
+  const p = openPopup({
+    GET_STATE: { ok: true, state: PROXY_STATE },
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    REPLACE_PROXIES: { ok: false, error: "Aucun proxy à remplacer : la vraie carte n'est pas (ou plus) en stock libre." },
+  });
+  t.after(p.close);
+  await settle();
+  buttonsOf(deckRow(p, "Zethi"))[1].click();
+  await settle();
+  assert.equal(p.$("built-status").textContent, "Erreur : Aucun proxy à remplacer : la vraie carte n'est pas (ou plus) en stock libre.");
+});
+
+test("proxies : pas de remplacement proposé sans la vraie carte en stock libre", async (t) => {
+  const state = { ...PROXY_STATE, stock: { "sol ring": { name: "Sol Ring", qty: 0 } } };
+  const p = openPopup({ GET_STATE: { ok: true, state }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  assert.deepEqual(buttonsOf(deckRow(p, "Zethi")).map((b) => b.textContent), ["🖨️ Imprimer", "Démonter"]);
+});
+
+test("proxies : jamais comptés dans les exemplaires des decks montés", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: PROXY_STATE }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  // 1 Sol Ring réel dans Zethi + 1 dans Sidisi ; Counterspell entièrement en proxy.
+  assert.equal(p.$("stock-in-decks").textContent, "2");
+  assert.equal(p.$("stock-owned").textContent, "4");
 });

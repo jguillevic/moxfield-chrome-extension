@@ -63,6 +63,170 @@ function createDeckChecks(normalizeName, { t, tn }) {
     return shortages;
   }
 
+  // Prix des cartes manquantes : prix unitaire de la version du deck (la
+  // moins chère si le deck en utilise plusieurs) × quantité manquante.
+  // codesByName : nom normalisé → codes des impressions du deck, possédées
+  // ou non (cf. printingCodeOf dans deck-scraper.js) ; priceOfCode : code →
+  // prix en euros, ou undefined (cf. extractDeckPrintings dans
+  // moxfield-collection.js). Une carte sans code (liste collée) ou sans prix
+  // n'est pas comptée : `unpriced` le dit, pour ne pas présenter un total
+  // partiel comme complet. Calcul en centimes : pas d'erreur d'arrondi en
+  // additionnant.
+  // → { byName: Map nom normalisé → { unit, total }, total, unpriced }
+  function computeShortagePrices(shortages, codesByName, priceOfCode) {
+    const cents = (euros) => Math.round(euros * 100);
+    const byName = new Map();
+    let totalCents = 0;
+    let unpriced = 0;
+    for (const s of shortages) {
+      const key = normalizeName(s.name);
+      const prices = (codesByName.get(key) || []).map(priceOfCode).filter((p) => typeof p === "number");
+      if (prices.length === 0) {
+        unpriced++;
+        continue;
+      }
+      const unitCents = cents(Math.min(...prices));
+      byName.set(key, { unit: unitCents / 100, total: (unitCents * s.missing) / 100 });
+      totalCents += unitCents * s.missing;
+    }
+    return { byName, total: totalCents / 100, unpriced };
+  }
+
+  // --- Proxies ---
+  // Carte d'un deck monté : { name, qty, proxyQty?, proxyPrinting? } —
+  // proxyQty exemplaires sont des proxies (cartes imprimées, cf.
+  // proxies.html) : jamais pris au stock libre, ni rendus au démontage. La
+  // collection Moxfield reste la seule source de vérité du stock : un proxy
+  // n'en fait pas partie. proxyPrinting : { set, cn } de la version du deck,
+  // pour imprimer la bonne image.
+
+  // Exemplaires en proxy (proxyQty invalide : aucun).
+  function proxyCountOf(card) {
+    const n = card.proxyQty;
+    return Number.isInteger(n) && n > 0 ? Math.min(n, card.qty) : 0;
+  }
+
+  // Exemplaires d'une carte d'un deck monté pris au stock libre. Un seul
+  // calcul pour le montage, le démontage, la collection et le popup.
+  function stockQtyOf(card) {
+    return card.excludedFromStock ? 0 : card.qty - proxyCountOf(card);
+  }
+
+  // Nombre total de proxies d'une liste de cartes.
+  function proxyTotal(cards) {
+    return cards.reduce((n, c) => n + proxyCountOf(c), 0);
+  }
+
+  // Liste dont les cartes en stock insuffisant reçoivent des proxies pour
+  // les exemplaires manquants, en plus de ceux qu'elles ont déjà (mise à
+  // jour d'un deck monté). printingOf : nom → { set, cn } de la version du
+  // deck, ou null.
+  function addProxies(cards, shortages, printingOf = () => null) {
+    const missing = new Map(shortages.map((s) => [normalizeName(s.name), s.missing]));
+    return cards.map((c) => {
+      const extra = missing.get(normalizeName(c.name));
+      if (!extra) return c;
+      const card = { ...c, proxyQty: Math.min(c.qty, proxyCountOf(c) + extra) };
+      const printing = c.proxyPrinting || printingOf(c.name);
+      if (printing) card.proxyPrinting = printing;
+      return card;
+    });
+  }
+
+  // Mise à jour d'un deck monté : chaque carte garde ses proxies (dans la
+  // limite de sa nouvelle quantité) — remplacer un proxy par la vraie carte
+  // est une action à part (cf. replaceableProxies).
+  function carryProxies(cards, previousCards) {
+    const previous = new Map(previousCards.filter((c) => proxyCountOf(c) > 0).map((c) => [normalizeName(c.name), c]));
+    return cards.map((c) => {
+      const old = previous.get(normalizeName(c.name));
+      if (!old) return c;
+      const card = { ...c, proxyQty: Math.min(c.qty, proxyCountOf(old)) };
+      if (old.proxyPrinting) card.proxyPrinting = old.proxyPrinting;
+      return card;
+    });
+  }
+
+  // Proxies d'un deck monté que le stock libre permet maintenant de
+  // remplacer par la vraie carte (carte achetée, ajoutée à la collection
+  // Moxfield) : [{ name, qty }]. Le même stock n'est pas compté deux fois
+  // pour deux lignes du même nom.
+  function replaceableProxies(deck, stock) {
+    const free = new Map();
+    const result = [];
+    for (const card of deck.cards || []) {
+      const proxies = card.excludedFromStock ? 0 : proxyCountOf(card);
+      if (proxies === 0) continue;
+      const key = normalizeName(card.name);
+      if (!free.has(key)) free.set(key, stock[key] ? stock[key].qty : 0);
+      const qty = Math.min(proxies, Math.max(0, free.get(key)));
+      if (qty === 0) continue;
+      free.set(key, free.get(key) - qty);
+      result.push({ name: card.name, qty });
+    }
+    return result;
+  }
+
+  // --- Passer un deck sur les éditions de la collection ---
+  // Carte possédée dans une autre édition que celle du deck : plutôt que de
+  // monter le deck en laissant croire, sur Moxfield, que tu as cette
+  // édition, le deck est passé sur une édition que tu possèdes. Choix : celle
+  // dont il reste le plus d'exemplaires que les autres decks montés ne
+  // tiennent pas, puis la plus fournie. owned : [{ set, cn, qty, finishes? }]
+  // (cf. collectionEditions dans background.js) ; current : { set, cn,
+  // finish? } de la carte dans le deck ; others : versions prises par les
+  // autres decks (cf. buildVersionUsage), seules celles d'édition connue
+  // comptent. Renvoie { set, cn, finish? } ; null si tu n'as ni autre
+  // édition ni autre finition.
+  //
+  // Finition : Moxfield signale aussi une carte possédée dans l'édition du
+  // deck mais pas dans sa finition (ex. possédée en foil, le deck demande la
+  // non-foil — constaté en vrai, novembre 2026). Elle passe alors sur la
+  // finition possédée, sans changer d'édition, en priorité : c'est
+  // l'exemplaire exact que tu as.
+  //
+  // Foil d'abord (demande de l'utilisateur) : un exemplaire foil possédé est
+  // choisi même si tu as aussi la finition du deck ; sinon la finition du
+  // deck est gardée si tu l'as, sinon la plus fournie. Entre éditions
+  // également libres, celle que tu as en foil passe devant.
+  //
+  // Quantité (current.quantity, 1 par défaut) : Moxfield ne tient une carte
+  // pour possédée que si tu en as autant d'exemplaires que le deck dans
+  // cette édition (et cette finition). Une édition qui n'en couvre qu'une
+  // partie n'est jamais choisie : la carte resterait signalée, et chaque
+  // clic la ferait passer d'une édition à l'autre (constaté en vrai sur les
+  // terrains de base, novembre 2026 : 11 Plains réparties sur plusieurs
+  // éditions).
+  const ownsFoil = (p) => Boolean(p.finishes && p.finishes.foil > 0);
+
+  function chooseOwnedEdition(owned, current, others = []) {
+    const needed = Math.max(1, Number.isInteger(current.quantity) ? current.quantity : 1);
+    // Finition à demander, undefined pour garder celle du deck. Seules
+    // comptent les finitions possédées en assez d'exemplaires.
+    const ownedFinish = (p) => {
+      const finishes = Object.keys(p.finishes || {}).filter((f) => p.finishes[f] >= needed);
+      if (finishes.includes("foil")) return current.finish === "foil" ? undefined : "foil";
+      if (finishes.length === 0 || finishes.includes(current.finish)) return undefined;
+      return finishes.sort((a, b) => p.finishes[b] - p.finishes[a] || a.localeCompare(b))[0];
+    };
+    const same = owned.find((p) => p.set === current.set && p.cn === current.cn);
+    if (same && current.finish) {
+      const finish = ownedFinish(same);
+      if (finish) return { set: same.set, cn: same.cn, finish };
+    }
+    const used = (p) => others.filter((o) => o.set === p.set && (o.cn || "") === p.cn).reduce((n, o) => n + o.qty, 0);
+    const candidates = owned
+      .filter((p) => !(p.set === current.set && p.cn === current.cn) && p.qty >= needed)
+      .map((p) => ({ ...p, free: p.qty - used(p) }));
+    if (candidates.length === 0) return null;
+    candidates.sort(
+      (a, b) => b.free - a.free || ownsFoil(b) - ownsFoil(a) || b.qty - a.qty || a.set.localeCompare(b.set) || a.cn.localeCompare(b.cn)
+    );
+    const best = candidates[0];
+    const finish = current.finish ? ownedFinish(best) : undefined;
+    return finish ? { set: best.set, cn: best.cn, finish } : { set: best.set, cn: best.cn };
+  }
+
   // --- Version déjà utilisée par un autre deck monté ---
   // Le stock est suivi par nom, mais une carte possédée en plusieurs
   // éditions peut être demandée deux fois dans la MÊME version : Moxfield
@@ -96,17 +260,26 @@ function createDeckChecks(normalizeName, { t, tn }) {
   // Versions prises par les decks montés, par carte (nom normalisé) :
   // Map → [{ code, qty, deck, set?, cn? }]. excludeDeckId : deck à ignorer
   // (celui qu'on met à jour, dont les cartes lui reviennent). Les cartes
-  // excludedFromStock n'ont jamais été retirées du stock.
+  // excludedFromStock n'ont jamais été retirées du stock. Un proxy ne tient
+  // aucun exemplaire : il est d'abord compté sur les exemplaires sans
+  // version possédée (versions : seulement celles possédées, cf.
+  // ownedVersionOf), puis retiré des versions.
   function buildVersionUsage(builtDecks, excludeDeckId = null) {
     const usage = new Map();
     for (const [deckId, deck] of Object.entries(builtDecks)) {
       if (deckId === excludeDeckId) continue;
       for (const card of deck.cards || []) {
         if (card.excludedFromStock) continue;
-        for (const v of card.versions || []) {
+        const versions = card.versions || [];
+        const unversioned = card.qty - versions.reduce((n, v) => n + v.qty, 0);
+        let proxies = Math.max(0, proxyCountOf(card) - Math.max(0, unversioned));
+        for (const v of versions) {
+          const qty = v.qty - Math.min(proxies, v.qty);
+          proxies -= v.qty - qty;
+          if (qty <= 0) continue;
           const key = normalizeName(card.name);
           if (!usage.has(key)) usage.set(key, []);
-          const use = { code: v.code, qty: v.qty, deck: deck.name };
+          const use = { code: v.code, qty, deck: deck.name };
           usage.get(key).push(v.set ? { ...use, set: v.set, cn: v.cn || "" } : use);
         }
       }
@@ -209,19 +382,28 @@ function createDeckChecks(normalizeName, { t, tn }) {
   // version a changé est vérifiée aussi.
   // pageCards : nouvelle liste (pour ses versions) ; versionUsage : versions
   // prises par les AUTRES decks montés (cf. buildVersionUsage).
+  // Les proxies d'une carte lui restent (cf. carryProxies) : seuls les
+  // autres exemplaires sont à prendre au stock.
   function evaluateDeckUpdate(changes, deck, stockMap, wrongEditionNames, pageCards = [], versionUsage = new Map()) {
     const available = {};
     for (const [key, c] of Object.entries(stockMap)) available[key] = { ...c };
+    const proxies = new Map();
     for (const c of deck.cards) {
-      if (c.excludedFromStock) continue;
       const key = normalizeName(c.name);
+      proxies.set(key, (proxies.get(key) || 0) + proxyCountOf(c));
+      if (stockQtyOf(c) === 0) continue;
       if (!available[key]) available[key] = { name: c.name, qty: 0 };
-      available[key].qty += c.qty;
+      available[key].qty += stockQtyOf(c);
     }
     const versionsOf = new Map(pageCards.map((c) => [normalizeName(c.name), c.versions]));
     const increased = changes
       .filter((c) => c.to > c.from || c.version)
-      .map((c) => ({ name: c.name, qty: c.to, versions: versionsOf.get(normalizeName(c.name)) }));
+      .map((c) => {
+        const key = normalizeName(c.name);
+        return { name: c.name, qty: c.to - Math.min(c.to, proxies.get(key) || 0), versions: versionsOf.get(key) };
+      })
+      // Entièrement en proxy : rien à prendre au stock, ni version à vérifier.
+      .filter((c) => c.qty > 0);
     const basic = increased.filter((c) => isBasicLand(c.name));
     const nonBasic = increased.filter((c) => !isBasicLand(c.name));
     const check = {
@@ -307,6 +489,14 @@ function createDeckChecks(normalizeName, { t, tn }) {
     buildWrongEditionSet,
     computeWrongEditionCards,
     computeShortages,
+    computeShortagePrices,
+    proxyCountOf,
+    stockQtyOf,
+    proxyTotal,
+    addProxies,
+    carryProxies,
+    replaceableProxies,
+    chooseOwnedEdition,
     buildVersionUsage,
     computeVersionConflicts,
     parseCardsText,

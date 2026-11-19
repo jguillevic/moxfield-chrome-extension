@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="proxiesPageTitle"></title>
+  <link rel="stylesheet" href="proxies.css" />
+</head>
+<body>
+  <header class="toolbar">
+    <div class="toolbar-text">
+      <div class="brand">Moxfield Stock Manager</div>
+      <h1 id="deck-name" data-i18n="proxiesPageTitle"></h1>
+      <p id="status" role="status"></p>
+      <p class="hint" data-i18n="proxiesPrintHint"></p>
+    </div>
+    <div class="toolbar-actions">
+      <label class="mark-option">
+        <input type="checkbox" id="proxy-mark" checked />
+        <span data-i18n="proxiesMarkLabel"></span>
+      </label>
+      <button id="print" class="primary" disabled>🖨️ <span data-i18n="proxiesPrint"></span></button>
+    </div>
+  </header>
+  <main id="sheets"></main>
+  <footer class="credits hint" data-i18n="proxiesCredits"></footer>
+  <script src="i18n.js"></script>
+  <script src="proxies.js"></script>
+</body>
+</html>

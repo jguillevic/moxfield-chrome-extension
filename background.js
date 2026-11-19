@@ -4,11 +4,14 @@
 //     qty : exemplaires libres ; printings : exemplaires POSSÉDÉS par édition,
 //     seulement pour une carte possédée en plusieurs éditions (cf.
 //     parseCollectionCSV).
-//   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty, versions?}], builtAt: number,
+//   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty, versions?, proxyQty?, proxyPrinting?}], builtAt: number,
 //     versions : [{code, qty, set?, cn?}], impressions Moxfield lues sur la
 //     page au montage (cf. ownedVersionOf dans deck-scraper.js) ; set et cn :
 //     édition et numéro donnés par l'API du deck quand elle a répondu (cf.
 //     GET_DECK_PRINTINGS), comme dans printings.
+//     proxyQty : exemplaires joués en proxy, jamais pris au stock ;
+//     proxyPrinting : {set, cn} de la version à imprimer (cf. proxyCountOf
+//     dans deck-checks.js).
 //                   updatedAt?: number,
 //                   pageChanges?: [{name, from, to}], pageCheckedAt?: number } }
 //     pageChanges : différences constatées sur la page Moxfield du deck par
@@ -31,6 +34,12 @@ const STORAGE_KEY = "moxfieldStockManagerState";
 function normalizeName(name) {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
+
+// Règles partagées avec la page d'un deck et le popup (cf. deck-checks.js).
+const { isBasicLand, stockQtyOf, proxyCountOf, proxyTotal, replaceableProxies, chooseOwnedEdition, buildVersionUsage } = createDeckChecks(
+  normalizeName,
+  i18n
+);
 
 // Seuls stock, builtDecks et history sont conservés : une ancienne version stockait
 // aussi les réglages de synchro automatique (settings, lastAutoSync...),
@@ -180,6 +189,28 @@ function parseCSVLine(line) {
 }
 
 function parseCollectionCSV(csvText) {
+  const { aggregated, editions } = parseCollectionRows(csvText);
+  for (const [key, byEdition] of editions) {
+    if (byEdition.size < 2) continue;
+    // Finitions laissées de côté : le stock ne les distingue pas.
+    aggregated[key].printings = [...byEdition.values()]
+      .map(({ set, cn, qty }) => ({ set, cn, qty }))
+      .sort((a, b) => a.set.localeCompare(b.set) || a.cn.localeCompare(b.cn));
+  }
+  return aggregated;
+}
+
+// Éditions possédées de chaque carte, une seule édition comprise : Map nom
+// normalisé → [{ set, cn, qty, finishes: { nonFoil?, foil?, etched? } }]
+// (exemplaires par finition). Pour le changement d'édition d'un deck
+// seulement, jamais enregistré dans l'état (cf. parseCollectionCSV).
+function collectionEditions(csvText) {
+  const result = new Map();
+  for (const [key, byEdition] of parseCollectionRows(csvText).editions) result.set(key, [...byEdition.values()]);
+  return result;
+}
+
+function parseCollectionRows(csvText) {
   const lines = csvText.replace(/\r\n/g, "\n").split("\n").filter((l) => l.trim().length > 0);
   if (lines.length < 2) throw new Error(i18n.t("csvEmpty"));
 
@@ -192,6 +223,8 @@ function parseCollectionCSV(csvText) {
 
   const editionIdx = header.indexOf("edition");
   const numberIdx = header.indexOf("collector number");
+  // Colonne « Foil » de l'export Moxfield : « foil », « etched » ou vide.
+  const foilIdx = header.indexOf("foil");
 
   const aggregated = {};
   const editions = new Map(); // nom normalisé → Map("édition|numéro" → { set, cn, qty })
@@ -210,14 +243,14 @@ function parseCollectionCSV(csvText) {
     if (!editions.has(key)) editions.set(key, new Map());
     const byEdition = editions.get(key);
     const editionKey = `${set}|${cn}`;
-    if (!byEdition.has(editionKey)) byEdition.set(editionKey, { set, cn, qty: 0 });
-    byEdition.get(editionKey).qty += rawCount;
+    if (!byEdition.has(editionKey)) byEdition.set(editionKey, { set, cn, qty: 0, finishes: {} });
+    const edition = byEdition.get(editionKey);
+    edition.qty += rawCount;
+    const foil = foilIdx === -1 ? "" : (cells[foilIdx] || "").trim().toLowerCase();
+    const finish = foil === "etched" ? "etched" : foil === "foil" ? "foil" : "nonFoil";
+    edition.finishes[finish] = (edition.finishes[finish] || 0) + rawCount;
   }
-  for (const [key, byEdition] of editions) {
-    if (byEdition.size < 2) continue;
-    aggregated[key].printings = [...byEdition.values()].sort((a, b) => a.set.localeCompare(b.set) || a.cn.localeCompare(b.cn));
-  }
-  return aggregated;
+  return { aggregated, editions };
 }
 
 // --- Handlers ---
@@ -271,28 +304,60 @@ async function handleImportCSV(csvText) {
 
 // sign = -1 : les cartes partent dans un deck (montage) ; +1 : elles
 // reviennent au stock (démontage).
+// Cartes excludedFromStock (absentes de la collection Moxfield) et proxies :
+// jamais décomptés (cf. stockQtyOf).
 function moveCardsInStock(stock, cards, sign) {
   for (const card of cards) {
-    if (card.excludedFromStock) continue; // absente de la collection Moxfield : jamais décomptée
+    const qty = stockQtyOf(card);
+    if (qty === 0) continue;
     const key = normalizeName(card.name);
     if (!stock[key]) stock[key] = { name: card.name, qty: 0 };
-    stock[key].qty += sign * card.qty;
+    stock[key].qty += sign * qty;
   }
 }
 
-// Montage / démontage, notés dans l'historique.
+// Exemplaires pris au stock par une liste (historique).
+function stockCount(cards) {
+  return cards.reduce((n, c) => n + stockQtyOf(c), 0);
+}
+
+// Champs proxy reçus d'une page : proxyQty entier entre 1 et la quantité,
+// proxyPrinting { set, cn } court ; tout le reste est retiré plutôt que
+// d'enregistrer une valeur qui fausserait le stock.
+function cleanProxyFields(cards) {
+  const short = (value) => (typeof value === "string" ? value.slice(0, 20) : "");
+  return (cards || []).map((card) => {
+    if (!("proxyQty" in card) && !("proxyPrinting" in card)) return card;
+    const { proxyQty, proxyPrinting, ...rest } = card;
+    if (!Number.isInteger(proxyQty) || proxyQty < 1 || proxyQty > card.qty) return rest;
+    const clean = { ...rest, proxyQty };
+    if (proxyPrinting && short(proxyPrinting.set)) clean.proxyPrinting = { set: short(proxyPrinting.set), cn: short(proxyPrinting.cn) };
+    return clean;
+  });
+}
+
+// Montage / démontage, notés dans l'historique. cardCount : exemplaires pris
+// au stock (ou rendus) ; proxyCount : proxies, s'il y en a.
+function withProxyCount(entry, cards) {
+  const proxies = proxyTotal(cards);
+  return proxies > 0 ? { ...entry, proxyCount: proxies } : entry;
+}
+
 async function buildDeck(state, { deckId, deckName, url, cards }) {
   const builtAt = Date.now();
   moveCardsInStock(state.stock, cards, -1);
   state.builtDecks[deckId] = { name: deckName, url, cards, builtAt };
-  await recordHistory(state, { type: "deck-built", deckId, deckName, url, builtAt, cardCount: historyLog.cardCount(cards) });
+  await recordHistory(state, withProxyCount({ type: "deck-built", deckId, deckName, url, builtAt, cardCount: stockCount(cards) }, cards));
 }
 
 async function unbuildDeck(state, deckId) {
   const deck = state.builtDecks[deckId];
   moveCardsInStock(state.stock, deck.cards, +1);
   delete state.builtDecks[deckId];
-  await recordHistory(state, { type: "deck-unbuilt", deckId, deckName: deck.name, url: deck.url, cards: deck.cards });
+  await recordHistory(
+    state,
+    withProxyCount({ type: "deck-unbuilt", deckId, deckName: deck.name, url: deck.url, cards: deck.cards, cardCount: stockCount(deck.cards) }, deck.cards)
+  );
 }
 
 async function handleToggleDeck({ deckId, deckName, url, cards, built }) {
@@ -300,7 +365,7 @@ async function handleToggleDeck({ deckId, deckName, url, cards, built }) {
 
   if (built) {
     if (state.builtDecks[deckId]) return { ok: true, alreadyBuilt: true };
-    await buildDeck(state, { deckId, deckName, url, cards });
+    await buildDeck(state, { deckId, deckName, url, cards: cleanProxyFields(cards) });
   } else {
     if (!state.builtDecks[deckId]) return { ok: true, wasNotBuilt: true };
     await unbuildDeck(state, deckId);
@@ -321,7 +386,7 @@ async function updateDeck(state, { deckId, deckName, url, cards }) {
   delete updated.pageChanges; // le montage correspond de nouveau à la page
   delete updated.pageCheckedAt;
   state.builtDecks[deckId] = updated;
-  await recordHistory(state, {
+  const entry = {
     type: "deck-updated",
     deckId,
     deckName,
@@ -329,14 +394,71 @@ async function updateDeck(state, { deckId, deckName, url, cards }) {
     changes: historyLog.cardsDiff(deck.cards, cards),
     previousCards: deck.cards,
     updatedAt: updated.updatedAt,
-  });
+  };
+  // Proxies ajoutés pour des cartes en stock insuffisant.
+  const proxiesAdded = proxyTotal(cards) - proxyTotal(deck.cards);
+  if (proxiesAdded > 0) entry.proxiesAdded = proxiesAdded;
+  await recordHistory(state, entry);
 }
 
 async function handleUpdateBuiltDeck({ deckId, deckName, url, cards }) {
   const state = await getState();
   if (!state.builtDecks[deckId]) throw new Error(i18n.t("deckNoLongerBuilt"));
-  await updateDeck(state, { deckId, deckName, url, cards });
+  await updateDeck(state, { deckId, deckName, url, cards: cleanProxyFields(cards) });
   await setState(state);
+  return { ok: true };
+}
+
+// Proxies d'un deck monté remplacés par la vraie carte, dès que le stock
+// libre le permet (cf. replaceableProxies) : la carte est alors prise au
+// stock comme les autres. Aucune vérification de version : le doute
+// profite au montage, comme au montage par recoupement.
+async function handleReplaceProxies({ deckId }) {
+  const state = await getState();
+  const deck = state.builtDecks[deckId];
+  if (!deck) throw Object.assign(new Error(i18n.t("deckNoLongerBuilt")), { expected: true });
+  const replaced = replaceableProxies(deck, state.stock);
+  if (replaced.length === 0) throw Object.assign(new Error(i18n.t("proxiesNothingToReplace")), { expected: true });
+  const left = new Map(replaced.map((r) => [normalizeName(r.name), r.qty]));
+  deck.cards = deck.cards.map((card) => {
+    const key = normalizeName(card.name);
+    const qty = Math.min(left.get(key) || 0, proxyCountOf(card));
+    if (qty === 0) return card;
+    left.set(key, left.get(key) - qty);
+    const { proxyQty, proxyPrinting, ...rest } = card;
+    const remaining = proxyCountOf(card) - qty;
+    return remaining > 0 ? { ...card, proxyQty: remaining } : rest;
+  });
+  moveCardsInStock(state.stock, replaced, -1);
+  await recordHistory(state, {
+    type: "proxies-replaced",
+    deckId,
+    deckName: deck.name,
+    url: deck.url,
+    cards: replaced,
+  });
+  await setState(state);
+  return { ok: true, replaced };
+}
+
+// Proxies d'un deck monté, pour la page d'impression (proxies.html) :
+// seulement ce deck, pas l'état complet.
+async function handleGetDeckProxies({ deckId }) {
+  const { builtDecks } = await getState();
+  const deck = builtDecks[deckId];
+  if (!deck) return { ok: true, deck: null };
+  const cards = deck.cards
+    .filter((c) => proxyCountOf(c) > 0)
+    .map((c) => ({ name: c.name, qty: proxyCountOf(c), ...(c.proxyPrinting ? { set: c.proxyPrinting.set, cn: c.proxyPrinting.cn } : {}) }));
+  return { ok: true, deck: { name: deck.name, url: deck.url, cards } };
+}
+
+// Page d'impression des proxies d'un deck, ouverte dans un nouvel onglet :
+// une page de Moxfield ne peut pas ouvrir elle-même une page de
+// l'extension.
+async function handleOpenProxiesPage({ deckId }) {
+  if (typeof deckId !== "string" || !deckId) return { ok: false, error: i18n.t("deckNoLongerBuilt") };
+  await chrome.tabs.create({ url: chrome.runtime.getURL(`proxies.html?deck=${encodeURIComponent(deckId)}`) });
   return { ok: true };
 }
 
@@ -961,7 +1083,6 @@ const moxfieldCollection = createMoxfieldCollection({
   getCookies: () => chrome.cookies.getAll({ domain: "moxfield.com" }),
   i18n,
 });
-const { isBasicLand } = createDeckChecks(normalizeName, i18n);
 
 async function getCollectionMeta() {
   const data = await chrome.storage.local.get(COLLECTION_META_KEY);
@@ -989,7 +1110,8 @@ function findUncoveredCards(state) {
   const decksByCard = new Map();
   for (const deck of Object.values(state.builtDecks)) {
     for (const card of deck.cards) {
-      if (card.excludedFromStock || isBasicLand(card.name)) continue;
+      // Proxies et cartes excludedFromStock : ne tiennent aucun exemplaire.
+      if (stockQtyOf(card) === 0 || isBasicLand(card.name)) continue;
       const key = normalizeName(card.name);
       if (!decksByCard.has(key)) decksByCard.set(key, []);
       decksByCard.get(key).push(deck.name);
@@ -1059,6 +1181,222 @@ async function handleGetDeckPrintings({ deckId }) {
     if (!EXPECTED_DECK_PRINTINGS_ERRORS.includes(code)) reportError("moxfield-deck", e, { code });
     return { ok: false, error: e.message || String(e), code };
   }
+}
+
+// --- Passer un deck Moxfield sur les éditions de la collection ---
+// Cartes possédées dans une autre édition que celle du deck (cf.
+// chooseOwnedEdition dans deck-checks.js). Deux temps : proposition (aucune
+// écriture : collection, deck et éditions lus), puis application, carte par
+// carte, après confirmation sur la page du deck. C'est la seule écriture de
+// l'extension sur Moxfield. Ni le stock ni les decks montés ne changent :
+// pas d'entrée dans l'historique (le deck Moxfield garde la sienne).
+// Pause entre deux appels à Moxfield : jusqu'à une centaine de cartes.
+const MOXFIELD_CALL_DELAY_MS = 150;
+const MAX_EDITION_CHANGES = 250;
+const validDeckId = (deckId) => typeof deckId === "string" && /^[\w-]{1,64}$/.test(deckId);
+const pause = () => new Promise((resolve) => setTimeout(resolve, MOXFIELD_CALL_DELAY_MS));
+// Lectures des éditions menées en parallèle, par petits groupes : 66 cartes
+// lues une à une prenaient près d'une minute (constaté en vrai, novembre
+// 2026), sans aller jusqu'à inonder Moxfield (refus 429).
+const EDITIONS_CONCURRENCY = 3;
+
+// fn appliquée à chaque élément, au plus limit à la fois ; résultats dans
+// l'ordre des éléments. Première erreur propagée.
+async function mapLimited(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+// Refus de Moxfield (deck d'un autre compte, protection anti-robot) :
+// expliqué à l'utilisateur, pas rapporté.
+const EXPECTED_EDITION_ERRORS = [...EXPECTED_DECK_PRINTINGS_ERRORS, "blocked"];
+
+// Même file que la collection : jamais deux suites d'appels à Moxfield à la
+// fois.
+async function inMoxfieldQueue(where, task) {
+  const run = collectionQueue.then(task);
+  collectionQueue = run.catch(() => {});
+  try {
+    return { ok: true, ...(await run) };
+  } catch (e) {
+    const code = e.code || "unknown";
+    // Réponse de Moxfield (motif d'un refus) jointe au rapport ; adresses
+    // mail et jetons masqués par scrub (error-reports.js).
+    const extra = typeof e.response === "string" ? { code, response: e.response } : { code };
+    if (!EXPECTED_EDITION_ERRORS.includes(code)) reportError(where, e, extra);
+    return { ok: false, error: e.message || String(e), code, ...(e.partial || {}) };
+  }
+}
+
+// Proposition : { plan: [{ name, board, uniqueCardId, from: {set, cn},
+// to: {set, cn, setName, cardId, finishes} }], skipped: [{ name, reason }] }.
+// reason : "not-in-deck", "several" (plusieurs impressions dans la même
+// entrée), "no-other-edition", "edition-unknown" (édition de la collection
+// introuvable chez Moxfield pour cette carte).
+// Avancement ({ step: "plan" | "apply", done, total }) envoyé à l'onglet
+// qui a lancé l'action, pour sa jauge : sans elle, une minute sans rien
+// voir bouger donne l'impression que rien ne marche (retour utilisateur).
+// Onglet fermé ou rechargé entre-temps : ignoré.
+function progressTo(sender) {
+  const tabId = sender && sender.tab && sender.tab.id;
+  return (progress) => {
+    if (tabId === undefined) return;
+    try {
+      Promise.resolve(chrome.tabs.sendMessage(tabId, { type: "OWNED_EDITIONS_PROGRESS", ...progress })).catch(() => {});
+    } catch (e) {
+      // onglet introuvable : rien à afficher
+    }
+  };
+}
+
+async function handlePlanOwnedEditions({ deckId, names }, progress = () => {}) {
+  if (!validDeckId(deckId) || !Array.isArray(names)) return { ok: false, code: "deck-unavailable", error: i18n.t("moxfieldDeckUnavailable") };
+  return inMoxfieldQueue("moxfield-editions", async () => {
+    const owned = collectionEditions(await moxfieldCollection.downloadCollectionCSV());
+    const entries = deckEntries(await moxfieldCollection.fetchDeck(deckId));
+    const usage = buildVersionUsage((await getState()).builtDecks, deckId);
+    // Choix faits d'abord (sans appel), éditions lues ensuite en parallèle ;
+    // cartes laissées gardées dans l'ordre demandé.
+    const steps = [];
+    for (const name of names.filter((n) => typeof n === "string").slice(0, MAX_EDITION_CHANGES)) {
+      const key = normalizeName(name);
+      // La page ne donne parfois que la face avant (cf. completeCardNames).
+      const entry =
+        entries.find((e) => normalizeName(e.name) === key) || entries.find((e) => normalizeName(e.name).split(" // ")[0] === key.split(" // ")[0]);
+      if (!entry) {
+        steps.push({ skip: { name, reason: "not-in-deck" } });
+        continue;
+      }
+      if (entry.several) {
+        steps.push({ skip: { name: entry.name, reason: "several" } });
+        continue;
+      }
+      const cardKey = normalizeName(entry.name);
+      const ownedEditions = owned.get(cardKey) || [];
+      const choice = chooseOwnedEdition(ownedEditions, entry, usage.get(cardKey) || []);
+      if (choice) {
+        steps.push({ entry, choice });
+        continue;
+      }
+      // Possédée ailleurs, mais aucune édition n'en a assez pour la ligne.
+      const partly = chooseOwnedEdition(ownedEditions, { ...entry, quantity: 1 }, usage.get(cardKey) || []);
+      steps.push({ skip: { name: entry.name, reason: partly ? "not-enough" : "no-other-edition" } });
+    }
+    const chosen = steps.filter((step) => step.entry);
+    let read = 0;
+    progress({ step: "plan", done: 0, total: chosen.length });
+    const editions = await mapLimited(chosen, EDITIONS_CONCURRENCY, async ({ entry }) => {
+      const known = await moxfieldCollection.fetchCardEditions(entry.uniqueCardId);
+      progress({ step: "plan", done: ++read, total: chosen.length });
+      return known;
+    });
+    chosen.forEach((step, i) => (step.editions = editions[i]));
+    const plan = [];
+    const skipped = [];
+    for (const { skip, entry, choice, editions: known } of steps) {
+      if (skip) {
+        skipped.push(skip);
+        continue;
+      }
+      const edition = known.find((e) => e.set === choice.set && e.cn === choice.cn);
+      // Même édition, finition que Moxfield ne connaît pas pour elle : rien
+      // à changer.
+      const sameEdition = edition && edition.set === entry.set && edition.cn === entry.cn;
+      if (!edition || (sameEdition && !edition.finishes.includes(choice.finish))) {
+        skipped.push({ name: entry.name, reason: "edition-unknown" });
+        continue;
+      }
+      plan.push({
+        name: entry.name,
+        board: entry.board,
+        uniqueCardId: entry.uniqueCardId,
+        from: { set: entry.set, cn: entry.cn },
+        to: { set: edition.set, cn: edition.cn, setName: edition.setName, cardId: edition.cardId, finishes: edition.finishes, finish: choice.finish },
+      });
+    }
+    return { plan, skipped };
+  });
+}
+
+// Application d'une proposition, une carte à la fois : Moxfield exige la
+// version du deck, qui change à chaque modification. Le deck n'est lu qu'au
+// début (le relire avant chaque carte faisait près de 2 minutes pour 66
+// cartes, constaté en vrai, novembre 2026) : la version est ensuite
+// augmentée de 1 après chaque changement accepté. Si Moxfield refuse
+// (deck modifié ailleurs, version qui ne suit pas), le deck est relu et la
+// carte retentée une fois. Une carte modifiée entre-temps n'est pas touchée
+// ("changed"). Arrêt à la première erreur, avec les cartes déjà passées
+// (done).
+const FINISHES = ["nonFoil", "foil", "etched"];
+
+async function handleApplyOwnedEditions({ deckId, plan }, progress = () => {}) {
+  const short = (v) => typeof v === "string" && v.length > 0 && v.length <= 64;
+  const valid = (item) =>
+    item && short(item.name) && /^\w{1,32}$/.test(item.board) && /^[\w-]{1,32}$/.test(item.uniqueCardId) &&
+    item.from && typeof item.from.set === "string" && typeof item.from.cn === "string" &&
+    item.to && /^[\w-]{1,32}$/.test(item.to.cardId) && Array.isArray(item.to.finishes) &&
+    (item.to.finish === undefined || FINISHES.includes(item.to.finish));
+  if (!validDeckId(deckId) || !Array.isArray(plan) || !plan.every(valid)) return { ok: false, code: "invalid", error: i18n.t("unknownError") };
+  return inMoxfieldQueue("moxfield-edition-change", async () => {
+    const done = [];
+    const skipped = [];
+    let deck = null;
+    const read = async () => {
+      deck = await moxfieldCollection.fetchDeck(deckId);
+    };
+    const entryOf = (item) => {
+      const entry = deckEntries(deck).find((e) => e.board === item.board && e.uniqueCardId === item.uniqueCardId);
+      return entry && !entry.several && entry.set === item.from.set && entry.cn === item.from.cn ? entry : null;
+    };
+    const items = plan.slice(0, MAX_EDITION_CHANGES);
+    progress({ step: "apply", done: 0, total: items.length });
+    for (const [i, item] of items.entries()) {
+      if (i > 0) await pause();
+      // Carte traitée (changée ou laissée), même en cas d'erreur juste après.
+      const advance = () => progress({ step: "apply", done: i + 1, total: items.length });
+      try {
+        if (!deck) await read();
+        const finishes = item.to.finishes.filter((f) => FINISHES.includes(f));
+        const edition = { cardId: item.to.cardId, finishes, finish: item.to.finish };
+        let entry = entryOf(item);
+        if (!entry) {
+          skipped.push({ name: item.name, reason: "changed" });
+          advance();
+          continue;
+        }
+        try {
+          await moxfieldCollection.setDeckCardEdition(deck, entry, edition);
+        } catch (e) {
+          // Refus attendu d'une version périmée : relire, puis une seule
+          // nouvelle tentative. Réseau coupé ou blocage : arrêt direct.
+          if (e.code !== "api-changed") throw e;
+          await read();
+          entry = entryOf(item);
+          if (!entry) {
+            skipped.push({ name: item.name, reason: "changed" });
+            advance();
+            continue;
+          }
+          await moxfieldCollection.setDeckCardEdition(deck, entry, edition);
+        }
+        deck = { ...deck, version: deck.version + 1 };
+        done.push(item.name);
+        advance();
+      } catch (e) {
+        e.partial = { done, skipped };
+        throw e;
+      }
+    }
+    return { done, skipped };
+  });
 }
 
 async function fetchCollectionIfDue() {
@@ -1199,6 +1537,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "UPDATE_BUILT_DECK":
           sendResponse(await handleUpdateBuiltDeck(msg.payload));
+          break;
+        case "PLAN_OWNED_EDITIONS":
+          sendResponse(await handlePlanOwnedEditions(msg.payload || {}, progressTo(sender)));
+          break;
+        case "APPLY_OWNED_EDITIONS":
+          sendResponse(await handleApplyOwnedEditions(msg.payload || {}, progressTo(sender)));
+          break;
+        case "REPLACE_PROXIES":
+          sendResponse(await handleReplaceProxies(msg.payload || {}));
+          break;
+        case "GET_DECK_PROXIES":
+          sendResponse(await handleGetDeckProxies(msg.payload || {}));
+          break;
+        case "OPEN_PROXIES_PAGE":
+          sendResponse(await handleOpenProxiesPage(msg.payload || {}));
           break;
         case "GET_SYNC_STATUS":
           sendResponse({ ok: true, meta: await getSyncMeta() });

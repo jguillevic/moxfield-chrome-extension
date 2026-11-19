@@ -159,9 +159,23 @@ test("demandes simultanées (alarme et popup) : une seule fenêtre", async () =>
 });
 
 test("fenêtre ouverte longtemps : le service worker est maintenu en vie, puis plus", async () => {
-  const slow = (details) =>
-    new Promise((resolve) => setTimeout(() => resolve(`${REDIRECT}#access_token=lent&expires_in=3599`), 120));
-  const { auth, keepAlive } = setup({ launch: slow, keepAliveMs: 20 });
+  // Fenêtre fermée seulement après 3 maintiens (et non au bout d'un délai
+  // fixe) : machine chargée (tests en parallèle), les minuteries prennent du
+  // retard et un délai fixe faisait échouer le test au hasard.
+  let keepAlive;
+  const slow = () =>
+    new Promise((resolve) => {
+      // Borne : sans maintien du tout, le test échoue au lieu de bloquer.
+      const giveUpAt = Date.now() + 2000;
+      const check = setInterval(() => {
+        if (keepAlive.calls < 3 && Date.now() < giveUpAt) return;
+        clearInterval(check);
+        resolve(`${REDIRECT}#access_token=lent&expires_in=3599`);
+      }, 5);
+    });
+  const harness = setup({ launch: slow, keepAliveMs: 20 });
+  const { auth } = harness;
+  keepAlive = harness.keepAlive;
   await auth.getToken({ interactive: true });
   assert.ok(keepAlive.calls >= 3, `${keepAlive.calls} appels`);
   const after = keepAlive.calls;

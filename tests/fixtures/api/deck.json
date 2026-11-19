@@ -14,7 +14,7 @@
           "isFoil": false,
           "isAlter": false,
           "isProxy": false,
-          "card": { "id": "ZOwRD", "uniqueCardId": "u0001", "set": "rav", "set_name": "Ravnica: City of Guilds", "name": "Golgari Thug", "cn": "87", "lang": "en" }
+          "card": { "id": "ZOwRD", "uniqueCardId": "u0001", "set": "rav", "set_name": "Ravnica: City of Guilds", "name": "Golgari Thug", "cn": "87", "lang": "en", "prices": { "usd": 0.3, "usd_foil": 0.35, "eur": 0.15, "eur_foil": 0.45, "ck": 0.49, "lastUpdatedAtUtc": "2026-11-18T01:17:16.938Z" } }
         },
         "u0002": {
           "quantity": 1,
@@ -23,7 +23,7 @@
           "isFoil": true,
           "isAlter": false,
           "isProxy": false,
-          "card": { "id": "E0aWJ", "uniqueCardId": "u0002", "set": "PKTK", "set_name": "Khans of Tarkir Promos", "name": "Sidisi, Brood Tyrant", "cn": "199P", "lang": "en" }
+          "card": { "id": "E0aWJ", "uniqueCardId": "u0002", "set": "PKTK", "set_name": "Khans of Tarkir Promos", "name": "Sidisi, Brood Tyrant", "cn": "199P", "lang": "en", "prices": { "usd": 1.1, "usd_foil": 2.4, "eur": 0.9, "eur_foil": 2.05, "ck": 1.99, "lastUpdatedAtUtc": "2026-11-18T01:17:16.938Z" } }
         },
         "u0003": {
           "quantity": 1,
@@ -32,7 +32,7 @@
           "isFoil": false,
           "isAlter": false,
           "isProxy": false,
-          "card": { "id": "xRXAR", "uniqueCardId": "u0003", "set": "mh3", "set_name": "Modern Horizons 3", "name": "Revitalizing Repast // Old-Growth Grove", "cn": "235", "lang": "en" }
+          "card": { "id": "xRXAR", "uniqueCardId": "u0003", "set": "mh3", "set_name": "Modern Horizons 3", "name": "Revitalizing Repast // Old-Growth Grove", "cn": "235", "lang": "en", "prices": { "usd": 0.12, "usd_foil": 0.2, "eur": 0.1, "eur_foil": 0.18, "ck": 0.25, "lastUpdatedAtUtc": "2026-11-18T01:17:16.938Z" } }
         },
         "u0004": {
           "quantity": 3,
@@ -41,7 +41,7 @@
           "isFoil": false,
           "isAlter": false,
           "isProxy": false,
-          "card": { "id": "SWAMP1", "uniqueCardId": "u0004", "set": "war", "set_name": "War of the Spark", "name": "Swamp", "cn": "256", "lang": "en" },
+          "card": { "id": "SWAMP1", "uniqueCardId": "u0004", "set": "war", "set_name": "War of the Spark", "name": "Swamp", "cn": "256", "lang": "en", "prices": { "usd": 0.13, "usd_foil": 0.18, "eur": 0.11, "eur_foil": 0.11, "lastUpdatedAtUtc": "2026-11-18T01:17:16.938Z" } },
           "printingData": [
             {
               "id": "SWAMP1",
@@ -50,7 +50,7 @@
               "hash": "SWAMP1N0",
               "set": "war",
               "cn": "256",
-              "card": { "id": "SWAMP1", "uniqueCardId": "u0004", "set": "war", "name": "Swamp", "cn": "256", "lang": "en" }
+              "card": { "id": "SWAMP1", "uniqueCardId": "u0004", "set": "war", "name": "Swamp", "cn": "256", "lang": "en", "prices": { "usd": 0.13, "usd_foil": 0.18, "eur": 0.11, "eur_foil": 0.11, "lastUpdatedAtUtc": "2026-11-18T01:17:16.938Z" } }
             },
             {
               "id": "SWAMP2",
@@ -59,7 +59,7 @@
               "hash": "SWAMP2F0",
               "set": "pwar",
               "cn": "WAR-115",
-              "card": { "id": "SWAMP2", "uniqueCardId": "u0004", "set": "pwar", "name": "Swamp", "cn": "WAR-115", "lang": "ja" }
+              "card": { "id": "SWAMP2", "uniqueCardId": "u0004", "set": "pwar", "name": "Swamp", "cn": "WAR-115", "lang": "ja", "prices": { "usd_foil": 0.6, "eur_foil": 0.8, "ck_foil": 0.99, "lastUpdatedAtUtc": "2026-11-18T01:17:16.938Z" } }
             }
           ]
         }
@@ -89,13 +89,14 @@
           "isFoil": false,
           "isAlter": false,
           "isProxy": false,
-          "card": { "id": "mAyBe", "uniqueCardId": "u0006", "set": "c21", "set_name": "Commander 2021", "name": "Sol Ring", "cn": "263", "lang": "en" }
+          "card": { "id": "mAyBe", "uniqueCardId": "u0006", "set": "c21", "set_name": "Commander 2021", "name": "Sol Ring", "cn": "263", "lang": "en", "prices": { "usd": 1.6, "eur": 1.25, "eur_foil": 4.5, "ck": 1.99, "lastUpdatedAtUtc": "2026-11-18T01:17:16.938Z" } }
         }
       }
     },
     "sideboard": { "count": 0, "cards": {} },
     "companions": { "count": 0, "cards": {} }
   },
+  "version": 6,
   "tokens": [],
   "authorTags": {}
 }

@@ -7,7 +7,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-const { JSDOM } = require("jsdom");
+const { JSDOM, VirtualConsole } = require("jsdom");
 const { FIXTURES_DIR, simulateLayout, fakeGetMessage } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
@@ -36,19 +36,31 @@ const FULL_STOCK = stockOf({
 // lang : langue du navigateur (français par défaut).
 // handle : réponse imposée à un message dès le chargement de la page (cf.
 // page.handle).
-function openDeckPage(state, lang = "fr", handle = null) {
+// beforeScripts(win) : préparation de la page avant les scripts de
+// l'extension (ex. sessionStorage laissé par un rechargement).
+function openDeckPage(state, lang = "fr", handle = null, format = "Commander", beforeScripts = null) {
   const html = fs.readFileSync(path.join(FIXTURES_DIR, "text.html"), "utf8");
-  const dom = new JSDOM(html, { url: "https://www.moxfield.com/decks/abc123", runScripts: "outside-only" });
+  // jsdom ne sait pas recharger une page : il le signale sur sa console, ce
+  // qui permet de vérifier qu'un rechargement a été demandé.
+  const reloads = [];
+  const virtualConsole = new VirtualConsole();
+  virtualConsole.on("jsdomError", (err) => {
+    if (/navigation/.test(err.message)) reloads.push(err.message);
+    else console.error(err);
+  });
+  const dom = new JSDOM(html, { url: "https://www.moxfield.com/decks/abc123", runScripts: "outside-only", virtualConsole });
   const win = dom.window;
   simulateLayout(win);
   win.document.querySelector('select[name="viewMode"], select#viewMode').value = "table";
-  // Le bouton n'apparaît que sur un deck Commander.
+  // Format du deck (badge d'en-tête de Moxfield) : le bouton n'en dépend pas.
   const badge = win.document.createElement("span");
   badge.className = "badge-header";
-  badge.textContent = "Commander";
+  badge.textContent = format;
   win.document.body.prepend(badge);
 
   const storageListeners = [];
+  // Messages du service worker vers la page (cf. page.emit).
+  const messageListeners = [];
   const page = {
     state,
     win,
@@ -57,11 +69,14 @@ function openDeckPage(state, lang = "fr", handle = null) {
       page.state = { ...page.state, stock };
       for (const fn of storageListeners) fn({ [STATE_KEY]: { newValue: page.state } }, "local");
     },
-    button: () => win.document.querySelector(".msm-floating-btn, .msm-bar-btn"),
+    button: () => win.document.querySelector(".msm-floating-btn, .msm-bar-btn:not(.msm-editions-bar-btn)"),
     close: () => win.close(),
     sent: [],
     // Réponse imposée à un message (ex. erreur levée), sinon comportement normal.
     handle,
+    reloads,
+    // Message envoyé à la page par le service worker.
+    emit: (msg) => messageListeners.forEach((fn) => fn(JSON.parse(JSON.stringify(msg)))),
   };
   // Comme le service worker (GET_DECK_CONTEXT) : seulement le stock des
   // cartes demandées (face avant d'une double face comprise) et de celles
@@ -89,9 +104,11 @@ function openDeckPage(state, lang = "fr", handle = null) {
         return { ok: true };
       },
       getURL: (p) => `chrome-extension://test/${p}`,
+      onMessage: { addListener: (fn) => messageListeners.push(fn) },
     },
     storage: { onChanged: { addListener: (fn) => storageListeners.push(fn) } },
   };
+  if (beforeScripts) beforeScripts(win);
   for (const source of SCRIPTS) win.eval(source);
   return page;
 }
@@ -501,4 +518,563 @@ test("deck monté avant la lecture des éditions : elles sont ajoutées à ses v
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.equal(sentOf(page, "GET_DECK_PRINTINGS").length, 1);
   assert.ok(!buttonText(page).includes("⚠️"), "deck pas signalé comme modifié");
+});
+
+test("deck d'un autre format que Commander : bouton et faisabilité affichés", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", null, "Modern");
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("dispo") || buttonTitle(page).includes("dispo"), 2000, "faisabilité affichée");
+  assert.ok(page.button(), "bouton absent hors Commander");
+});
+
+// --- Prix des cartes manquantes (prix « eur » de l'API du deck) ---
+
+// Golgari Thug et Sidisi ont un prix ; Revitalizing Repast n'en a pas.
+const PAGE_PRICES = {
+  ...PAGE_PRINTINGS,
+  ZOwRD: { ...PAGE_PRINTINGS.ZOwRD, eur: 0.15 },
+  E0aWJ: { ...PAGE_PRINTINGS.E0aWJ, eur: 0.9 },
+};
+// Espaces insécables des montants (« 0,15 € ») ramenées à des espaces.
+const plainText = (el) => el.textContent.replace(/\s/g, " ");
+const NO_STOCK = { ...FULL_STOCK, ...stockOf({ "Golgari Thug": 0, "Sidisi, Brood Tyrant": 0, "Revitalizing Repast // Old-Growth Grove": 0 }) };
+
+test("montage : prix de chaque carte manquante et total, partiel si une carte n'a pas de prix", async (t) => {
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const warning = doc.querySelector("#msm-shortage-warning");
+  await waitFor(() => warning.textContent.includes("Golgari Thug"), 2000, "manques affichés");
+  assert.match(plainText(warning), /Golgari Thug — as 0, besoin 1 \(manque 1\) · 0,15 €/);
+  assert.match(plainText(warning), /Sidisi, Brood Tyrant — as 0, besoin 1 \(manque 1\) · 0,90 €/);
+  const repast = [...warning.querySelectorAll("li")].find((li) => li.textContent.startsWith("Revitalizing"));
+  assert.equal(plainText(repast), "Revitalizing Repast // Old-Growth Grove — as 0, besoin 1 (manque 1)", "sans prix");
+  const total = warning.querySelector(".msm-price-total");
+  assert.equal(plainText(total), "💶 Coût des cartes manquantes : au moins 1,05 € (1 carte sans prix)");
+  assert.match(total.title, /Cardmarket/);
+
+  // Quantité changée à la main : la carte garde son prix.
+  const textarea = doc.querySelector("#msm-cards-textarea");
+  textarea.value = textarea.value.replace("1 Golgari Thug", "3 Golgari Thug").replace(/^1 Revitalizing.*$/m, "");
+  textarea.dispatchEvent(new page.win.Event("input"));
+  await waitFor(() => warning.textContent.includes("manque 3"), 2000, "liste recalculée");
+  assert.match(plainText(warning), /Golgari Thug — as 0, besoin 3 \(manque 3\) · 0,45 € \(0,15 € l'unité\)/);
+  assert.equal(plainText(warning.querySelector(".msm-price-total")), "💶 Coût des cartes manquantes : 1,35 €");
+});
+
+test("montage : sans réponse de l'API du deck, ni prix ni total", async (t) => {
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: false, code: "network", error: "Réseau" }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const warning = doc.querySelector("#msm-shortage-warning");
+  await waitFor(() => warning.textContent.includes("Golgari Thug"), 2000, "manques affichés");
+  assert.ok(!warning.textContent.includes("€"), warning.textContent);
+  assert.equal(warning.querySelector(".msm-price-total"), null);
+});
+
+test("montage : prix en anglais au format de la langue", async (t) => {
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "en", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  await waitFor(() => page.button(), 2000, "bouton affiché");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector(".msm-price-total"), 3000, "total affiché");
+  assert.equal(plainText(doc.querySelector(".msm-price-total")), "💶 Cost of the missing cards: at least €1.05 (1 card without a price)");
+});
+
+test("mise à jour d'un deck monté : prix des cartes ajoutées qui manquent", async (t) => {
+  // Sidisi ajoutée au deck depuis son montage, plus en stock.
+  const cards = BUILT_CARDS.filter((c) => c.name !== "Sidisi, Brood Tyrant");
+  const stock = { ...FULL_STOCK, ...stockOf({ "Sidisi, Brood Tyrant": 0 }) };
+  const page = openDeckPage({ stock, builtDecks: builtDeck(cards) }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector(".msm-price-total"), 3000, "total affiché");
+  const warning = doc.querySelector("#msm-shortage-warning");
+  assert.match(plainText(warning), /Sidisi, Brood Tyrant — as 0, besoin 1 \(manque 1\) · 0,90 €/);
+  assert.equal(plainText(warning.querySelector(".msm-price-total")), "💶 Coût des cartes manquantes : 0,90 €");
+});
+
+test("montage : quantité abaissée à la main sous celle de la page, la carte garde son prix", async (t) => {
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  // 3 Golgari Thug sur la page : la version détectée porte sur 3 exemplaires.
+  const input = page.win.document.querySelector('input[name="ZOwRDF0"]');
+  input.value = "3";
+  input.setAttribute("value", "3");
+  // Total de la page désormais différent de celui annoncé : pas de pastille
+  // de faisabilité à attendre, la fenêtre s'ouvre quand même.
+  await waitFor(() => page.button(), 2000, "bouton affiché");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-shortage-warning"), 2000, "fenêtre ouverte");
+  const warning = doc.querySelector("#msm-shortage-warning");
+  await waitFor(() => warning.textContent.includes("manque 3"), 2000, "manques affichés");
+  const textarea = doc.querySelector("#msm-cards-textarea");
+  textarea.value = textarea.value.replace("3 Golgari Thug", "2 Golgari Thug");
+  textarea.dispatchEvent(new page.win.Event("input"));
+  await waitFor(() => warning.textContent.includes("manque 2"), 2000, "liste recalculée");
+  assert.match(plainText(warning), /Golgari Thug — as 0, besoin 2 \(manque 2\) · 0,30 € \(0,15 € l'unité\)/);
+});
+
+// Cas constaté en vrai (novembre 2026) : pas de prix pour certaines cartes
+// manquantes. Une carte manquante est souvent absente de la collection
+// (marqueur « no ») ou possédée dans une autre édition (« pt ») : la page ne
+// donne pas de version possédée, mais le code de l'impression du deck reste
+// lisible dans le marqueur.
+test("montage : prix des cartes manquantes absentes de la collection ou d'une autre édition", async (t) => {
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  // Aucune carte du deck dans sa version : rien à enregistrer, mais les prix
+  // doivent quand même être demandés.
+  for (const marker of page.win.document.querySelectorAll('[id^="collection_full_"]')) {
+    marker.id = marker.id.replace("collection_full_", marker.id.includes("E0aWJ") ? "collection_pt_" : "collection_no_");
+  }
+  await waitFor(() => page.button(), 2000, "bouton affiché");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector(".msm-price-total"), 3000, "total affiché");
+  const warning = doc.querySelector("#msm-shortage-warning");
+  assert.match(plainText(warning), /Golgari Thug — as 0, besoin 1 \(manque 1\) · 0,15 €/, "absente de la collection");
+  assert.match(plainText(warning), /Sidisi, Brood Tyrant — as 0, besoin 1 \(manque 1\) · 0,90 €/, "autre édition");
+  assert.equal(plainText(warning.querySelector(".msm-price-total")), "💶 Coût des cartes manquantes : au moins 1,05 € (1 carte sans prix)");
+});
+
+test("code absent de la réponse de l'API : redemandé seulement après quelques minutes", async (t) => {
+  // PAGE_PRINTINGS n'a pas l'impression de Birds of Paradise (EZA0w).
+  const cards = BUILT_CARDS.map((c) => (c.name === "Golgari Thug" ? { ...c, versions: [{ code: "ZOwRD", qty: 1 }] } : c));
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRINTINGS }));
+  t.after(page.close);
+  await waitFor(() => sentOf(page, "GET_DECK_PRINTINGS").length > 0, 2000, "première demande");
+  page.setStock({ ...FULL_STOCK });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(sentOf(page, "GET_DECK_PRINTINGS").length, 1, "pas redemandé aussitôt");
+  // Six minutes plus tard (horloge de la page).
+  const now = page.win.Date.now;
+  page.win.Date.now = () => now() + 6 * 60 * 1000;
+  page.setStock({ ...FULL_STOCK });
+  await waitFor(() => sentOf(page, "GET_DECK_PRINTINGS").length === 2, 2000, "redemandé après le délai");
+});
+
+// --- Proxies ---
+
+test("montage avec des proxies : les exemplaires manquants partent en proxy, avec leur version", async (t) => {
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const warning = doc.querySelector("#msm-shortage-warning");
+  await waitFor(() => warning.querySelector(".msm-proxy-btn"), 2000, "bouton des proxies");
+  assert.match(warning.querySelector(".msm-proxy-btn").textContent, /Monter avec des proxies/);
+  warning.querySelector(".msm-proxy-btn").click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const cards = builds(page)[0].payload.cards;
+  const byName = (name) => cards.find((c) => c.name === name);
+  assert.deepEqual(byName("Golgari Thug"), {
+    name: "Golgari Thug",
+    qty: 1,
+    versions: [{ code: "ZOwRD", qty: 1, set: "dds", cn: "50" }],
+    proxyQty: 1,
+    proxyPrinting: { set: "dds", cn: "50" },
+  });
+  assert.deepEqual(byName("Sidisi, Brood Tyrant").proxyQty, 1);
+  assert.deepEqual(byName("Sidisi, Brood Tyrant").proxyPrinting, { set: "ktk", cn: "199" });
+  assert.equal(byName("Revitalizing Repast // Old-Growth Grove").proxyQty, 1);
+  assert.equal(byName("Birds of Paradise").proxyQty, undefined, "en stock : pas de proxy");
+  assert.equal(byName("Swamp").proxyQty, undefined, "terrain de base : jamais en proxy");
+  await waitFor(() => toasts(page).length > 0, 2000, "montage confirmé");
+  assert.deepEqual(toasts(page), ["Deck monté avec 3 proxies — imprime-les depuis le popup ou cette fenêtre."]);
+});
+
+test("montage avec des proxies : une version différente bloque toujours", async (t) => {
+  // Birds of Paradise possédée dans une autre version : un proxy ne règle
+  // pas une question d'édition.
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("dispo"), 2000, "faisabilité affichée");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-shortage-warning .msm-proxy-btn"), 2000, "bouton des proxies");
+  doc.querySelector("#msm-shortage-warning .msm-proxy-btn").click();
+  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
+  assert.deepEqual(toasts(page), ["Montage impossible — version différente de ta collection pour : Birds of Paradise"]);
+  assert.deepEqual(builds(page), []);
+});
+
+test("mise à jour avec des proxies : nouveaux proxies, et ceux du montage gardés", async (t) => {
+  // Monté sans Sidisi, Golgari Thug en proxy ; Sidisi ajoutée depuis, plus en stock.
+  const cards = BUILT_CARDS.filter((c) => c.name !== "Sidisi, Brood Tyrant").map((c) =>
+    c.name === "Golgari Thug" ? { ...c, proxyQty: 1, proxyPrinting: { set: "dds", cn: "50" } } : c
+  );
+  const stock = { ...FULL_STOCK, ...stockOf({ "Sidisi, Brood Tyrant": 0 }) };
+  const page = openDeckPage({ stock, builtDecks: builtDeck(cards) }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-shortage-warning .msm-proxy-btn"), 3000, "bouton des proxies");
+  assert.match(doc.querySelector("#msm-proxy-info").textContent, /Ce deck compte 1 proxy/);
+  assert.ok(doc.querySelector("#msm-update").disabled, "sans proxies : bloquée");
+  doc.querySelector("#msm-shortage-warning .msm-proxy-btn").click();
+  await waitFor(() => sentOf(page, "UPDATE_BUILT_DECK").length > 0, 2000, "mise à jour envoyée");
+  const updated = sentOf(page, "UPDATE_BUILT_DECK")[0].cards;
+  assert.deepEqual(updated.find((c) => c.name === "Sidisi, Brood Tyrant"), {
+    name: "Sidisi, Brood Tyrant",
+    qty: 1,
+    versions: [{ code: "E0aWJ", qty: 1, set: "ktk", cn: "199" }],
+    proxyQty: 1,
+    proxyPrinting: { set: "ktk", cn: "199" },
+  });
+  assert.equal(updated.find((c) => c.name === "Golgari Thug").proxyQty, 1, "proxy du montage gardé");
+  await waitFor(() => toasts(page).length > 0, 2000, "mise à jour confirmée");
+  assert.deepEqual(toasts(page), ["Montage mis à jour avec 1 nouveau proxy."]);
+});
+
+test("mise à jour sans changement de stock : les proxies du montage sont reportés", async (t) => {
+  // Golgari Thug en proxy ; une Swamp en plus sur la page (en stock).
+  const cards = BUILT_CARDS.map((c) =>
+    c.name === "Golgari Thug" ? { ...c, proxyQty: 1 } : c.name === "Swamp" ? { ...c, qty: 2 } : c
+  );
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-update") && !doc.querySelector("#msm-update").hidden, 3000, "mise à jour proposée");
+  doc.querySelector("#msm-update").click();
+  await waitFor(() => sentOf(page, "UPDATE_BUILT_DECK").length > 0, 2000, "mise à jour envoyée");
+  const updated = sentOf(page, "UPDATE_BUILT_DECK")[0].cards;
+  assert.equal(updated.find((c) => c.name === "Golgari Thug").proxyQty, 1);
+});
+
+test("deck monté avec des proxies : nombre affiché et impression demandée", async (t) => {
+  const cards = BUILT_CARDS.map((c) => (c.name === "Sidisi, Brood Tyrant" ? { ...c, proxyQty: 1 } : c));
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("Monté"), 2000, "bouton de deck monté");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-proxy-info") && !doc.querySelector("#msm-proxy-info").hidden, 3000, "proxies affichés");
+  assert.match(doc.querySelector("#msm-proxy-info").textContent, /Ce deck compte 1 proxy\. 🖨️ Imprimer les proxies/);
+  doc.querySelector("#msm-proxy-info button").click();
+  await waitFor(() => sentOf(page, "OPEN_PROXIES_PAGE").length > 0, 2000, "impression demandée");
+  assert.deepEqual(sentOf(page, "OPEN_PROXIES_PAGE"), [{ deckId: "abc123" }]);
+});
+
+// --- Passer le deck Moxfield sur les éditions de ta collection ---
+
+const BIRDS_PLAN = {
+  name: "Birds of Paradise",
+  board: "commanders",
+  uniqueCardId: "u0005",
+  from: { set: "plst", cn: "52★" },
+  to: { set: "m10", cn: "168", setName: "Magic 2010", cardId: "BrM10", finishes: ["nonFoil", "foil"] },
+};
+
+// Barre d'actions de Moxfield (repères confirmés via inspection réelle, cf.
+// findActionBar) : absente des pages de test enregistrées. Sans cœur, notre
+// bouton va en fin de barre (cf. findBarAnchor).
+function addActionBar(win, icons = ["arrow-up-to-line", "comment", "heart"]) {
+  const bar = win.document.createElement("div");
+  bar.className = "msm-test-bar";
+  bar.innerHTML = icons.map((icon) => `<a><svg data-icon="${icon}"></svg></a>`).join("");
+  win.document.body.prepend(bar);
+}
+
+// Page avec la barre d'actions ; saved : bilan laissé avant un rechargement.
+function openBarPage(handle = null, saved = null, state = { stock: FULL_STOCK, builtDecks: {} }, icons = undefined) {
+  return openDeckPage(state, "fr", handle, "Commander", (win) => {
+    addActionBar(win, icons);
+    if (saved) win.sessionStorage.setItem("msmOwnedEditionsDone", JSON.stringify(saved));
+  });
+}
+
+const editionsButton = (page) => page.win.document.querySelector(".msm-editions-bar-btn");
+const editionsShown = (page) => Boolean(editionsButton(page)) && editionsButton(page).style.display !== "none";
+
+// Bouton « Utiliser mes éditions » affiché (Birds of Paradise possédée dans
+// une autre version).
+async function waitEditionsButton(page) {
+  await waitFor(() => editionsShown(page), 2000, "bouton des éditions");
+  return editionsButton(page);
+}
+
+test("éditions de la collection : bouton du ruban juste à gauche de « Monter », avec le nombre de cartes", async (t) => {
+  const page = openBarPage();
+  t.after(page.close);
+  const button = await waitEditionsButton(page);
+  const buildButton = page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)");
+  assert.equal(button.nextElementSibling, buildButton, "à gauche du bouton de montage");
+  assert.equal(button.previousElementSibling.querySelector("svg").getAttribute("data-icon"), "heart");
+  assert.equal(button.querySelector(".msm-editions-badge").textContent, "1");
+  assert.match(button.title, /^Utiliser mes éditions — 1 carte possédée dans une autre édition\n.*Le deck n'est pas monté/);
+});
+
+test("éditions de la collection : bouton masqué sans carte d'une autre édition, remis en place après un re-rendu", async (t) => {
+  const page = openBarPage();
+  t.after(page.close);
+  await waitEditionsButton(page);
+  // React re-rend la barre : notre bouton de montage disparaît.
+  page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)").remove();
+  await waitFor(() => page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)"), 2000, "bouton recréé");
+  assert.equal(page.win.document.querySelectorAll(".msm-editions-bar-btn").length, 1, "un seul bouton des éditions");
+  assert.equal(editionsButton(page).nextElementSibling, page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)"));
+  // Plus aucune carte d'une autre édition sur la page.
+  const marker = page.win.document.querySelector('[id^="collection_pt_"]');
+  marker.id = marker.id.replace("collection_pt_", "collection_full_");
+  await waitFor(() => !editionsShown(page), 2000, "bouton masqué");
+});
+
+test("éditions de la collection : bouton retiré par un re-rendu de la barre, remis à gauche de « Monter »", async (t) => {
+  for (const icons of [undefined, ["arrow-up-to-line", "comment"]]) {
+    const page = openBarPage(null, null, undefined, icons);
+    t.after(page.close);
+    (await waitEditionsButton(page)).remove();
+    await waitFor(() => editionsShown(page), 2000, "bouton des éditions recréé");
+    const buildButton = page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)");
+    assert.equal(editionsButton(page).nextElementSibling, buildButton);
+  }
+});
+
+test("éditions de la collection : un clic change les éditions, recharge la page, ne monte pas le deck", async (t) => {
+  const answers = {
+    PLAN_OWNED_EDITIONS: { ok: true, plan: [BIRDS_PLAN], skipped: [{ name: "Swamp", reason: "several" }] },
+    APPLY_OWNED_EDITIONS: { ok: true, done: ["Birds of Paradise"], skipped: [] },
+  };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => page.reloads.length > 0, 2000, "page rechargée");
+  assert.deepEqual(sentOf(page, "PLAN_OWNED_EDITIONS"), [{ deckId: "abc123", names: ["Birds of Paradise"] }]);
+  assert.deepEqual(sentOf(page, "APPLY_OWNED_EDITIONS"), [{ deckId: "abc123", plan: [BIRDS_PLAN] }], "sans confirmation");
+  assert.deepEqual(builds(page), [], "deck pas monté");
+  assert.equal(page.win.document.querySelector(".msm-overlay"), null, "pas de fenêtre de montage");
+  const saved = JSON.parse(page.win.sessionStorage.getItem("msmOwnedEditionsDone"));
+  assert.deepEqual({ ...saved, at: typeof saved.at }, { deckId: "abc123", done: 1, error: null, at: "number" });
+});
+
+test("éditions de la collection : deck déjà monté, le bouton est là aussi", async (t) => {
+  const builtDecks = {
+    abc123: {
+      name: "Deck",
+      cards: [
+        { name: "Birds of Paradise", qty: 1 },
+        { name: "Golgari Thug", qty: 1 },
+        { name: "Revitalizing Repast // Old-Growth Grove", qty: 1 },
+        { name: "Sidisi, Brood Tyrant", qty: 1 },
+        { name: "Swamp", qty: 3 },
+      ],
+    },
+  };
+  const page = openBarPage(null, null, { stock: FULL_STOCK, builtDecks });
+  t.after(page.close);
+  await waitEditionsButton(page);
+});
+
+const progressOverlay = (page) => page.win.document.querySelector(".msm-progress-overlay");
+const progressText = (page) => progressOverlay(page).querySelector(".msm-progress-text").textContent;
+const progressWidth = (page) => progressOverlay(page).querySelector(".msm-progress-fill").style.width;
+
+test("éditions de la collection : fenêtre bloquante avec jauge pendant le traitement, gardée jusqu'au rechargement", async (t) => {
+  const gates = {};
+  const wait = (type) => new Promise((resolve) => (gates[type] = resolve));
+  const answers = {
+    PLAN_OWNED_EDITIONS: { ok: true, plan: [BIRDS_PLAN, BIRDS_PLAN], skipped: [] },
+    APPLY_OWNED_EDITIONS: { ok: true, done: ["Birds of Paradise"], skipped: [] },
+  };
+  const page = openBarPage((msg) => (answers[msg.type] ? wait(msg.type).then(() => answers[msg.type]) : undefined));
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => progressOverlay(page), 2000, "fenêtre affichée");
+  assert.match(progressText(page), /Recherche de tes éditions/);
+  assert.ok(progressOverlay(page).querySelector(".msm-progress-bar").classList.contains("msm-progress-indeterminate"), "durée inconnue");
+  page.emit({ type: "OWNED_EDITIONS_PROGRESS", step: "plan", done: 1, total: 4 });
+  assert.equal(progressText(page), "Recherche des éditions chez Moxfield : 1 / 4");
+  assert.equal(progressWidth(page), "25%");
+  assert.ok(!progressOverlay(page).querySelector(".msm-progress-bar").classList.contains("msm-progress-indeterminate"));
+  gates.PLAN_OWNED_EDITIONS();
+  await waitFor(() => /Changement des cartes/.test(progressText(page)), 2000, "écriture commencée");
+  assert.equal(progressText(page), "Changement des cartes sur Moxfield : 0 / 2");
+  page.emit({ type: "OWNED_EDITIONS_PROGRESS", step: "apply", done: 1, total: 2 });
+  assert.equal(progressText(page), "Changement des cartes sur Moxfield : 1 / 2");
+  assert.equal(progressWidth(page), "50%");
+  // Autres messages ignorés.
+  page.emit({ type: "AUTRE", step: "apply", done: 2, total: 2 });
+  assert.equal(progressWidth(page), "50%");
+  gates.APPLY_OWNED_EDITIONS();
+  await waitFor(() => page.reloads.length > 0, 2000, "page rechargée");
+  assert.ok(progressOverlay(page), "fenêtre gardée jusqu'au rechargement");
+  assert.equal(progressText(page), "C'est fait, rechargement de la page…");
+  assert.equal(progressWidth(page), "100%");
+});
+
+test("éditions de la collection : fenêtre retirée quand rien n'a changé ou en cas d'erreur", async (t) => {
+  for (const answers of [
+    { PLAN_OWNED_EDITIONS: { ok: false, code: "not-logged-in", error: "Pas connecté à Moxfield" } },
+    { PLAN_OWNED_EDITIONS: { ok: true, plan: [], skipped: [{ name: "Birds of Paradise", reason: "no-other-edition" }] } },
+    {
+      PLAN_OWNED_EDITIONS: { ok: true, plan: [BIRDS_PLAN], skipped: [] },
+      APPLY_OWNED_EDITIONS: { ok: false, code: "network", error: "Moxfield injoignable", done: [], skipped: [] },
+    },
+  ]) {
+    const page = openBarPage((msg) => answers[msg.type]);
+    t.after(page.close);
+    (await waitEditionsButton(page)).click();
+    await waitFor(() => toasts(page).length > 0, 2000, "résultat affiché");
+    assert.equal(progressOverlay(page), null);
+    // Avancement arrivé après coup : pas de fenêtre fantôme.
+    page.emit({ type: "OWNED_EDITIONS_PROGRESS", step: "apply", done: 1, total: 1 });
+    assert.equal(progressOverlay(page), null);
+  }
+});
+
+test("éditions de la collection : arrêt en cours de route, la page est quand même rechargée", async (t) => {
+  const answers = {
+    PLAN_OWNED_EDITIONS: { ok: true, plan: [BIRDS_PLAN, BIRDS_PLAN], skipped: [] },
+    APPLY_OWNED_EDITIONS: { ok: false, code: "network", error: "Moxfield injoignable", done: ["Birds of Paradise"], skipped: [] },
+  };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => page.reloads.length > 0, 2000, "page rechargée");
+  assert.equal(JSON.parse(page.win.sessionStorage.getItem("msmOwnedEditionsDone")).error, "Moxfield injoignable");
+});
+
+test("éditions de la collection : rien de changé, raison affichée sans rechargement", async (t) => {
+  const answers = {
+    PLAN_OWNED_EDITIONS: { ok: true, plan: [BIRDS_PLAN], skipped: [{ name: "Swamp", reason: "several" }] },
+    APPLY_OWNED_EDITIONS: { ok: false, code: "network", error: "Moxfield injoignable", done: [], skipped: [] },
+  };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => toasts(page).some((m) => /arrêt/.test(m)), 2000, "erreur affichée");
+  assert.ok(
+    toasts(page).includes("0 carte passée, puis arrêt : Moxfield injoignable Swamp — plusieurs éditions dans la même ligne du deck, à changer à la main")
+  );
+  assert.deepEqual(page.reloads, []);
+  assert.equal(page.win.sessionStorage.getItem("msmOwnedEditionsDone"), null);
+});
+
+test("éditions de la collection : aucune carte à changer, rien n'est écrit", async (t) => {
+  const answers = { PLAN_OWNED_EDITIONS: { ok: true, plan: [], skipped: [{ name: "Birds of Paradise", reason: "no-other-edition" }] } };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => toasts(page).some((m) => /Aucune carte/.test(m)), 2000, "raison affichée");
+  assert.ok(toasts(page).some((m) => /Birds of Paradise — aucune autre édition dans ta collection/.test(m)));
+  assert.deepEqual(sentOf(page, "APPLY_OWNED_EDITIONS"), []);
+  assert.deepEqual(page.reloads, []);
+});
+
+test("éditions de la collection : proposition impossible, raison affichée", async (t) => {
+  const answers = { PLAN_OWNED_EDITIONS: { ok: false, code: "not-logged-in", error: "Pas connecté à Moxfield" } };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => toasts(page).some((m) => m.startsWith("Erreur")), 2000, "erreur affichée");
+  assert.ok(toasts(page).includes("Erreur : Pas connecté à Moxfield"));
+  assert.deepEqual(page.reloads, []);
+});
+
+test("éditions de la collection : un seul traitement à la fois", async (t) => {
+  let release;
+  const pending = new Promise((resolve) => (release = resolve));
+  const answers = {
+    PLAN_OWNED_EDITIONS: { ok: true, plan: [BIRDS_PLAN], skipped: [] },
+    APPLY_OWNED_EDITIONS: { ok: true, done: ["Birds of Paradise"], skipped: [] },
+  };
+  const page = openBarPage((msg) => (msg.type === "PLAN_OWNED_EDITIONS" ? pending.then(() => answers[msg.type]) : answers[msg.type]));
+  t.after(page.close);
+  const button = await waitEditionsButton(page);
+  button.click();
+  button.click();
+  assert.ok(button.classList.contains("msm-busy"));
+  release();
+  await waitFor(() => page.reloads.length > 0, 2000, "page rechargée");
+  assert.equal(sentOf(page, "PLAN_OWNED_EDITIONS").length, 1);
+});
+
+test("éditions de la collection : après le rechargement, bilan affiché, fenêtre de montage non ouverte", async (t) => {
+  const page = openBarPage(null, { deckId: "abc123", done: 2, error: null, at: Date.now() });
+  t.after(page.close);
+  await waitFor(() => toasts(page).length > 0, 2000, "bilan affiché");
+  assert.deepEqual(toasts(page), ["2 cartes passées sur l'édition de ta collection."]);
+  assert.equal(page.win.sessionStorage.getItem("msmOwnedEditionsDone"), null, "une seule fois");
+  await new Promise((r) => setTimeout(r, 700));
+  assert.equal(page.win.document.querySelector(".msm-overlay"), null);
+  assert.equal(toasts(page).length, 1);
+});
+
+test("éditions de la collection : bilan d'un arrêt en cours de route après le rechargement", async (t) => {
+  const page = openBarPage(null, { deckId: "abc123", done: 1, error: "Moxfield injoignable", at: Date.now() });
+  t.after(page.close);
+  await waitFor(() => toasts(page).length > 0, 2000, "bilan affiché");
+  assert.deepEqual(toasts(page), ["1 carte passée, puis arrêt : Moxfield injoignable"]);
+});
+
+test("éditions de la collection : cartes impossibles à changer plus comptées sur le bouton (terrains de base)", async (t) => {
+  const answers = { PLAN_OWNED_EDITIONS: { ok: true, plan: [], skipped: [{ name: "Birds of Paradise", reason: "not-enough" }] } };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => toasts(page).length > 0, 2000, "raison affichée");
+  assert.ok(toasts(page).some((m) => m.includes("Birds of Paradise — pas assez d'exemplaires dans une même édition")));
+  await waitFor(() => !editionsShown(page), 2000, "bouton masqué");
+  // Toujours masqué au contrôle suivant de la page.
+  await new Promise((r) => setTimeout(r, 700));
+  assert.ok(!editionsShown(page));
+});
+
+test("éditions de la collection : cartes impossibles à changer, retenues par deck jusqu'à la fermeture de l'onglet", async (t) => {
+  const remembered = (unfixable) =>
+    openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", null, "Commander", (win) => {
+      addActionBar(win);
+      win.sessionStorage.setItem("msmOwnedEditionsUnfixable", JSON.stringify(unfixable));
+    });
+  const same = remembered({ abc123: ["birds of paradise"] });
+  t.after(same.close);
+  await waitFor(() => buttonTitle(same).includes("dispo"), 2000, "faisabilité affichée");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(!editionsShown(same), "même deck : plus comptée");
+  const other = remembered({ autre: ["birds of paradise"] });
+  t.after(other.close);
+  await waitEditionsButton(other);
+});
+
+test("éditions de la collection : carte modifiée ailleurs entre-temps, toujours comptée", async (t) => {
+  const answers = {
+    PLAN_OWNED_EDITIONS: { ok: true, plan: [BIRDS_PLAN], skipped: [] },
+    APPLY_OWNED_EDITIONS: { ok: true, done: [], skipped: [{ name: "Birds of Paradise", reason: "changed" }] },
+  };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => toasts(page).length > 0, 2000, "résultat affiché");
+  assert.ok(editionsShown(page));
+  assert.equal(page.win.sessionStorage.getItem("msmOwnedEditionsUnfixable"), null);
+});
+
+test("éditions de la collection : rechargement trop ancien ou d'un autre deck, pas de bilan", async (t) => {
+  for (const saved of [
+    { deckId: "abc123", done: 2, error: null, at: Date.now() - 60000 },
+    { deckId: "autre", done: 2, error: null, at: Date.now() },
+  ]) {
+    const page = openBarPage(null, saved);
+    t.after(page.close);
+    await waitEditionsButton(page);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(toasts(page), []);
+  }
+});
+
+test("fenêtre de montage : cartes d'une autre édition listées, sans bouton des éditions", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("dispo"), 2000, "faisabilité affichée");
+  page.button().click();
+  const box = () => page.win.document.querySelector("#msm-printing-warning");
+  await waitFor(() => box() && /Birds of Paradise/.test(box().textContent), 2000, "liste affichée");
+  assert.equal(box().querySelector("button"), null);
 });

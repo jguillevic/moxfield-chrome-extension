@@ -58,6 +58,13 @@ function createI18n(getMessage) {
     return new Date(value).toLocaleDateString(locale);
   }
 
+  // Prix en euros (ex. 1,50 € ; €1.50) : les prix lus sont ceux de
+  // Cardmarket, toujours en euros, quelle que soit la langue.
+  const priceFormat = new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" });
+  function formatPrice(value) {
+    return priceFormat.format(value);
+  }
+
   // Textes d'une page HTML : data-i18n (contenu), data-i18n-placeholder,
   // data-i18n-title. Les éléments n'ont pas de texte dans le HTML : une seule
   // source, les messages.
@@ -68,7 +75,7 @@ function createI18n(getMessage) {
     for (const el of doc.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
   }
 
-  return { locale, t, tn, formatDateTime, formatDay, translateDocument };
+  return { locale, t, tn, formatDateTime, formatDay, formatPrice, translateDocument };
 }
 
 // Messages de l'extension (popup, page d'un deck, service worker).

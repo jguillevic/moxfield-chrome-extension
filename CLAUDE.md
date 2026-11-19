@@ -76,6 +76,23 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 - Les cartes de la zone « Considering » ne font pas partie du deck.
 - Les cartes `excludedFromStock` ne sont jamais décomptées ni rendues au
   stock.
+- Proxies (`proxyQty` d'une carte d'un deck monté) : ne font pas partie du
+  stock (la collection Moxfield reste la seule source de vérité), donc
+  jamais décomptés ni rendus, ni comptés « dans des decks ». Toujours
+  passer par `stockQtyOf` / `proxyCountOf` (`deck-checks.js`). Un proxy ne
+  remplace qu'un stock insuffisant, jamais une version différente ou déjà
+  utilisée. Suivis dans l'extension seulement, rien n'est écrit sur
+  Moxfield.
+- Seule écriture sur Moxfield : passer, dans un deck, des cartes possédées
+  dans une autre édition sur l'édition de la collection
+  (`PLAN_OWNED_EDITIONS` puis `APPLY_OWNED_EDITIONS`), en un seul clic sur
+  un bouton explicite (« Utiliser mes éditions », dans la barre d'actions,
+  sans confirmation : choix de l'utilisateur), carte par carte (jamais
+  d'écritures en parallèle : chacune change la version du deck), deck lu
+  une fois puis relu sur un refus avant une seule nouvelle tentative,
+  réponse vérifiée ; la page est
+  ensuite rechargée. Ne monte jamais le deck. Toute autre écriture sur Moxfield demande
+  la même prudence (action explicite, vérification de la réponse).
 - Toute nouvelle action qui change le stock ou les decks montés est notée
   dans l'historique (`recordHistory`, cf. `history.js`).
 

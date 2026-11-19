@@ -6,11 +6,15 @@
 //
 // Entrées : { id, at, device, type, ...détail } —
 //   collection     { source: "fetch" | "csv", changes: [{name, from, to}], changeCount? }
-//   deck-built     { deckId, deckName, url, builtAt, cardCount }
-//   deck-unbuilt   { deckId, deckName, url, cards }
-//   deck-updated   { deckId, deckName, url, changes, changeCount?, previousCards, updatedAt }
+//   deck-built     { deckId, deckName, url, builtAt, cardCount, proxyCount? }
+//   deck-unbuilt   { deckId, deckName, url, cards, cardCount?, proxyCount? }
+//     cardCount : exemplaires pris au stock (ou rendus), proxies exclus ;
+//     absent des démontages d'avant les proxies : calculé sur cards.
+//   deck-updated   { deckId, deckName, url, changes, changeCount?, previousCards, updatedAt, proxiesAdded? }
 //     changes : { name, from, to }, ou { name, from, to, version: true } pour
 //     une carte dont seule la version (impression) a changé.
+//   proxies-replaced { deckId, deckName, url, cards: [{name, qty}] }
+//     proxies remplacés par la vraie carte, prise au stock libre.
 // changeCount : nombre total quand le détail est tronqué (cf. compactEntry).
 //   reset          { builtDecks }
 //   drive-restore  {}
@@ -100,17 +104,26 @@ function createHistory(normalizeName, { tn, t }) {
     return cards.reduce((n, c) => n + c.qty, 0);
   }
 
+  // Libellé suivi du nombre de proxies, s'il y en a.
+  function withProxies(text, key, count) {
+    return count > 0 ? t("historyWithProxies", text, tn(key, count)) : text;
+  }
+
   // Libellé d'une entrée, pour le popup.
   function describe(entry) {
     switch (entry.type) {
       case "collection":
         return tn(entry.source === "csv" ? "historyCsvImport" : "historyCollectionFetched", changeCount(entry));
       case "deck-built":
-        return tn("historyDeckBuilt", entry.cardCount, entry.deckName);
-      case "deck-unbuilt":
-        return tn("historyDeckUnbuilt", cardCount(entry.cards), entry.deckName);
+        return withProxies(tn("historyDeckBuilt", entry.cardCount, entry.deckName), "proxyCount", entry.proxyCount);
+      case "deck-unbuilt": {
+        const count = Number.isInteger(entry.cardCount) ? entry.cardCount : cardCount(entry.cards);
+        return withProxies(tn("historyDeckUnbuilt", count, entry.deckName), "proxyCount", entry.proxyCount);
+      }
       case "deck-updated":
-        return tn("historyDeckUpdated", changeCount(entry), entry.deckName);
+        return withProxies(tn("historyDeckUpdated", changeCount(entry), entry.deckName), "proxyAdded", entry.proxiesAdded);
+      case "proxies-replaced":
+        return tn("historyProxiesReplaced", cardCount(entry.cards), entry.deckName);
       case "reset":
         return tn("historyReset", Object.keys(entry.builtDecks).length);
       case "drive-restore":

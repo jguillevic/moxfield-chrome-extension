@@ -572,6 +572,21 @@
   "shortageShort": {
     "message": "$1 ($2 missing)"
   },
+  "shortagePriceEach": {
+    "message": "$1 ($2 each)"
+  },
+  "shortagePriceTotal": {
+    "message": "Cost of the missing cards: $1"
+  },
+  "shortagePricePartial_one": {
+    "message": "Cost of the missing cards: at least $2 ($1 card without a price)"
+  },
+  "shortagePricePartial_other": {
+    "message": "Cost of the missing cards: at least $2 ($1 cards without a price)"
+  },
+  "shortagePriceSource": {
+    "message": "Cardmarket price of the deck's printing (the cheapest one if it uses several), as given by Moxfield."
+  },
   "cardmarketCopyButton": {
     "message": "Copy the missing cards for Cardmarket"
   },
@@ -709,5 +724,191 @@
   },
   "buildDone": {
     "message": "Deck marked as built, cards taken out of the stock."
+  },
+  "buildWithProxies": {
+    "message": "Build with proxies"
+  },
+  "updateWithProxies": {
+    "message": "Update with proxies"
+  },
+  "proxiesHint": {
+    "message": "The missing copies are played as proxies: they are not taken from your stock, and you can print them."
+  },
+  "buildDoneWithProxies_one": {
+    "message": "Deck built with $1 proxy — print it from the popup or this window."
+  },
+  "buildDoneWithProxies_other": {
+    "message": "Deck built with $1 proxies — print them from the popup or this window."
+  },
+  "updateDoneWithProxies_one": {
+    "message": "Build updated with $1 new proxy."
+  },
+  "updateDoneWithProxies_other": {
+    "message": "Build updated with $1 new proxies."
+  },
+  "deckProxyInfo_one": {
+    "message": "This deck has $1 proxy."
+  },
+  "deckProxyInfo_other": {
+    "message": "This deck has $1 proxies."
+  },
+  "printProxies": {
+    "message": "Print the proxies"
+  },
+  "printProxiesShort": {
+    "message": "Print"
+  },
+  "deckProxiesList": {
+    "message": "Proxies: $1"
+  },
+  "replaceProxies_one": {
+    "message": "Replace $1 proxy"
+  },
+  "replaceProxies_other": {
+    "message": "Replace $1 proxies"
+  },
+  "replaceProxiesHint": {
+    "message": "You now have the real card in your free stock: it will replace the proxy and be taken from the stock. $1"
+  },
+  "proxiesReplaced_one": {
+    "message": "$1 proxy replaced by the real card."
+  },
+  "proxiesReplaced_other": {
+    "message": "$1 proxies replaced by the real card."
+  },
+  "proxiesNothingToReplace": {
+    "message": "No proxy to replace: the real card is not (or no longer) in your free stock."
+  },
+  "historyWithProxies": {
+    "message": "$1 (+ $2)"
+  },
+  "proxyCount_one": {
+    "message": "$1 proxy"
+  },
+  "proxyCount_other": {
+    "message": "$1 proxies"
+  },
+  "proxyAdded_one": {
+    "message": "$1 new proxy"
+  },
+  "proxyAdded_other": {
+    "message": "$1 new proxies"
+  },
+  "historyProxiesReplaced_one": {
+    "message": "Deck “$2”: $1 proxy replaced by the real card, taken from the free stock"
+  },
+  "historyProxiesReplaced_other": {
+    "message": "Deck “$2”: $1 proxies replaced by the real card, taken from the free stock"
+  },
+  "proxiesPageTitle": {
+    "message": "Proxies to print"
+  },
+  "proxiesPageTitleDeck": {
+    "message": "Proxies — $1"
+  },
+  "proxiesPrintHint": {
+    "message": "Print at 100% (actual size), without fitting to the page. A double-faced card takes two slots: front and back, to slide back to back into the same sleeve."
+  },
+  "proxiesMarkLabel": {
+    "message": "“PROXY” mark on the cards"
+  },
+  "proxiesMarkText": {
+    "message": "PROXY"
+  },
+  "proxiesPrint": {
+    "message": "Print"
+  },
+  "proxiesCredits": {
+    "message": "Card images: Scryfall. Cards and artwork © Wizards of the Coast. For your personal use only."
+  },
+  "proxiesNone": {
+    "message": "This deck is no longer built, or has no proxies."
+  },
+  "proxiesLoading": {
+    "message": "Looking up the images on Scryfall…"
+  },
+  "proxiesSummary_one": {
+    "message": "$1 proxy to print on $2."
+  },
+  "proxiesSummary_other": {
+    "message": "$1 proxies to print on $2."
+  },
+  "proxiesSheets_one": {
+    "message": "$1 page"
+  },
+  "proxiesSheets_other": {
+    "message": "$1 pages"
+  },
+  "proxiesSomeMissing": {
+    "message": "$1 Image not found for $2 slot(s): the card name is printed instead."
+  },
+  "proxiesScryfallError": {
+    "message": "Scryfall can't be reached right now: only the card names are shown. Try again later (reload the page)."
+  },
+  "moxfieldNotEditions": {
+    "message": "the response doesn't contain the card's printings"
+  },
+  "moxfieldEditionNotSaved": {
+    "message": "Moxfield didn't save the requested printing"
+  },
+  "ownedEditionsButton": {
+    "message": "Use my printings"
+  },
+  "ownedEditionsHint": {
+    "message": "Switches these cards, in your Moxfield deck, to a printing from your collection (preferably one no other built deck uses), then reloads the page. The deck is not built. Cards with no other owned printing stay as they are."
+  },
+  "ownedEditionsLoading": {
+    "message": "Looking up your printings (Moxfield collection and deck)…"
+  },
+  "ownedEditionsDone_one": {
+    "message": "$1 card switched to the printing in your collection."
+  },
+  "ownedEditionsDone_other": {
+    "message": "$1 cards switched to the printing in your collection."
+  },
+  "ownedEditionsFailed_one": {
+    "message": "$1 card switched, then stopped: $2"
+  },
+  "ownedEditionsFailed_other": {
+    "message": "$1 cards switched, then stopped: $2"
+  },
+  "ownedEditionsSkipNotInDeck": {
+    "message": "not found in the Moxfield deck"
+  },
+  "ownedEditionsSkipSeveral": {
+    "message": "several printings on the same deck line, to change by hand"
+  },
+  "ownedEditionsSkipNoOther": {
+    "message": "no other printing in your collection"
+  },
+  "ownedEditionsSkipUnknown": {
+    "message": "the printing in your collection can't be found on Moxfield"
+  },
+  "ownedEditionsSkipChanged": {
+    "message": "changed on Moxfield in the meantime, left untouched"
+  },
+  "ownedEditionsZero": {
+    "message": "No card could be switched to a printing from your collection."
+  },
+  "ownedEditionsCount_one": {
+    "message": "$1 card owned in another printing"
+  },
+  "ownedEditionsCount_other": {
+    "message": "$1 cards owned in another printing"
+  },
+  "ownedEditionsPlanProgress": {
+    "message": "Looking up printings on Moxfield: $1 / $2"
+  },
+  "ownedEditionsApplyProgress": {
+    "message": "Switching cards on Moxfield: $1 / $2"
+  },
+  "ownedEditionsReloading": {
+    "message": "Done, reloading the page…"
+  },
+  "ownedEditionsProgressHint": {
+    "message": "Don't close this tab or edit the deck in the meantime."
+  },
+  "ownedEditionsSkipNotEnough": {
+    "message": "not enough copies in a single printing of your collection for the whole deck line"
   }
 }

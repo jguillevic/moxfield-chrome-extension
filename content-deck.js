@@ -26,20 +26,10 @@
     return Boolean(m) && !NON_DECK_SLUGS.has(m[1].toLowerCase());
   }
 
-  // Le bouton ne doit s'afficher que sur un deck de format "Commander" — ce
-  // badge (texte "Commander") est un des badges d'en-tête du deck, classe
-  // "badge-header" (nom semble sémantique et volontaire, contrairement aux
-  // classes générées type "H3UM7DGQXHnJUSoQ5Jgv" — confirmé via inspection
-  // HTML réelle). D'autres badges partagent cette classe (Bracket, hubs de
-  // tags comme "Burn"/"Combo"/"Tokens") : on ne retient que celui dont le
-  // texte correspond exactement à "Commander".
-  function hasCommanderBadge() {
-    const badges = document.querySelectorAll(".badge-header");
-    for (const el of badges) {
-      if ((el.textContent || "").trim().toLowerCase() === "commander") return true;
-    }
-    return false;
-  }
+  // Tous les formats : le bouton a d'abord été réservé aux decks Commander
+  // (badge d'en-tête "Commander", classe "badge-header"), mais rien dans les
+  // contrôles n'en dépend — un deck de 60 cartes se monte avec sa réserve
+  // (sideboard), comptée dans le total annoncé par Moxfield.
 
   function getDeckId() {
     const m = window.location.pathname.match(/\/decks\/([^/]+)/);
@@ -68,6 +58,10 @@
     buildWrongEditionSet,
     computeWrongEditionCards,
     computeShortages,
+    computeShortagePrices,
+    proxyTotal,
+    addProxies,
+    carryProxies,
     buildVersionUsage,
     computeVersionConflicts,
     parseCardsText,
@@ -92,9 +86,200 @@
     }
     el.style.display = "block";
     el.innerHTML =
-      `<strong>🚫 ${escapeHtml(tn("printingWarningTitle", names.length))}</strong> — ${escapeHtml(t("printingWarningHint"))}<ul>` +
+      `<strong>🚫 ${escapeHtml(tn("printingWarningTitle", names.length))}</strong> — ${escapeHtml(t("printingWarningHint"))}` +
+      "<ul>" +
       names.map((n) => `<li>${escapeHtml(n)}</li>`).join("") +
       "</ul>";
+  }
+
+  // --- Passer le deck Moxfield sur les éditions de ta collection ---
+  // Bouton du ruban, juste à gauche de « Monter », affiché quand Moxfield
+  // indique des cartes possédées dans une autre édition (cf.
+  // ownedEditionNames). Un seul clic (demande de l'utilisateur : pas de
+  // proposition à confirmer, et le deck n'est pas monté) : le service worker
+  // choisit une édition possédée par carte (PLAN_OWNED_EDITIONS), l'écrit sur
+  // Moxfield (APPLY_OWNED_EDITIONS), puis la page est rechargée — Moxfield
+  // n'affiche pas une modification faite ailleurs que dans son interface.
+  const EDITION_SKIP_REASONS = {
+    "not-in-deck": "ownedEditionsSkipNotInDeck",
+    several: "ownedEditionsSkipSeveral",
+    "no-other-edition": "ownedEditionsSkipNoOther",
+    "edition-unknown": "ownedEditionsSkipUnknown",
+    changed: "ownedEditionsSkipChanged",
+    "not-enough": "ownedEditionsSkipNotEnough",
+  };
+  // sessionStorage : survit au rechargement de l'onglet, pas au-delà.
+  const OWNED_EDITIONS_KEY = "msmOwnedEditionsDone";
+  // Cartes qu'un clic n'a pas pu changer (pas assez d'exemplaires dans une
+  // même édition, aucune autre édition…), par deck : plus comptées sur le
+  // bouton, sinon il resterait bloqué sur un nombre qu'aucun clic ne fait
+  // baisser (constaté en vrai avec les terrains de base, novembre 2026).
+  // Oubliées à la fermeture de l'onglet : la collection a pu changer.
+  // « changed » (modifiée ailleurs entre-temps) n'en fait pas partie : un
+  // nouveau clic peut la changer.
+  const OWNED_EDITIONS_UNFIXABLE_KEY = "msmOwnedEditionsUnfixable";
+  // Decks retenus au plus (sessionStorage est limité).
+  const MAX_UNFIXABLE_DECKS = 20;
+  const frontFace = (name) => normalizeName(name).split(" // ")[0];
+
+  function readUnfixable() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(OWNED_EDITIONS_UNFIXABLE_KEY) || "{}");
+      return saved && typeof saved === "object" ? saved : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function rememberUnfixable(deckId, skipped) {
+    const names = skipped.filter((s) => s.reason !== "changed").map((s) => frontFace(s.name));
+    if (names.length === 0) return;
+    const saved = readUnfixable();
+    const merged = [...new Set([...(saved[deckId] || []), ...names])];
+    delete saved[deckId];
+    const kept = Object.entries(saved).slice(-(MAX_UNFIXABLE_DECKS - 1));
+    try {
+      sessionStorage.setItem(OWNED_EDITIONS_UNFIXABLE_KEY, JSON.stringify(Object.fromEntries([...kept, [deckId, merged]])));
+    } catch {
+      // Stockage bloqué : le bouton continue de les compter.
+    }
+  }
+
+  function isUnfixable(deckId, name) {
+    return (readUnfixable()[deckId] || []).includes(frontFace(name));
+  }
+  // Au-delà, le rechargement n'est plus le nôtre (onglet rouvert plus tard).
+  const OWNED_EDITIONS_RESUME_MS = 30000;
+
+  // Cartes de la page que Moxfield indique possédées, mais pas dans
+  // l'édition du deck (« Partially in collection », cf.
+  // buildWrongEditionSet), terrains de base compris : changer leur édition
+  // ne dépend pas du stock libre ni du montage. Sans celles qu'un clic n'a
+  // pas pu changer sur ce deck (cf. rememberUnfixable).
+  function ownedEditionNames(cards, deckId) {
+    const wrong = buildWrongEditionSet(cards);
+    const names = [];
+    for (const c of cards) {
+      if (wrong.has(normalizeName(c.name)) && !names.includes(c.name) && !isUnfixable(deckId, c.name)) names.push(c.name);
+    }
+    return names;
+  }
+
+  function skippedText(skipped) {
+    return skipped.map((s) => `${s.name} — ${t(EDITION_SKIP_REASONS[s.reason] || "unknownError")}`).join(" ; ");
+  }
+
+  // Un clic à la fois : l'écriture sur Moxfield prend jusqu'à une minute.
+  let ownedEditionsRunning = false;
+
+  // Fenêtre qui bloque la page pendant le traitement, avec une jauge mise à
+  // jour par le service worker (OWNED_EDITIONS_PROGRESS) : sans elle, une
+  // minute sans rien voir bouger donne l'impression que rien ne marche
+  // (retour utilisateur), et la page ne doit pas être modifiée pendant ce
+  // temps. total absent : jauge sans fin (étape de durée inconnue).
+  let progressEl = null;
+
+  function showEditionsProgress(text, done, total) {
+    if (!progressEl) {
+      progressEl = document.createElement("div");
+      progressEl.className = "msm-progress-overlay";
+      progressEl.setAttribute("role", "dialog");
+      progressEl.setAttribute("aria-modal", "true");
+      progressEl.setAttribute("aria-busy", "true");
+      progressEl.innerHTML =
+        `<div class="msm-modal msm-progress-modal"><h2>🔄 ${escapeHtml(t("ownedEditionsButton"))}</h2>` +
+        `<p class="msm-progress-text" aria-live="polite"></p>` +
+        `<div class="msm-progress-bar"><div class="msm-progress-fill"></div></div>` +
+        `<p class="msm-progress-hint">${escapeHtml(t("ownedEditionsProgressHint"))}</p></div>`;
+      document.body.appendChild(progressEl);
+    }
+    progressEl.querySelector(".msm-progress-text").textContent = text;
+    const bar = progressEl.querySelector(".msm-progress-bar");
+    const known = Number.isInteger(total) && total > 0;
+    bar.classList.toggle("msm-progress-indeterminate", !known);
+    progressEl.querySelector(".msm-progress-fill").style.width = known ? `${Math.round((100 * Math.min(done, total)) / total)}%` : "";
+  }
+
+  function hideEditionsProgress() {
+    if (progressEl) progressEl.remove();
+    progressEl = null;
+  }
+
+  try {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (!msg || msg.type !== "OWNED_EDITIONS_PROGRESS" || !ownedEditionsRunning || !progressEl) return;
+      const key = msg.step === "apply" ? "ownedEditionsApplyProgress" : "ownedEditionsPlanProgress";
+      showEditionsProgress(t(key, msg.done, msg.total), msg.done, msg.total);
+    });
+  } catch (e) {
+    // contexte d'extension invalidé : pas de jauge, le traitement reste possible
+  }
+
+  async function useOwnedEditions(deckId, names) {
+    if (ownedEditionsRunning || names.length === 0) return;
+    ownedEditionsRunning = true;
+    renderEditionsButton();
+    let reloading = false;
+    try {
+      showEditionsProgress(t("ownedEditionsLoading"));
+      const planned = await safeSendMessage({ type: "PLAN_OWNED_EDITIONS", payload: { deckId, names } });
+      if (planned.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
+      if (!planned.ok) {
+        toast(t("errorPrefix", planned.error || t("unknownError")), true);
+        return;
+      }
+      let res = { ok: true, done: [], skipped: [] };
+      if (planned.plan.length > 0) {
+        showEditionsProgress(t("ownedEditionsApplyProgress", 0, planned.plan.length), 0, planned.plan.length);
+        res = await safeSendMessage({ type: "APPLY_OWNED_EDITIONS", payload: { deckId, plan: planned.plan } });
+        if (res.error === "extension-context-invalidated") return;
+      }
+      const done = res.done || [];
+      const skipped = [...planned.skipped, ...(res.skipped || [])];
+      rememberUnfixable(deckId, skipped);
+      if (done.length > 0) {
+        try {
+          sessionStorage.setItem(
+            OWNED_EDITIONS_KEY,
+            JSON.stringify({ deckId, done: done.length, error: res.ok ? null : res.error || t("unknownError"), at: Date.now() })
+          );
+        } catch {
+          // Stockage bloqué : la page est rechargée quand même, sans le bilan.
+        }
+        // Fenêtre gardée jusqu'au rechargement.
+        reloading = true;
+        showEditionsProgress(t("ownedEditionsReloading"), 1, 1);
+        window.location.reload();
+        return;
+      }
+      // Rien n'a changé : pas de rechargement, la raison est affichée.
+      setEditionNames(btnEditionNames.filter((n) => !isUnfixable(deckId, n)));
+      const summary = res.ok ? t("ownedEditionsZero") : tn("ownedEditionsFailed", 0, res.error || t("unknownError"));
+      toast(skipped.length > 0 ? `${summary} ${skippedText(skipped)}` : summary, true);
+    } finally {
+      if (!reloading) hideEditionsProgress();
+      ownedEditionsRunning = false;
+      renderEditionsButton();
+    }
+  }
+
+  // Après le rechargement déclenché par useOwnedEditions : bilan, une fois.
+  let ownedEditionsResume = null;
+  try {
+    const raw = sessionStorage.getItem(OWNED_EDITIONS_KEY);
+    sessionStorage.removeItem(OWNED_EDITIONS_KEY);
+    // Âge et deck vérifiés par announceOwnedEditions.
+    if (raw) ownedEditionsResume = JSON.parse(raw);
+  } catch {
+    // Stockage bloqué ou illisible : pas de bilan.
+  }
+
+  function announceOwnedEditions(deckId) {
+    if (!ownedEditionsResume) return;
+    const { done, error, at } = ownedEditionsResume;
+    const ours = ownedEditionsResume.deckId === deckId && Date.now() - at <= OWNED_EDITIONS_RESUME_MS;
+    ownedEditionsResume = null;
+    if (ours) toast(error ? tn("ownedEditionsFailed", done, error) : tn("ownedEditionsDone", done), Boolean(error));
   }
 
   // Versions (impressions Moxfield) des cartes de la liste détectée, par nom
@@ -102,9 +287,29 @@
   // de la fenêtre ne porte que « QTE Nom ». Vide si la liste vient du
   // presse-papiers.
   let lastVersions = new Map();
+  // Codes des impressions du deck, possédées ou non, par nom normalisé :
+  // pour le prix des cartes manquantes (cf. printingCodeOf dans
+  // deck-scraper.js). Gardés même si la quantité est modifiée à la main.
+  let lastPrintingCodes = new Map();
 
   function rememberVersions(cards) {
     lastVersions = new Map(cards.filter((c) => c.versions && c.versions.length > 0).map((c) => [normalizeName(c.name), c.versions]));
+    lastPrintingCodes = printingCodesByName(cards);
+  }
+
+  function printingCodesByName(cards) {
+    return new Map(cards.filter((c) => c.printingCodes && c.printingCodes.length > 0).map((c) => [normalizeName(c.name), c.printingCodes]));
+  }
+
+  // Version du deck d'une carte ({ set, cn }, donnée par l'API du deck), pour
+  // imprimer son proxy ; null si inconnue (l'impression se fera par nom).
+  function proxyPrintingFinder(codesByName) {
+    return (name) => {
+      for (const code of codesByName.get(normalizeName(name)) || []) {
+        if (printingsByCode.has(code)) return { ...printingsByCode.get(code) };
+      }
+      return null;
+    };
   }
 
   // Liste de la zone de texte, complétée des versions détectées. Quantité
@@ -126,19 +331,39 @@
   // sans édition et le contrôle se replie sur le recoupement (cf.
   // computeVersionConflicts dans deck-checks.js).
   const printingsByCode = new Map();
+  // Prix en euros de ces mêmes impressions (code → prix), donnés par la même
+  // réponse : sert au coût des cartes manquantes (cf. computeShortagePrices
+  // dans deck-checks.js). Gardé à part : il ne doit pas être enregistré avec
+  // les versions d'un deck monté.
+  const pricesByCode = new Map();
   // Dernière demande : les mêmes codes inconnus ne sont pas redemandés avant
   // ce délai (chaque demande renouvelle la session Moxfield côté service
   // worker, et la page est contrôlée toutes les 3 secondes).
   const PRINTINGS_RETRY_MS = 5 * 60 * 1000;
   let printingsAsked = { key: null, at: 0 };
   let printingsRequest = null;
+  // Codes absents d'une réponse réussie (code → moment de la réponse) :
+  // redemander tout de suite ne les ferait pas apparaître, mais une carte
+  // tout juste ajoutée au deck peut ne pas encore être enregistrée chez
+  // Moxfield, d'où le même délai qu'après un échec.
+  const printingsMissing = new Map();
 
-  // Demande les éditions des versions pas encore connues ; résout à true si
-  // de nouvelles ont été apprises. Ne lève jamais : sans elles, les
-  // contrôles se font par recoupement.
+  // Demande les éditions (et prix) des impressions pas encore connues ;
+  // résout à true si de nouvelles éditions ont été apprises. Ne lève jamais :
+  // sans elles, les contrôles se font par recoupement. Impressions non
+  // possédées comprises : un deck dont tu n'as aucune carte a aussi besoin
+  // de ses prix.
   function loadPrintings(deckId, cards) {
     const unknown = new Set();
-    for (const c of cards) for (const v of c.versions || []) if (!printingsByCode.has(v.code)) unknown.add(v.code);
+    const ask = (code) => {
+      if (printingsByCode.has(code)) return;
+      if (printingsMissing.has(code) && Date.now() - printingsMissing.get(code) < PRINTINGS_RETRY_MS) return;
+      unknown.add(code);
+    };
+    for (const c of cards) {
+      for (const v of c.versions || []) ask(v.code);
+      for (const code of c.printingCodes || []) ask(code);
+    }
     if (unknown.size === 0) return Promise.resolve(false);
     if (printingsRequest) return printingsRequest;
     const key = deckId + ":" + [...unknown].sort().join(",");
@@ -150,10 +375,12 @@
         if (!res || !res.ok || !res.printings) return false;
         let added = false;
         for (const [code, printing] of Object.entries(res.printings)) {
+          if (printing && typeof printing.eur === "number" && printing.eur > 0) pricesByCode.set(code, printing.eur);
           if (printingsByCode.has(code) || !printing || typeof printing.set !== "string" || !printing.set) continue;
           printingsByCode.set(code, { set: printing.set, cn: typeof printing.cn === "string" ? printing.cn : "" });
           added = true;
         }
+        for (const code of unknown) if (!printingsByCode.has(code)) printingsMissing.set(code, Date.now());
         return added;
       } catch (e) {
         return false; // extension rechargée ou service worker injoignable
@@ -250,7 +477,11 @@
     };
   }
 
-  function renderShortageWarning(el, shortages, deckUsage = new Map()) {
+  // codesByName : nom normalisé → codes des impressions du deck, pour le
+  // prix des cartes manquantes (cf. computeShortagePrices) ; vide (liste
+  // collée) : pas de prix. onProxies : action du bouton « … avec des
+  // proxies » (proxyLabel : son libellé), absent : pas de bouton.
+  function renderShortageWarning(el, shortages, deckUsage = new Map(), codesByName = new Map(), onProxies = null, proxyLabel = "buildWithProxies") {
     if (shortages.length === 0) {
       el.style.display = "none";
       el.innerHTML = "";
@@ -262,17 +493,40 @@
       if (!decks || decks.length === 0) return "";
       return ` · <strong>${escapeHtml(t("shortageIn", decks.map((d) => `${d.name} (${d.qty})`).join(", ")))}</strong>`;
     };
+    const prices = computeShortagePrices(shortages, codesByName, (code) => pricesByCode.get(code));
+    const { formatPrice } = i18n;
+    const priceText = (s) => {
+      const price = prices.byName.get(normalizeName(s.name));
+      if (!price) return "";
+      const text = s.missing > 1 ? t("shortagePriceEach", formatPrice(price.total), formatPrice(price.unit)) : formatPrice(price.total);
+      return ` · <span class="msm-price">${escapeHtml(text)}</span>`;
+    };
+    // Aucun prix (pas de réponse de l'API du deck, liste collée) : pas de
+    // total du tout plutôt qu'un « au moins 0 € ».
+    let totalLine = "";
+    if (prices.byName.size > 0) {
+      const total = formatPrice(prices.total);
+      const text = prices.unpriced > 0 ? tn("shortagePricePartial", prices.unpriced, total) : t("shortagePriceTotal", total);
+      totalLine = `<p class="msm-price-total" title="${escapeHtml(t("shortagePriceSource"))}">💶 ${escapeHtml(text)}</p>`;
+    }
     el.innerHTML =
       `<strong>⚠️ ${escapeHtml(tn("shortageTitle", shortages.length))}</strong>` +
-      `<button type="button" class="msm-secondary msm-export-btn">🛒 ${escapeHtml(t("cardmarketCopyButton"))}</button><ul>` +
+      `<button type="button" class="msm-secondary msm-export-btn">🛒 ${escapeHtml(t("cardmarketCopyButton"))}</button>` +
+      (onProxies
+        ? `<button type="button" class="msm-secondary msm-export-btn msm-proxy-btn" title="${escapeHtml(t("proxiesHint"))}">🃏 ${escapeHtml(t(proxyLabel))}</button>`
+        : "") +
+      // Avant la liste : le cadre défile, le total resterait sinon caché.
+      totalLine +
+      "<ul>" +
       shortages
         .map(
           (s) =>
-            `<li>${escapeHtml(t("shortageItem", s.name, s.have, s.need, s.missing))}${whereText(s)}</li>`
+            `<li>${escapeHtml(t("shortageItem", s.name, s.have, s.need, s.missing))}${priceText(s)}${whereText(s)}</li>`
         )
         .join("") +
       "</ul>";
     el.querySelector(".msm-export-btn").addEventListener("click", () => exportShortagesToCardmarket(shortages));
+    if (onProxies) el.querySelector(".msm-proxy-btn").addEventListener("click", onProxies);
   }
 
   // Export vers Cardmarket : pas d'API utilisable sans identifiants
@@ -408,10 +662,32 @@
     return `<ul class="msm-diff">${items.join("")}</ul>`;
   }
 
+  // Proxies d'un deck monté : leur nombre, et de quoi les imprimer (page de
+  // l'extension, ouverte par le service worker).
+  function renderProxyInfo(el, deckId, deck) {
+    const count = proxyTotal(deck.cards);
+    if (count === 0) {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    el.hidden = false;
+    el.innerHTML =
+      `🃏 ${escapeHtml(tn("deckProxyInfo", count))} ` +
+      `<button type="button" class="msm-secondary msm-export-btn">🖨️ ${escapeHtml(t("printProxies"))}</button>`;
+    el.querySelector("button").addEventListener("click", async () => {
+      const res = await safeSendMessage({ type: "OPEN_PROXIES_PAGE", payload: { deckId } });
+      if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
+      if (!res.ok) toast(t("errorPrefix", res.error || t("unknownError")), true);
+    });
+  }
+
   // Modale d'un deck monté : compare la liste de la page à celle du montage
   // et, si elle a changé, affiche la différence et active « Mettre à jour le
-  // montage ». Renvoie la nouvelle liste à enregistrer, ou null.
-  async function prepareDeckUpdate(overlay, deckId) {
+  // montage ». Renvoie la nouvelle liste à enregistrer (proxies du montage
+  // reportés), ou null. onProxies : mise à jour avec des proxies pour les
+  // cartes en stock insuffisant.
+  async function prepareDeckUpdate(overlay, deckId, onProxies = null) {
     const changesEl = overlay.querySelector("#msm-deck-changes");
     changesEl.innerHTML = `<p class="msm-card-count">${escapeHtml(t("deckChecking"))}</p>`;
     // Juste après un chargement ou une modification, Moxfield peut ne pas
@@ -431,6 +707,7 @@
       changesEl.innerHTML = "";
       return null;
     }
+    renderProxyInfo(overlay.querySelector("#msm-proxy-info"), deckId, deck);
     const pageCards = withPrintings(completeCardNames(detection.cards, Object.values(stockMap), deck.cards));
     if (!detection.reliable) {
       // Écarts entre la liste détectée (non fiable) et le montage : aide à
@@ -461,7 +738,8 @@
       `<strong>${escapeHtml(t("deckChangedTitle", since))}</strong>` +
       renderDeckDiff(changes) +
       `<p>${escapeHtml(t("deckUpdateHint", t("updateBuild")))}</p></div>`;
-    renderShortageWarning(overlay.querySelector("#msm-shortage-warning"), check.shortages, deckUsage);
+    lastPrintingCodes = printingCodesByName(scraped);
+    renderShortageWarning(overlay.querySelector("#msm-shortage-warning"), check.shortages, deckUsage, lastPrintingCodes, onProxies, "updateWithProxies");
     renderPrintingWarning(overlay.querySelector("#msm-printing-warning"), check.wrongEdition);
     renderVersionWarning(overlay.querySelector("#msm-version-warning"), check.versionTaken);
     renderBasicLandNotice(overlay.querySelector("#msm-basic-land-warning"), check.basicWrongEdition, check.basicShortages);
@@ -471,7 +749,8 @@
     updateBtn.disabled = check.blocked;
     if (check.blocked) updateBtn.title = t("deckUpdateBlocked");
     overlay.querySelector("#msm-confirm").classList.remove("msm-primary");
-    return scraped.map(({ name, qty, versions }) => (versions && versions.length > 0 ? { name, qty, versions } : { name, qty }));
+    const cards = scraped.map(({ name, qty, versions }) => (versions && versions.length > 0 ? { name, qty, versions } : { name, qty }));
+    return carryProxies(cards, deck.cards);
   }
 
   // Icône de l'extension (déclarée dans web_accessible_resources). getURL
@@ -501,6 +780,7 @@
         ${
           isBuilt
             ? `<p>${escapeHtml(t("overlayBuiltIntro"))}</p>
+               <div id="msm-proxy-info" class="msm-card-count" hidden></div>
                <div id="msm-deck-changes"></div>
                <div id="msm-printing-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-version-warning" class="msm-shortage-warning" style="display:none"></div>
@@ -713,6 +993,7 @@
           btnAvailability = null;
           renderButton();
         }
+        if (tooLong && deckId === currentDeckId) setEditionNames([]);
         return;
       }
       unreliableSince = 0;
@@ -729,6 +1010,7 @@
       const deck = context.builtDecks[deckId];
       if (deck) {
         const scraped = withPrintings(completeCardNames(detection.cards, Object.values(stockMap), deck.cards));
+        setEditionNames(ownedEditionNames(scraped, deckId));
         const changes = computeDeckDiff(deck.cards, scraped);
         reportPageChanges(deckId, changes);
         const outdated = changes.length > 0;
@@ -742,8 +1024,10 @@
           renderButton();
         }
       } else {
+        const cards = withPrintings(completeCardNames(detection.cards, Object.values(stockMap)));
+        setEditionNames(ownedEditionNames(cards, deckId));
         const availability = computeDeckAvailability(
-          withPrintings(completeCardNames(detection.cards, Object.values(stockMap))),
+          cards,
           stockMap,
           undefined,
           buildVersionUsage(context.builtDecks)
@@ -782,7 +1066,7 @@
 
   function isOwnNode(node) {
     const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
-    return Boolean(el && el.closest(".msm-bar-btn, .msm-floating-btn, .msm-overlay, .msm-toast"));
+    return Boolean(el && el.closest(".msm-bar-btn, .msm-floating-btn, .msm-overlay, .msm-progress-overlay, .msm-toast"));
   }
 
   function isOwnMutation(m) {
@@ -821,11 +1105,47 @@
       viewBox: "0 0 640 512",
       path: "M58.9 42.1c3-6.1 9.6-9.6 16.3-8.7L320 64 564.8 33.4c6.7-.8 13.3 2.7 16.3 8.7l41.7 83.4c9 17.9-.6 39.6-19.8 45.1L439.6 217.3c-13.9 4-28.8-1.9-36.2-14.3L320 64 236.6 203c-7.4 12.4-22.3 18.3-36.2 14.3L37.1 170.6c-19.3-5.5-28.8-27.2-19.8-45.1L58.9 42.1zM321.1 128l54.9 91.4c14.9 24.8 44.6 36.6 72.5 28.6L576 211.6l0 167c0 22-15 41.2-36.4 46.6l-204.1 51c-10.2 2.6-20.9 2.6-31 0l-204.1-51C79 419.7 64 400.5 64 378.5l0-167L191.6 248c27.8 8 57.6-3.8 72.5-28.6L318.9 128l2.2 0z",
     },
+    // arrows-rotate
+    editions: {
+      viewBox: "0 0 512 512",
+      path: "M105.1 202.6c7.7-21.8 20.2-42.3 37.8-59.8c62.5-62.5 163.8-62.5 226.3 0L386.3 160 352 160c-17.7 0-32 14.3-32 32s14.3 32 32 32l111.5 0c0 0 0 0 0 0l.4 0c17.7 0 32-14.3 32-32l0-112c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 35.2L414.4 97.6c-87.5-87.5-229.3-87.5-316.8 0C73.2 122 55.6 150.7 44.8 181.4c-5.9 16.7 2.9 34.9 19.5 40.8s34.9-2.9 40.8-19.5zM39 289.3c-5 1.5-9.8 4.2-13.7 8.2c-4 4-6.7 8.8-8.1 14c-.3 1.2-.6 2.5-.8 3.8c-.3 1.7-.4 3.4-.4 5.1L16 432c0 17.7 14.3 32 32 32s32-14.3 32-32l0-35.1 17.6 17.5c0 0 0 0 0 0c87.5 87.4 229.3 87.4 316.7 0c24.4-24.4 42.1-53.1 52.9-83.8c5.9-16.7-2.9-34.9-19.5-40.8s-34.9 2.9-40.8 19.5c-7.7 21.8-20.2 42.3-37.8 59.8c-62.5 62.5-163.8 62.5-226.3 0l-.1-.1L125.6 352l34.4 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L48.4 288c-1.6 0-3.2 .1-4.8 .3s-3.1 .5-4.6 1z",
+    },
     built: {
       viewBox: "0 0 512 512",
       path: "M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z",
     },
   };
+
+  // Bouton « Utiliser mes éditions » (ruban seulement, cf. ensureButton) et
+  // cartes qu'il changerait (cf. ownedEditionNames).
+  let editionsBtn = null;
+  let btnEditionNames = [];
+
+  function setEditionNames(names) {
+    if (JSON.stringify(names) === JSON.stringify(btnEditionNames)) return;
+    btnEditionNames = names;
+    renderEditionsButton();
+  }
+
+  function renderEditionsButton() {
+    if (!editionsBtn) return;
+    const count = btnEditionNames.length;
+    editionsBtn.style.display = count === 0 ? "none" : "";
+    editionsBtn.replaceChildren(createBarIcon("editions"));
+    if (count > 0) {
+      const badge = document.createElement("span");
+      badge.className = "msm-avail-badge msm-editions-badge";
+      badge.textContent = String(count);
+      badge.setAttribute("aria-hidden", "true");
+      editionsBtn.appendChild(badge);
+    }
+    const label = ownedEditionsRunning
+      ? t("ownedEditionsLoading")
+      : `${t("ownedEditionsButton")} — ${tn("ownedEditionsCount", count)}`;
+    editionsBtn.title = `${label}\n${t("ownedEditionsHint")}`;
+    editionsBtn.setAttribute("aria-label", label);
+    editionsBtn.classList.toggle("msm-busy", ownedEditionsRunning);
+  }
 
   function createBarIcon(kind) {
     const SVG_NS = "http://www.w3.org/2000/svg";
@@ -914,7 +1234,7 @@
 
     let updatedCards = null;
     if (isBuilt) {
-      updatedCards = await prepareDeckUpdate(overlay, deckId);
+      updatedCards = await prepareDeckUpdate(overlay, deckId, () => submitUpdate(true));
     } else {
       const textarea = overlay.querySelector("#msm-cards-textarea");
       const warningEl = overlay.querySelector("#msm-shortage-warning");
@@ -945,7 +1265,9 @@
         const summary = blockingSummary(computeDeckAvailability(cards, stockMap, lastWrongEditionNames, versionUsage));
         blockingSummaryEl.hidden = !summary;
         blockingSummaryEl.textContent = summary ? `🚫 ${summary}.` : "";
-        renderShortageWarning(warningEl, computeShortages(nonBasicCards, stockMap), deckUsage);
+        // Impressions détectées sur la page, pas les versions de la liste :
+        // une quantité modifiée à la main garde le prix de la carte.
+        renderShortageWarning(warningEl, computeShortages(nonBasicCards, stockMap), deckUsage, lastPrintingCodes, () => submitBuild(true));
         renderPrintingWarning(printingWarningEl, computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames));
         renderVersionWarning(versionWarningEl, computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames));
         renderBasicLandNotice(
@@ -985,78 +1307,97 @@
 
     overlay.querySelector("#msm-cancel").addEventListener("click", () => overlay.remove());
 
-    if (updatedCards) {
-      overlay.querySelector("#msm-update").addEventListener("click", async () => {
-        try {
-          // Revérifié au clic : le stock a pu changer entre-temps (synchro
-          // Drive, autre onglet).
-          const { stockMap, versionUsage, builtDecks } = await getStockAndDeckUsage(updatedCards, deckId);
-          const deck = builtDecks[deckId];
-          if (!deck) throw new Error(t("deckNoLongerBuilt"));
-          const changes = computeDeckDiff(deck.cards, updatedCards);
-          if (evaluateDeckUpdate(changes, deck, stockMap, lastWrongEditionNames, updatedCards, versionUsage).blocked) {
-            toast(t("updateBlocked"), true);
-            return;
-          }
-          const payload = { deckId, deckName: getDeckName(), url: window.location.href, cards: updatedCards };
-          const res = await safeSendMessage({ type: "UPDATE_BUILT_DECK", payload });
-          if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
-          if (!res.ok) throw refusal(res);
-          overlay.remove();
-          btnOutdated = false;
-          await refreshButtonState(deckId);
-          toast(t("updateDone"));
-        } catch (e) {
-          if (!e.expected) reportError("deck-page:update", e);
-          toast(t("errorPrefix", e.message), true);
-        }
-      });
-    }
-
-    overlay.querySelector("#msm-confirm").addEventListener("click", async () => {
+    // Mise à jour du montage. withProxies : les cartes en stock insuffisant
+    // sont complétées par des proxies au lieu de bloquer ; version
+    // différente ou déjà utilisée bloquent toujours (un proxy ne règle pas
+    // une question d'édition).
+    async function submitUpdate(withProxies) {
       try {
-        let payload;
-        if (isBuilt) {
-          payload = { deckId, deckName: getDeckName(), url: window.location.href, cards: [], built: false };
-        } else {
-          const textarea = overlay.querySelector("#msm-cards-textarea");
-          const cards = withVersions(parseCardsText(textarea.value));
-          if (cards.length === 0) {
-            toast(t("noCardsRecognized"), true);
-            return;
-          }
-          // Trois vérifications bloquantes avant de pouvoir valider : version
-          // différente de ta collection Moxfield (zone 1), stock insuffisant
-          // (zone 2), puis version déjà prise par un autre deck monté — sauf
-          // pour les terrains de base, jamais bloquants (cf. isBasicLand).
-          // Recalculées ici au cas où le texte a été modifié depuis le
-          // dernier passage de updateWarnings.
-          const { stockMap, versionUsage } = await getStockAndDeckUsage(cards);
-          const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
-          const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
-          if (wrongEdition.length > 0) {
-            toast(t("buildBlockedWrongEdition", wrongEdition.join(", ")), true);
-            return;
-          }
-          const shortages = computeShortages(nonBasicCards, stockMap);
-          if (shortages.length > 0) {
-            const details = shortages.map((s) => t("shortageShort", s.name, s.missing)).join(", ");
-            toast(t("buildBlockedShortage", details), true);
-            return;
-          }
-          const versionTaken = computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames);
-          if (versionTaken.length > 0) {
-            toast(t("buildBlockedVersionTaken", versionTaken.map((c) => c.name).join(", ")), true);
-            return;
-          }
-          payload = { deckId, deckName: getDeckName(), url: window.location.href, cards, built: true };
+        // Revérifié au clic : le stock a pu changer entre-temps (synchro
+        // Drive, autre onglet).
+        const { stockMap, versionUsage, builtDecks } = await getStockAndDeckUsage(updatedCards, deckId);
+        const deck = builtDecks[deckId];
+        if (!deck) throw new Error(t("deckNoLongerBuilt"));
+        const changes = computeDeckDiff(deck.cards, updatedCards);
+        const check = evaluateDeckUpdate(changes, deck, stockMap, lastWrongEditionNames, updatedCards, versionUsage);
+        const blocked = withProxies ? check.wrongEdition.length > 0 || check.versionTaken.length > 0 : check.blocked;
+        if (blocked) {
+          toast(t("updateBlocked"), true);
+          return;
         }
-        const res = await safeSendMessage({ type: "TOGGLE_DECK_BUILT", payload });
+        const cards = withProxies ? addProxies(updatedCards, check.shortages, proxyPrintingFinder(lastPrintingCodes)) : updatedCards;
+        const payload = { deckId, deckName: getDeckName(), url: window.location.href, cards };
+        const res = await safeSendMessage({ type: "UPDATE_BUILT_DECK", payload });
         if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
         if (!res.ok) throw refusal(res);
         overlay.remove();
+        btnOutdated = false;
         await refreshButtonState(deckId);
-        toast(t(isBuilt ? "unbuildDone" : "buildDone"));
+        const added = proxyTotal(cards) - proxyTotal(updatedCards);
+        toast(added > 0 ? tn("updateDoneWithProxies", added) : t("updateDone"));
+      } catch (e) {
+        if (!e.expected) reportError("deck-page:update", e);
+        toast(t("errorPrefix", e.message), true);
+      }
+    }
+
+    // Montage. withProxies : comme pour la mise à jour.
+    async function submitBuild(withProxies) {
+      try {
+        const textarea = overlay.querySelector("#msm-cards-textarea");
+        const cards = withVersions(parseCardsText(textarea.value));
+        if (cards.length === 0) {
+          toast(t("noCardsRecognized"), true);
+          return;
+        }
+        // Trois vérifications bloquantes avant de pouvoir valider : version
+        // différente de ta collection Moxfield (zone 1), stock insuffisant
+        // (zone 2, sauf montage avec des proxies), puis version déjà prise
+        // par un autre deck monté — sauf pour les terrains de base, jamais
+        // bloquants (cf. isBasicLand). Recalculées ici au cas où le texte a
+        // été modifié depuis le dernier passage de updateWarnings.
+        const { stockMap, versionUsage } = await getStockAndDeckUsage(cards);
+        const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
+        const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
+        if (wrongEdition.length > 0) {
+          toast(t("buildBlockedWrongEdition", wrongEdition.join(", ")), true);
+          return;
+        }
+        const shortages = computeShortages(nonBasicCards, stockMap);
+        if (shortages.length > 0 && !withProxies) {
+          const details = shortages.map((s) => t("shortageShort", s.name, s.missing)).join(", ");
+          toast(t("buildBlockedShortage", details), true);
+          return;
+        }
+        const versionTaken = computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames);
+        if (versionTaken.length > 0) {
+          toast(t("buildBlockedVersionTaken", versionTaken.map((c) => c.name).join(", ")), true);
+          return;
+        }
+        const built = withProxies ? addProxies(cards, shortages, proxyPrintingFinder(lastPrintingCodes)) : cards;
+        await sendToggle({ deckId, deckName: getDeckName(), url: window.location.href, cards: built, built: true });
+      } catch (e) {
+        if (!e.expected) reportError("deck-page:toggle", e);
+        toast(t("errorPrefix", e.message), true);
+      }
+    }
+
+    async function sendToggle(payload) {
+      const res = await safeSendMessage({ type: "TOGGLE_DECK_BUILT", payload });
+      if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
+      if (!res.ok) throw refusal(res);
+      overlay.remove();
+      await refreshButtonState(deckId);
+      const proxies = proxyTotal(payload.cards);
+      toast(!payload.built ? t("unbuildDone") : proxies > 0 ? tn("buildDoneWithProxies", proxies) : t("buildDone"));
+    }
+
+    if (updatedCards) overlay.querySelector("#msm-update").addEventListener("click", () => submitUpdate(false));
+
+    overlay.querySelector("#msm-confirm").addEventListener("click", async () => {
+      if (!isBuilt) return submitBuild(false);
+      try {
+        await sendToggle({ deckId, deckName: getDeckName(), url: window.location.href, cards: [], built: false });
       } catch (e) {
         if (!e.expected) reportError("deck-page:toggle", e);
         toast(t("errorPrefix", e.message), true);
@@ -1108,10 +1449,11 @@
     return heart ? heart.closest("a") : null;
   }
 
+  // « Utiliser mes éditions » juste à gauche de notre bouton.
   function isButtonWellPlaced(bar) {
-    if (btn.parentElement !== bar) return false;
+    if (btn.parentElement !== bar || !editionsBtn || btn.previousElementSibling !== editionsBtn) return false;
     const anchor = findBarAnchor(bar);
-    return anchor ? btn.previousElementSibling === anchor : true;
+    return anchor ? editionsBtn.previousElementSibling === anchor : true;
   }
 
   function ensureButton() {
@@ -1138,6 +1480,20 @@
       const anchor = findBarAnchor(bar);
       if (anchor) anchor.after(btn);
       else bar.appendChild(btn);
+      editionsBtn = document.createElement("a");
+      editionsBtn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn msm-editions-bar-btn";
+      editionsBtn.setAttribute("role", "button");
+      editionsBtn.setAttribute("tabindex", "0");
+      const useEditions = () => useOwnedEditions(currentDeckId, btnEditionNames);
+      editionsBtn.addEventListener("click", useEditions);
+      editionsBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          useEditions();
+        }
+      });
+      btn.before(editionsBtn);
+      renderEditionsButton();
     } else {
       btn = document.createElement("button");
       btn.className = "msm-floating-btn";
@@ -1154,23 +1510,28 @@
       btn.remove();
       btn = null;
     }
+    if (editionsBtn) {
+      editionsBtn.remove();
+      editionsBtn = null;
+    }
   }
 
   async function syncButtonToLocation() {
-    // Le badge "Commander" est injecté par React après le chargement
-    // initial de la page : au moment précis où l'URL change, il peut ne pas
-    // encore être présent. On ne se fie donc pas qu'au changement d'URL —
-    // cette fonction est rappelée à chaque tick du polling (voir plus bas)
-    // pour réévaluer sa présence tant qu'on reste sur la même page.
-    if (isDeckPage() && hasCommanderBadge()) {
+    // Rappelée à chaque tick du polling (voir plus bas) : la liste du deck
+    // est affichée par React après le changement d'URL, et contrôlée tant
+    // qu'on reste sur la page (cf. checkDeckStatus).
+    if (isDeckPage()) {
       const deckId = getDeckId();
       ensureButton();
       if (deckId !== currentDeckId) {
         currentDeckId = deckId;
+        btnEditionNames = [];
+        renderEditionsButton();
         btnOutdated = false;
         unreliableSince = 0;
         await refreshButtonState(deckId);
       }
+      announceOwnedEditions(deckId);
       checkDeckStatus(deckId);
     } else {
       currentDeckId = null;
@@ -1182,8 +1543,8 @@
   }
 
   // Polling léger (voir en-tête du fichier) : sert à la fois à détecter les
-  // changements d'URL de la SPA et à réévaluer le badge "Commander" tant
-  // qu'on reste sur la même page (cf. commentaire de syncButtonToLocation).
+  // changements d'URL de la SPA et à recontrôler la page tant qu'on y
+  // reste (cf. commentaire de syncButtonToLocation).
   setInterval(syncButtonToLocation, 500);
 
   syncButtonToLocation();

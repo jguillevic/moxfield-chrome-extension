@@ -46,6 +46,9 @@ function loadBackground(initialState, options = {}) {
   const cookieListeners = [];
   const counts = { stateWrites: 0, fetches: 0 };
   const sentry = [];
+  const tabsCreated = [];
+  const tabMessages = [];
+  const moxfieldCalls = [];
   const session = {};
   // Compte Google du profil Chrome et de la fenêtre de connexion ;
   // modifiable en cours de test (changement de compte).
@@ -77,6 +80,13 @@ function loadBackground(initialState, options = {}) {
       onInstalled: listener(),
       getManifest: () => ({ version: "0.2.0" }),
       getPlatformInfo: async () => ({ os: "win" }),
+      getURL: (p) => `chrome-extension://test/${p}`,
+    },
+    // Onglets ouverts par l'extension (page d'impression des proxies).
+    tabs: {
+      create: async (info) => tabsCreated.push(clone(info)),
+      // Messages envoyés à un onglet (avancement de « Utiliser mes éditions »).
+      sendMessage: async (tabId, msg) => tabMessages.push({ tabId, ...clone(msg) }),
     },
     alarms: {
       onAlarm: listener(alarmListeners),
@@ -123,6 +133,20 @@ function loadBackground(initialState, options = {}) {
     }
     counts.fetches++;
     if (options.moxfieldCSV === undefined) throw new Error(`appel réseau inattendu : ${url}`);
+    // Éditions d'une carte et changement d'édition dans un deck (cf.
+    // options.moxfieldEditions, options.moxfieldEdit).
+    if (url.includes("/cards/editions/") || url.includes("/v2/decks/")) {
+      moxfieldCalls.push({ url, method: (init && init.method) || "GET", headers: clone((init && init.headers) || {}), body: init && init.body ? JSON.parse(init.body) : null });
+      const answer = await (url.includes("/v2/decks/") ? options.moxfieldEdit(url, init) : options.moxfieldEditions(url));
+      if (answer instanceof Error) throw answer;
+      return {
+        ok: answer.status === undefined || answer.status < 400,
+        status: answer.status || 200,
+        json: async () => clone(answer.body),
+        text: async () => JSON.stringify(answer.body),
+      };
+    }
+    if (url.includes("/decks/all/")) moxfieldCalls.push({ url, method: "GET" });
     if (options.moxfieldCSV instanceof Error) throw options.moxfieldCSV;
     const body = url.includes("/token/")
       ? JSON.stringify({ access_token: "jeton" })
@@ -153,8 +177,9 @@ function loadBackground(initialState, options = {}) {
 
   // Comme Chrome, message et réponse sont sérialisés (ce qui ramène aussi
   // les objets du contexte isolé dans celui des tests, pour deepEqual).
-  function send(msg) {
-    return new Promise((resolve) => onMessage(clone(msg), {}, (res) => resolve(clone(res))));
+  // sender : expéditeur du message (ex. { tab: { id } } pour une page).
+  function send(msg, sender = {}) {
+    return new Promise((resolve) => onMessage(clone(msg), sender, (res) => resolve(clone(res))));
   }
   return {
     send,
@@ -166,6 +191,9 @@ function loadBackground(initialState, options = {}) {
     context,
     counts,
     sentry,
+    tabsCreated,
+    tabMessages,
+    moxfieldCalls,
     google,
     session,
     syncMeta: () => clone(storage[SYNC_KEY]),
@@ -1344,8 +1372,8 @@ test("éditions d'un deck : lues par l'API pour la page du deck, sans toucher à
   const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV, moxfieldDeck: JSON.stringify(API_DECK) });
   const res = await bg.send({ type: "GET_DECK_PRINTINGS", payload: { deckId: "abc123" } });
   assert.equal(res.ok, true);
-  assert.deepEqual(res.printings.ZOwRD, { set: "rav", cn: "87" });
-  assert.deepEqual(res.printings.SWAMP2, { set: "pwar", cn: "war-115" });
+  assert.deepEqual(res.printings.ZOwRD, { set: "rav", cn: "87", eur: 0.15 });
+  assert.deepEqual(res.printings.SWAMP2, { set: "pwar", cn: "war-115", eur: 0.8 });
   assert.equal(bg.counts.stateWrites, 0);
 
   const fetches = bg.counts.fetches;
@@ -1404,4 +1432,463 @@ test("versions d'un deck monté : édition ajoutée à une version déjà enregi
   assert.deepEqual(await bg.send({ type: "SET_DECK_VERSIONS", payload: { deckId: "a", versions } }), { ok: true, unchanged: true });
   assert.equal(bg.counts.stateWrites, writes);
   assert.deepEqual((await bg.state()).builtDecks.a.cards, expected);
+});
+
+// --- Proxies ---
+
+const update = (bg, deckId, cards) =>
+  bg.send({ type: "UPDATE_BUILT_DECK", payload: { deckId, deckName: `Deck ${deckId}`, url: `https://moxfield.com/decks/${deckId}`, cards } });
+
+test("proxies : jamais pris au stock au montage, ni rendus au démontage", async () => {
+  const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 1 } }, builtDecks: {} });
+  // 3 Sol Ring demandés, 1 en stock : 2 proxies ; Counterspell entièrement en proxy.
+  const cards = [
+    { name: "Sol Ring", qty: 3, proxyQty: 2, proxyPrinting: { set: "c21", cn: "263" } },
+    { name: "Counterspell", qty: 1, proxyQty: 1 },
+  ];
+  assert.deepEqual(await build(bg, "a", cards), { ok: true });
+  let state = await bg.state();
+  assert.deepEqual(quantities(state), { "sol ring": 0 }, "Counterspell n'entre pas dans le stock");
+  assert.deepEqual(state.builtDecks.a.cards, cards);
+  await unbuild(bg, "a");
+  state = await bg.state();
+  assert.deepEqual(quantities(state), { "sol ring": 1 });
+  const [unbuilt, built] = await historyOf(bg);
+  assert.equal(built.title, "Deck « Deck a » monté : 1 carte retirée du stock libre (+ 3 proxies)");
+  assert.equal(unbuilt.title, "Deck « Deck a » démonté : 1 carte rendue au stock (+ 3 proxies)");
+});
+
+test("proxies : valeurs reçues invalides retirées plutôt qu'enregistrées", async () => {
+  const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 5 } }, builtDecks: {} });
+  await build(bg, "a", [
+    { name: "Sol Ring", qty: 1, proxyQty: 2 }, // plus que la quantité
+    { name: "Counterspell", qty: 1, proxyQty: "1", proxyPrinting: { set: "c21", cn: "1" } },
+    { name: "Arcane Signet", qty: 2, proxyQty: 1, proxyPrinting: { set: "x".repeat(50), cn: 7 } },
+    { name: "Swords to Plowshares", qty: 1, proxyQty: 1, proxyPrinting: { set: "" } },
+  ]);
+  assert.deepEqual((await bg.state()).builtDecks.a.cards, [
+    { name: "Sol Ring", qty: 1 },
+    { name: "Counterspell", qty: 1 },
+    { name: "Arcane Signet", qty: 2, proxyQty: 1, proxyPrinting: { set: "x".repeat(20), cn: "" } },
+    { name: "Swords to Plowshares", qty: 1, proxyQty: 1 },
+  ]);
+  assert.deepEqual(quantities(await bg.state()), { "sol ring": 4, counterspell: -1, "arcane signet": -1 });
+});
+
+test("proxies : mise à jour avec de nouveaux proxies, notée dans l'historique", async () => {
+  const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 1 } }, builtDecks: {} });
+  await build(bg, "a", [{ name: "Sol Ring", qty: 2, proxyQty: 1 }]);
+  assert.deepEqual(quantities(await bg.state()), { "sol ring": 0 });
+  // Un 3e Sol Ring, lui aussi en proxy : le stock ne bouge pas.
+  await update(bg, "a", [{ name: "Sol Ring", qty: 3, proxyQty: 2 }]);
+  assert.deepEqual(quantities(await bg.state()), { "sol ring": 0 });
+  const [entry] = await historyOf(bg);
+  assert.equal(entry.title, "Montage de « Deck a » mis à jour : 1 carte modifiée (+ 1 nouveau proxy)");
+});
+
+test("proxies : collection récupérée, les proxies ne comptent ni dans le stock ni dans les cartes non couvertes", async () => {
+  const bg = loadBackground({ stock: {}, builtDecks: {} }, { moxfieldCSV: COLLECTION_CSV });
+  await build(bg, "a", [{ name: "Sol Ring", qty: 2, proxyQty: 2 }, { name: "Rhystic Study", qty: 2, proxyQty: 1 }]);
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  // 3 Sol Ring possédés, tous libres ; 1 Rhystic Study possédé, pris par le deck.
+  assert.deepEqual(quantities(await bg.state()), { "sol ring": 3, "rhystic study": 0, island: 10 });
+  assert.deepEqual((await collectionStatus(bg)).uncovered, []);
+});
+
+test("proxies : remplacés par la vraie carte quand elle arrive en stock libre", async () => {
+  const bg = loadBackground({ stock: {}, builtDecks: {} });
+  await build(bg, "a", [
+    { name: "Sol Ring", qty: 3, proxyQty: 3, proxyPrinting: { set: "c21", cn: "263" } },
+    { name: "Counterspell", qty: 1, proxyQty: 1 },
+  ]);
+  const nothing = await bg.send({ type: "REPLACE_PROXIES", payload: { deckId: "a" } });
+  assert.equal(nothing.ok, false);
+  assert.match(nothing.error, /Aucun proxy à remplacer/);
+  // 2 Sol Ring achetés et ajoutés à la collection.
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: csv("2,0,Sol Ring,,,,,,,,,,") });
+  const res = await bg.send({ type: "REPLACE_PROXIES", payload: { deckId: "a" } });
+  assert.deepEqual(res, { ok: true, replaced: [{ name: "Sol Ring", qty: 2 }] });
+  const state = await bg.state();
+  assert.deepEqual(state.builtDecks.a.cards, [
+    { name: "Sol Ring", qty: 3, proxyQty: 1, proxyPrinting: { set: "c21", cn: "263" } },
+    { name: "Counterspell", qty: 1, proxyQty: 1 },
+  ]);
+  assert.deepEqual(quantities(state), { "sol ring": 0 });
+  const [entry] = await historyOf(bg);
+  assert.equal(entry.title, "Deck « Deck a » : 2 proxies remplacés par la vraie carte, retirée du stock libre");
+  // Le dernier proxy de la carte remplacé : plus aucune trace du proxy.
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: csv("3,0,Sol Ring,,,,,,,,,,") });
+  await bg.send({ type: "REPLACE_PROXIES", payload: { deckId: "a" } });
+  assert.deepEqual((await bg.state()).builtDecks.a.cards[0], { name: "Sol Ring", qty: 3 });
+  // Refus expliqués : pas de rapport d'erreur.
+  assert.equal((await bg.send({ type: "REPLACE_PROXIES", payload: { deckId: "inconnu" } })).ok, false);
+  assert.deepEqual(bg.sentry, []);
+});
+
+test("proxies : page d'impression, avec seulement les proxies du deck demandé", async () => {
+  const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 1 } }, builtDecks: {} });
+  await build(bg, "a", [
+    { name: "Sol Ring", qty: 2, proxyQty: 1, proxyPrinting: { set: "c21", cn: "263" } },
+    { name: "Counterspell", qty: 1, proxyQty: 1 },
+    { name: "Island", qty: 5 },
+  ]);
+  assert.deepEqual(await bg.send({ type: "GET_DECK_PROXIES", payload: { deckId: "a" } }), {
+    ok: true,
+    deck: {
+      name: "Deck a",
+      url: "https://moxfield.com/decks/a",
+      cards: [
+        { name: "Sol Ring", qty: 1, set: "c21", cn: "263" },
+        { name: "Counterspell", qty: 1 },
+      ],
+    },
+  });
+  assert.deepEqual(await bg.send({ type: "GET_DECK_PROXIES", payload: { deckId: "b" } }), { ok: true, deck: null });
+  assert.deepEqual(await bg.send({ type: "OPEN_PROXIES_PAGE", payload: { deckId: "a/b" } }), { ok: true });
+  assert.deepEqual(bg.tabsCreated, [{ url: "chrome-extension://test/proxies.html?deck=a%2Fb" }]);
+  assert.equal((await bg.send({ type: "OPEN_PROXIES_PAGE", payload: {} })).ok, false);
+});
+
+test("proxies : un deck dont la carte est en proxy n'est pas cité parmi ceux qui la tiennent", async () => {
+  // Rhystic Study absente de la collection : le deck a la tient (stock
+  // négatif), le deck b ne l'a qu'en proxy.
+  const bg = loadBackground({ stock: {}, builtDecks: {} }, { moxfieldCSV: csv("1,0,Sol Ring,,,,,,,,,,") });
+  await build(bg, "a", [{ name: "Rhystic Study", qty: 1 }]);
+  await build(bg, "b", [{ name: "Rhystic Study", qty: 1, proxyQty: 1 }]);
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.deepEqual((await collectionStatus(bg)).uncovered, [{ name: "Rhystic Study", missing: 1, decks: ["Deck a"] }]);
+});
+
+// --- Passer un deck Moxfield sur les éditions de la collection ---
+
+const CARD_EDITIONS = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "api", "card-editions.json"), "utf8"));
+
+// Faux Moxfield qui tient un deck modifiable : chaque changement
+// d'édition exige la dernière version du deck, et l'incrémente.
+const BIRDS_EDITIONS = [
+  { cardId: "bIrDs", uniqueCardId: "u0005", abbreviation: "plst", cn: "52★", name: "The List", hasNonFoil: true, hasFoil: false, hasEtched: true },
+];
+
+function editableDeck() {
+  const deck = JSON.parse(JSON.stringify(API_DECK));
+  const options = {
+    sentryDsn: SENTRY_DSN,
+    // Golgari Thug possédée en DDS (le deck demande RAV) ; Sidisi en KTK
+    // (le deck demande la promo) ; Birds of Paradise dans l'édition du deck.
+    moxfieldCSV: csv("1,0,Golgari Thug,dds,,,,,,50,,,", "1,0,Sidisi; Brood Tyrant,ktk,,,,,,199,,,", "1,0,Birds of Paradise,plst,,,,,,52★,,,").replace(
+      "Sidisi; Brood Tyrant",
+      '"Sidisi, Brood Tyrant"'
+    ),
+    moxfieldDeck: JSON.stringify(deck),
+    // Éditions connues de Moxfield : celles de Golgari Thug et de Birds of
+    // Paradise (en etched dans le deck, possédée en non-foil).
+    moxfieldEditions: (url) => ({ body: url.endsWith("/u0001") ? CARD_EDITIONS : url.endsWith("/u0005") ? BIRDS_EDITIONS : [] }),
+    // Comme Moxfield (confirmé en vrai, novembre 2026) : la fin de l'URL est
+    // l'impression actuelle de la carte (card.id), pas son uniqueCardId ;
+    // un autre identifiant y est lu comme l'impression d'une autre carte, et
+    // la nouvelle impression est alors refusée (400).
+    moxfieldEdit: (url, init) => {
+      if (init.headers["x-deck-version"] !== String(deck.version)) return { status: 409, body: {} };
+      const currentId = url.split("/").pop();
+      const board = url.split("/").slice(-2)[0];
+      const entry = Object.values(deck.boards[board].cards).find((e) => e.card.id === currentId);
+      const id = JSON.parse(init.body).printingData[0].id;
+      if (!entry) return { status: 400, body: { "printingData[0].Id": ['Specified printing ID is not a printing of "Mad Auntie".'] } };
+      const edition = [...CARD_EDITIONS, ...BIRDS_EDITIONS].find((e) => e.cardId === id) || { abbreviation: "ktk", cn: "199" };
+      entry.card = { ...entry.card, id, set: edition.abbreviation, cn: edition.cn };
+      entry.finish = JSON.parse(init.body).finish;
+      deck.version++;
+      options.moxfieldDeck = JSON.stringify(deck);
+      return { body: { card: entry.card } };
+    },
+  };
+  return { deck, options };
+}
+
+const GOLGARI_TO_DDS = {
+  name: "Golgari Thug",
+  board: "mainboard",
+  uniqueCardId: "u0001",
+  from: { set: "rav", cn: "87" },
+  to: { set: "dds", cn: "50", setName: "Duel Decks: Mind vs. Might", cardId: "GtDds", finishes: ["nonFoil"] },
+};
+
+// Même édition, seule la finition change (cas constaté en vrai : possédée
+// dans une autre finition que celle du deck).
+const BIRDS_TO_NONFOIL = {
+  name: "Birds of Paradise",
+  board: "commanders",
+  uniqueCardId: "u0005",
+  from: { set: "plst", cn: "52★" },
+  to: { set: "plst", cn: "52★", setName: "The List", cardId: "bIrDs", finishes: ["nonFoil", "etched"], finish: "nonFoil" },
+};
+
+test("éditions de la collection : finition seule changée, édition gardée", async () => {
+  const { deck, options } = editableDeck();
+  const bg = loadBackground(undefined, options);
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [BIRDS_TO_NONFOIL] } });
+  assert.deepEqual(res, { ok: true, done: ["Birds of Paradise"], skipped: [] });
+  const [write] = bg.moxfieldCalls.filter((c) => c.method === "PUT");
+  assert.equal(write.url, "https://api2.moxfield.com/v2/decks/0000000/cards/commanders/bIrDs");
+  assert.equal(write.body.finish, "nonFoil");
+  assert.deepEqual(write.body.printingData.map((p) => [p.id, p.finish]), [["bIrDs", "nonFoil"]]);
+  assert.equal(deck.version, 7);
+});
+
+test("éditions de la collection : pas assez d'exemplaires dans une même édition, carte laissée", async () => {
+  const { deck, options } = editableDeck();
+  // 2 Golgari Thug dans le deck, une seule DDS possédée.
+  Object.values(deck.boards.mainboard.cards).find((e) => e.card.uniqueCardId === "u0001").quantity = 2;
+  options.moxfieldDeck = JSON.stringify(deck);
+  const bg = loadBackground(undefined, options);
+  const res = await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names: ["Golgari Thug"] } });
+  assert.deepEqual(res, { ok: true, plan: [], skipped: [{ name: "Golgari Thug", reason: "not-enough" }] });
+});
+
+test("éditions de la collection : finition possédée inconnue de Moxfield pour cette édition, carte laissée", async () => {
+  const { options } = editableDeck();
+  // Birds possédée en foil : The List n'existe pas en foil chez Moxfield.
+  options.moxfieldCSV = csv("1,0,Birds of Paradise,plst,,,foil,,,52★,,,");
+  const bg = loadBackground(undefined, options);
+  const res = await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names: ["Birds of Paradise"] } });
+  assert.deepEqual(res, { ok: true, plan: [], skipped: [{ name: "Birds of Paradise", reason: "edition-unknown" }] });
+});
+
+test("éditions de la collection : finitions de la collection jamais enregistrées dans le stock", async () => {
+  const bg = loadBackground();
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: csv("1,0,Sol Ring,c21,,,foil,,,263,,,", "1,0,Sol Ring,cmr,,,,,,472,,,") });
+  const { stock } = await bg.state();
+  assert.deepEqual(stock["sol ring"].printings, [
+    { set: "c21", cn: "263", qty: 1 },
+    { set: "cmr", cn: "472", qty: 1 },
+  ]);
+});
+
+test("éditions de la collection : proposition, sans rien écrire", async () => {
+  const { options } = editableDeck();
+  const bg = loadBackground(undefined, options);
+  const names = ["Golgari Thug", "Sidisi, Brood Tyrant", "Birds of Paradise", "Swamp", "Carte Inconnue", "Revitalizing Repast"];
+  const res = await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names } });
+  assert.deepEqual(res, {
+    ok: true,
+    plan: [GOLGARI_TO_DDS, BIRDS_TO_NONFOIL],
+    skipped: [
+      { name: "Sidisi, Brood Tyrant", reason: "edition-unknown" },
+      { name: "Swamp", reason: "several" },
+      { name: "Carte Inconnue", reason: "not-in-deck" },
+      { name: "Revitalizing Repast // Old-Growth Grove", reason: "no-other-edition" },
+    ],
+  });
+  assert.deepEqual(bg.moxfieldCalls.filter((c) => c.method !== "GET"), [], "aucune écriture");
+  assert.equal(bg.counts.stateWrites, 0);
+});
+
+test("éditions de la collection : application carte par carte, deck lu une seule fois", async () => {
+  const { deck, options } = editableDeck();
+  const bg = loadBackground(undefined, options);
+  const sidisi = {
+    name: "Sidisi, Brood Tyrant",
+    board: "mainboard",
+    uniqueCardId: "u0002",
+    from: { set: "pktk", cn: "199p" },
+    to: { set: "ktk", cn: "199", setName: "Khans of Tarkir", cardId: "SdKtk", finishes: ["nonFoil", "foil"] },
+  };
+  // Carte modifiée entre-temps sur Moxfield : plus dans l'édition proposée.
+  const stale = { ...GOLGARI_TO_DDS, name: "Revitalizing Repast // Old-Growth Grove", uniqueCardId: "u0003", from: { set: "mh3", cn: "1" } };
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS, sidisi, stale] } });
+  assert.deepEqual(res, { ok: true, done: ["Golgari Thug", "Sidisi, Brood Tyrant"], skipped: [{ name: stale.name, reason: "changed" }] });
+  const writes = bg.moxfieldCalls.filter((c) => c.method === "PUT");
+  assert.deepEqual(writes.map((c) => c.url), [
+    // Impression actuelle de Golgari Thug (RAV), puis de Sidisi (promo).
+    "https://api2.moxfield.com/v2/decks/0000000/cards/mainboard/ZOwRD",
+    "https://api2.moxfield.com/v2/decks/0000000/cards/mainboard/E0aWJ",
+  ]);
+  assert.deepEqual(writes.map((c) => c.headers["x-deck-version"]), ["6", "7"], "version suivie d'un changement à l'autre");
+  assert.equal(bg.moxfieldCalls.filter((c) => c.url.includes("/decks/all/")).length, 1, "deck lu une seule fois");
+  // Sidisi est en foil dans le deck, et l'édition KTK existe en foil.
+  assert.equal(writes[1].body.finish, "foil");
+  assert.equal(deck.version, 8);
+  assert.equal(bg.counts.stateWrites, 0, "ni stock ni decks montés modifiés");
+});
+
+test("éditions de la collection : arrêt à la première erreur, cartes déjà passées indiquées", async () => {
+  const { options } = editableDeck();
+  let calls = 0;
+  const edit = options.moxfieldEdit;
+  options.moxfieldEdit = (url, init) => (++calls === 2 ? new TypeError("Failed to fetch") : edit(url, init));
+  const bg = loadBackground(undefined, options);
+  const second = { ...GOLGARI_TO_DDS, name: "Sidisi, Brood Tyrant", uniqueCardId: "u0002", from: { set: "pktk", cn: "199p" } };
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS, second] } });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, "network");
+  assert.deepEqual(res.done, ["Golgari Thug"]);
+  assert.equal(calls, 2, "réseau coupé : pas de nouvelle tentative");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(bg.sentry, [], "réseau coupé : pas de rapport");
+});
+
+const SIDISI_TO_KTK = {
+  name: "Sidisi, Brood Tyrant",
+  board: "mainboard",
+  uniqueCardId: "u0002",
+  from: { set: "pktk", cn: "199p" },
+  to: { set: "ktk", cn: "199", setName: "Khans of Tarkir", cardId: "SdKtk", finishes: ["nonFoil", "foil"] },
+};
+
+test("éditions de la collection : deck modifié ailleurs en cours de route, relu puis carte retentée", async () => {
+  const { deck, options } = editableDeck();
+  const edit = options.moxfieldEdit;
+  let calls = 0;
+  options.moxfieldEdit = (url, init) => {
+    // Avant le 2e changement, le deck est modifié dans un autre onglet.
+    if (++calls === 2) {
+      deck.version++;
+      options.moxfieldDeck = JSON.stringify(deck);
+    }
+    return edit(url, init);
+  };
+  const bg = loadBackground(undefined, options);
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS, SIDISI_TO_KTK] } });
+  assert.deepEqual(res, { ok: true, done: ["Golgari Thug", "Sidisi, Brood Tyrant"], skipped: [] });
+  const writes = bg.moxfieldCalls.filter((c) => c.method === "PUT");
+  assert.deepEqual(writes.map((c) => c.headers["x-deck-version"]), ["6", "7", "8"], "refusée en 7, retentée en 8");
+  assert.equal(bg.moxfieldCalls.filter((c) => c.url.includes("/decks/all/")).length, 2, "deck relu après le refus");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(bg.sentry, [], "refus rattrapé : pas de rapport");
+});
+
+test("éditions de la collection : carte changée entre-temps, vue à la relecture, pas touchée", async () => {
+  const { deck, options } = editableDeck();
+  const edit = options.moxfieldEdit;
+  let calls = 0;
+  options.moxfieldEdit = (url, init) => {
+    // Sidisi passée à la main sur une autre édition, juste avant notre 2e changement.
+    if (++calls === 2) {
+      const sidisi = Object.values(deck.boards.mainboard.cards).find((e) => e.card.uniqueCardId === "u0002");
+      sidisi.card = { ...sidisi.card, set: "dtk", cn: "1" };
+      deck.version++;
+      options.moxfieldDeck = JSON.stringify(deck);
+    }
+    return edit(url, init);
+  };
+  const bg = loadBackground(undefined, options);
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS, SIDISI_TO_KTK] } });
+  assert.deepEqual(res, { ok: true, done: ["Golgari Thug"], skipped: [{ name: "Sidisi, Brood Tyrant", reason: "changed" }] });
+  assert.equal(bg.moxfieldCalls.filter((c) => c.method === "PUT").length, 2, "pas de nouvelle tentative");
+});
+
+test("éditions de la collection : refus répété, une seule nouvelle tentative puis arrêt", async () => {
+  const { options } = editableDeck();
+  options.moxfieldEdit = () => ({ status: 409, body: {} });
+  const bg = loadBackground(undefined, options);
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS, SIDISI_TO_KTK] } });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, "api-changed");
+  assert.deepEqual(res.done, []);
+  assert.equal(bg.moxfieldCalls.filter((c) => c.method === "PUT").length, 2);
+});
+
+test("éditions de la collection : avancement envoyé à l'onglet qui a lancé l'action", async () => {
+  const { options } = editableDeck();
+  const bg = loadBackground(undefined, options);
+  const tab = { tab: { id: 7 } };
+  await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names: ["Golgari Thug", "Birds of Paradise"] } }, tab);
+  await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS, SIDISI_TO_KTK] } }, tab);
+  const steps = bg.tabMessages.map(({ tabId, type, step, done, total }) => `${tabId} ${type} ${step} ${done}/${total}`);
+  assert.deepEqual(steps.slice(0, 1), ["7 OWNED_EDITIONS_PROGRESS plan 0/2"]);
+  // Lectures en parallèle : l'ordre d'arrivée importe peu, le compte si.
+  assert.deepEqual(steps.slice(1, 3).sort(), ["7 OWNED_EDITIONS_PROGRESS plan 1/2", "7 OWNED_EDITIONS_PROGRESS plan 2/2"]);
+  assert.deepEqual(steps.slice(3), [
+    "7 OWNED_EDITIONS_PROGRESS apply 0/2",
+    "7 OWNED_EDITIONS_PROGRESS apply 1/2",
+    "7 OWNED_EDITIONS_PROGRESS apply 2/2",
+  ]);
+  // Sans onglet (message venu d'ailleurs) : rien n'est envoyé.
+  const before = bg.tabMessages.length;
+  await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS] } });
+  assert.equal(bg.tabMessages.length, before);
+});
+
+test("éditions de la collection : carte laissée comptée dans l'avancement", async () => {
+  const { options } = editableDeck();
+  const bg = loadBackground(undefined, options);
+  const stale = { ...GOLGARI_TO_DDS, name: "Revitalizing Repast // Old-Growth Grove", uniqueCardId: "u0003", from: { set: "mh3", cn: "1" } };
+  await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [stale, GOLGARI_TO_DDS] } }, { tab: { id: 3 } });
+  assert.deepEqual(bg.tabMessages.map((m) => m.done), [0, 1, 2]);
+});
+
+test("éditions de la collection : éditions lues en parallèle, par 3 au plus, ordre gardé", async () => {
+  const { options } = editableDeck();
+  // Toutes les cartes du deck possédées dans une autre édition.
+  options.moxfieldCSV = csv(
+    "1,0,Golgari Thug,dds,,,,,,50,,,",
+    '1,0,"Sidisi, Brood Tyrant",ktk,,,,,,199,,,',
+    "1,0,Revitalizing Repast // Old-Growth Grove,mh3,,,,,,1,,,",
+    "1,0,Birds of Paradise,plst,,,,,,52★,,,",
+    "1,0,Swamp,war,,,,,,1,,,"
+  );
+  const known = options.moxfieldEditions;
+  let inFlight = 0;
+  let maxInFlight = 0;
+  options.moxfieldEditions = async (url) => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    inFlight--;
+    return known(url);
+  };
+  const bg = loadBackground(undefined, options);
+  const names = ["Golgari Thug", "Sidisi, Brood Tyrant", "Revitalizing Repast", "Birds of Paradise"];
+  const res = await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names } });
+  assert.equal(maxInFlight, 3);
+  assert.deepEqual(res.plan.map((p) => p.name), ["Golgari Thug", "Birds of Paradise"]);
+  assert.deepEqual(res.skipped.map((p) => p.name), ["Sidisi, Brood Tyrant", "Revitalizing Repast // Old-Growth Grove"]);
+});
+
+test("éditions de la collection : deck d'un autre compte refusé sans rapport, réponse anormale rapportée", async () => {
+  const refused = editableDeck();
+  refused.options.moxfieldEdit = () => ({ status: 403, body: {} });
+  const bg = loadBackground(undefined, refused.options);
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS] } });
+  assert.equal(res.code, "blocked");
+  const odd = editableDeck();
+  odd.options.moxfieldEdit = () => ({ body: { card: { id: "AUTRE" } } });
+  const bg2 = loadBackground(undefined, odd.options);
+  assert.equal((await bg2.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS] } })).code, "api-changed");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(bg.sentry.length, 0);
+  assert.equal(bg2.sentry.length, 1);
+  // Rien du deck ni des cartes dans le rapport.
+  assert.ok(!JSON.stringify(bg2.sentry).includes("Golgari"));
+});
+
+test("éditions de la collection : refus 400, motif de Moxfield joint au rapport, sans adresse mail", async () => {
+  const { options } = editableDeck();
+  const reason = { title: "One or more validation errors occurred.", errors: { "printingData[0].lang": ["Invalid"] }, contact: "joueur@exemple.fr" };
+  options.moxfieldEdit = () => ({ status: 400, body: { ...reason, padding: "x".repeat(2000) } });
+  const bg = loadBackground(undefined, options);
+  const res = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS] } });
+  assert.equal(res.code, "api-changed");
+  assert.ok(!res.error.includes("Invalid"), "motif brut jamais affiché");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(bg.sentry.length, 1);
+  const report = JSON.stringify(bg.sentry[0]);
+  assert.ok(report.includes("printingData[0].lang"), "motif du refus");
+  assert.ok(!report.includes("joueur@exemple.fr"), "adresse mail");
+  assert.ok(!report.includes("x".repeat(600)), "réponse bornée");
+});
+
+test("éditions de la collection : demandes invalides refusées sans appel", async () => {
+  const { options } = editableDeck();
+  const bg = loadBackground(undefined, options);
+  for (const payload of [
+    { deckId: "../x", plan: [GOLGARI_TO_DDS] },
+    { deckId: "abc123", plan: [{ ...GOLGARI_TO_DDS, to: { ...GOLGARI_TO_DDS.to, cardId: "a/b" } }] },
+    { deckId: "abc123", plan: [{ ...GOLGARI_TO_DDS, board: "main board" }] },
+    { deckId: "abc123" },
+  ]) {
+    assert.equal((await bg.send({ type: "APPLY_OWNED_EDITIONS", payload })).ok, false);
+  }
+  assert.equal((await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123" } })).ok, false);
+  assert.deepEqual(bg.moxfieldCalls, []);
 });

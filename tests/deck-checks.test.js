@@ -13,6 +13,7 @@ const {
   buildWrongEditionSet,
   computeWrongEditionCards,
   computeShortages,
+  computeShortagePrices,
   parseCardsText,
   evaluateDeckUpdate,
   computeDeckAvailability,
@@ -453,4 +454,225 @@ test("contrôle exact : édition demandée au-delà du possédé sans autre deck
   const usage = buildVersionUsage(builtWith([{ code: "AAAAA", qty: 1, ...GRN }]));
   const card = { name: "Steam Vents", qty: 2, versions: [{ code: "BBBBB", qty: 2, ...RNA }] };
   assert.deepEqual(computeVersionConflicts([card], steamVentsStock(2, UNEQUAL), usage), []);
+});
+
+// --- Prix des cartes manquantes ---
+
+test("computeShortagePrices : prix de la version du deck × quantité manquante, total", () => {
+  const prices = { SOL: 1.5, ELF1: 0.3, ELF2: 0.25 };
+  const codes = new Map([
+    ["sol ring", ["SOL"]],
+    // Deux versions dans le deck : la moins chère.
+    ["llanowar elves", ["ELF1", "ELF2"]],
+  ]);
+  const shortages = computeShortages([{ name: "SOL RING", qty: 1 }, { name: "Llanowar Elves", qty: 3 }], stockOf({ "Llanowar Elves": 1 }));
+  const result = computeShortagePrices(shortages, codes, (code) => prices[code]);
+  assert.deepEqual([...result.byName], [
+    ["sol ring", { unit: 1.5, total: 1.5 }],
+    ["llanowar elves", { unit: 0.25, total: 0.5 }],
+  ]);
+  assert.equal(result.total, 2);
+  assert.equal(result.unpriced, 0);
+});
+
+test("computeShortagePrices : cartes sans version ou sans prix comptées à part", () => {
+  const codes = new Map([["sol ring", ["SOL"]], ["counterspell", ["CS"]]]);
+  const shortages = computeShortages(
+    [{ name: "Sol Ring", qty: 1 }, { name: "Counterspell", qty: 1 }, { name: "Arcane Signet", qty: 1 }],
+    stockOf({})
+  );
+  const result = computeShortagePrices(shortages, codes, (code) => (code === "SOL" ? 2 : undefined));
+  assert.deepEqual([...result.byName.keys()], ["sol ring"]);
+  assert.equal(result.total, 2);
+  assert.equal(result.unpriced, 2);
+  assert.deepEqual(computeShortagePrices([], codes, () => 1), { byName: new Map(), total: 0, unpriced: 0 });
+});
+
+test("computeShortagePrices : total exact au centime", () => {
+  // En virgule flottante, 0,1 + 0,2 + 0,1 × 3 vaut 0,6000000000000001.
+  const codes = new Map(["a", "b", "c"].map((n) => [n, [n.toUpperCase()]]));
+  const shortages = computeShortages([{ name: "A", qty: 1 }, { name: "B", qty: 1 }, { name: "C", qty: 3 }], stockOf({}));
+  const result = computeShortagePrices(shortages, codes, (code) => ({ A: 0.1, B: 0.2, C: 0.1 })[code]);
+  assert.equal(result.total, 0.6);
+  assert.equal(result.byName.get("c").total, 0.3);
+});
+
+// --- Proxies ---
+
+const { proxyCountOf, stockQtyOf, proxyTotal, addProxies, carryProxies, replaceableProxies } = checks;
+
+test("proxies : exemplaires en proxy et exemplaires pris au stock", () => {
+  assert.equal(proxyCountOf({ name: "Sol Ring", qty: 2, proxyQty: 1 }), 1);
+  assert.equal(stockQtyOf({ name: "Sol Ring", qty: 2, proxyQty: 1 }), 1);
+  assert.equal(stockQtyOf({ name: "Sol Ring", qty: 2 }), 2);
+  assert.equal(stockQtyOf({ name: "Sol Ring", qty: 2, excludedFromStock: true }), 0);
+  // Valeurs invalides : aucun proxy ; jamais plus que la quantité.
+  for (const proxyQty of [0, -1, 1.5, "1", null]) assert.equal(proxyCountOf({ name: "Sol Ring", qty: 2, proxyQty }), 0, String(proxyQty));
+  assert.equal(proxyCountOf({ name: "Sol Ring", qty: 2, proxyQty: 5 }), 2);
+  assert.equal(proxyTotal([{ name: "A", qty: 2, proxyQty: 1 }, { name: "B", qty: 3, proxyQty: 3 }, { name: "C", qty: 1 }]), 4);
+});
+
+test("addProxies : exemplaires manquants en proxy, avec la version du deck", () => {
+  const cards = [{ name: "Sol Ring", qty: 2, versions: [{ code: "SOL", qty: 2 }] }, { name: "Counterspell", qty: 1 }, { name: "Island", qty: 5 }];
+  const shortages = [{ name: "SOL RING", have: 1, need: 2, missing: 1 }, { name: "Counterspell", have: 0, need: 1, missing: 1 }];
+  const printingOf = (name) => (name === "Sol Ring" ? { set: "c21", cn: "263" } : null);
+  assert.deepEqual(addProxies(cards, shortages, printingOf), [
+    { name: "Sol Ring", qty: 2, versions: [{ code: "SOL", qty: 2 }], proxyQty: 1, proxyPrinting: { set: "c21", cn: "263" } },
+    { name: "Counterspell", qty: 1, proxyQty: 1 },
+    { name: "Island", qty: 5 },
+  ]);
+  // Proxies déjà présents (mise à jour) : les nouveaux s'y ajoutent.
+  assert.deepEqual(addProxies([{ name: "Sol Ring", qty: 3, proxyQty: 1 }], [{ name: "Sol Ring", missing: 1 }]), [{ name: "Sol Ring", qty: 3, proxyQty: 2 }]);
+});
+
+test("carryProxies : chaque carte garde ses proxies, dans la limite de sa nouvelle quantité", () => {
+  const before = [
+    { name: "Sol Ring", qty: 2, proxyQty: 2, proxyPrinting: { set: "c21", cn: "263" } },
+    { name: "Counterspell", qty: 1, proxyQty: 1 },
+    { name: "Arcane Signet", qty: 1 },
+  ];
+  const after = [{ name: "Sol Ring", qty: 1 }, { name: "Arcane Signet", qty: 2 }, { name: "Llanowar Elves", qty: 1 }];
+  assert.deepEqual(carryProxies(after, before), [
+    { name: "Sol Ring", qty: 1, proxyQty: 1, proxyPrinting: { set: "c21", cn: "263" } },
+    { name: "Arcane Signet", qty: 2 },
+    { name: "Llanowar Elves", qty: 1 },
+  ]);
+});
+
+test("replaceableProxies : proxies que le stock libre permet de remplacer", () => {
+  const deck = {
+    cards: [
+      { name: "Sol Ring", qty: 2, proxyQty: 2 },
+      { name: "Counterspell", qty: 1, proxyQty: 1 },
+      { name: "Arcane Signet", qty: 1 },
+      { name: "Swords to Plowshares", qty: 1, proxyQty: 1, excludedFromStock: true },
+    ],
+  };
+  const stock = stockOf({ "Sol Ring": 1, Counterspell: 0, "Arcane Signet": 4, "Swords to Plowshares": 3 });
+  assert.deepEqual(replaceableProxies(deck, stock), [{ name: "Sol Ring", qty: 1 }]);
+  assert.deepEqual(replaceableProxies(deck, stockOf({ "Sol Ring": -1 })), [], "stock négatif");
+  // Deux lignes du même nom : le même stock n'est pas compté deux fois.
+  const twice = { cards: [{ name: "Sol Ring", qty: 1, proxyQty: 1 }, { name: "sol ring", qty: 1, proxyQty: 1 }] };
+  assert.deepEqual(replaceableProxies(twice, stockOf({ "Sol Ring": 1 })), [{ name: "Sol Ring", qty: 1 }]);
+});
+
+test("buildVersionUsage : un proxy ne tient aucune version", () => {
+  const decks = {
+    // 2 exemplaires dont 1 sans version possédée : le proxy est celui-là.
+    a: { name: "A", cards: [{ name: "Sol Ring", qty: 2, proxyQty: 1, versions: [{ code: "S1", qty: 1 }] }] },
+    // Toutes les versions possédées : le proxy en retire une.
+    b: { name: "B", cards: [{ name: "Counterspell", qty: 2, proxyQty: 1, versions: [{ code: "C1", qty: 2 }] }] },
+    // Entièrement en proxy.
+    c: { name: "C", cards: [{ name: "Arcane Signet", qty: 1, proxyQty: 1, versions: [{ code: "A1", qty: 1 }] }] },
+  };
+  const usage = buildVersionUsage(decks);
+  assert.deepEqual(usage.get("sol ring"), [{ code: "S1", qty: 1, deck: "A" }]);
+  assert.deepEqual(usage.get("counterspell"), [{ code: "C1", qty: 1, deck: "B" }]);
+  assert.equal(usage.get("arcane signet"), undefined);
+});
+
+test("evaluateDeckUpdate : les proxies du deck restent, seuls les autres exemplaires sont à prendre", () => {
+  // 1 vraie + 1 proxy ; la page en demande 3 : il manque 1 exemplaire.
+  const deck = { cards: [{ name: "Sol Ring", qty: 2, proxyQty: 1 }] };
+  const check = evaluateDeckUpdate([{ name: "Sol Ring", from: 2, to: 3 }], deck, stockOf({ "Sol Ring": 0 }), new Set());
+  assert.deepEqual(check.shortages, [{ name: "Sol Ring", have: 1, need: 2, missing: 1 }]);
+  // Le proxy n'est pas rendu au stock : 1 seul exemplaire disponible.
+  const enough = evaluateDeckUpdate([{ name: "Sol Ring", from: 2, to: 3 }], deck, stockOf({ "Sol Ring": 1 }), new Set());
+  assert.equal(enough.blocked, false);
+  // Carte entièrement en proxy, dont seule la version change : rien à vérifier.
+  const proxied = { cards: [{ name: "Counterspell", qty: 1, proxyQty: 1 }] };
+  const version = evaluateDeckUpdate([{ name: "Counterspell", from: 1, to: 1, version: true }], proxied, stockOf({}), new Set(["counterspell"]));
+  assert.equal(version.blocked, false);
+});
+
+// --- Passer un deck sur les éditions de la collection ---
+
+const { chooseOwnedEdition } = checks;
+
+test("chooseOwnedEdition : l'édition possédée la plus libre, jamais celle du deck", () => {
+  const owned = [
+    { set: "rav", cn: "87", qty: 1 },
+    { set: "dds", cn: "50", qty: 2 },
+    { set: "c21", cn: "1", qty: 1 },
+  ];
+  const current = { set: "rav", cn: "87" };
+  assert.deepEqual(chooseOwnedEdition(owned, current), { set: "dds", cn: "50" }, "la plus fournie");
+  // Les 2 DDS sont dans d'autres decks montés : la C21, libre.
+  const others = [{ code: "X", qty: 2, deck: "A", set: "dds", cn: "50" }, { code: "Y", qty: 1, deck: "B" }];
+  assert.deepEqual(chooseOwnedEdition(owned, current, others), { set: "c21", cn: "1" });
+  assert.equal(chooseOwnedEdition([{ set: "rav", cn: "87", qty: 3 }], current), null, "aucune autre édition");
+  assert.equal(chooseOwnedEdition([], current), null);
+});
+
+test("chooseOwnedEdition : même édition possédée dans une autre finition (constaté en vrai)", () => {
+  // Possédée seulement en foil, le deck demande la non-foil : seule la
+  // finition change, même si une autre édition est possédée.
+  const owned = [
+    { set: "rav", cn: "87", qty: 1, finishes: { foil: 1 } },
+    { set: "dds", cn: "50", qty: 3, finishes: { nonFoil: 3 } },
+  ];
+  assert.deepEqual(chooseOwnedEdition(owned, { set: "rav", cn: "87", finish: "nonFoil" }), { set: "rav", cn: "87", finish: "foil" });
+  // Foil possédée aussi dans la finition du deck : foil d'abord.
+  const both = [{ set: "rav", cn: "87", qty: 2, finishes: { foil: 1, nonFoil: 1 } }, owned[1]];
+  assert.deepEqual(chooseOwnedEdition(both, { set: "rav", cn: "87", finish: "nonFoil" }), { set: "rav", cn: "87", finish: "foil" });
+  // Déjà en foil dans le deck : rien à changer sur cette édition.
+  assert.deepEqual(chooseOwnedEdition(both, { set: "rav", cn: "87", finish: "foil" }), { set: "dds", cn: "50", finish: "nonFoil" });
+  // Seulement la finition du deck dans son édition : on passe à une autre édition.
+  const exact = [{ set: "rav", cn: "87", qty: 2, finishes: { nonFoil: 2 } }, owned[1]];
+  assert.deepEqual(chooseOwnedEdition(exact, { set: "rav", cn: "87", finish: "nonFoil" }), { set: "dds", cn: "50" });
+  // Plusieurs finitions possédées, aucune celle du deck : la plus fournie.
+  const many = [{ set: "rav", cn: "87", qty: 3, finishes: { etched: 1, foil: 2 } }];
+  assert.deepEqual(chooseOwnedEdition(many, { set: "rav", cn: "87", finish: "nonFoil" }), { set: "rav", cn: "87", finish: "foil" });
+  // Finition du deck inconnue : pas de changement de finition.
+  assert.equal(chooseOwnedEdition([owned[0]], { set: "rav", cn: "87" }), null);
+});
+
+test("chooseOwnedEdition : autre édition, finition possédée plutôt que celle du deck", () => {
+  const current = { set: "rav", cn: "87", finish: "nonFoil" };
+  assert.deepEqual(
+    chooseOwnedEdition([{ set: "dds", cn: "50", qty: 1, finishes: { foil: 1 } }], current),
+    { set: "dds", cn: "50", finish: "foil" },
+    "possédée seulement en foil"
+  );
+  assert.deepEqual(
+    chooseOwnedEdition([{ set: "dds", cn: "50", qty: 2, finishes: { foil: 1, nonFoil: 1 } }], current),
+    { set: "dds", cn: "50", finish: "foil" },
+    "foil d'abord, même si la finition du deck est possédée"
+  );
+  assert.deepEqual(
+    chooseOwnedEdition([{ set: "dds", cn: "50", qty: 3, finishes: { etched: 1, nonFoil: 2 } }], current),
+    { set: "dds", cn: "50" },
+    "sans foil : finition du deck gardée"
+  );
+});
+
+test("chooseOwnedEdition : seulement une édition qui couvre toute la quantité du deck (terrains de base, constaté en vrai)", () => {
+  // 11 Plains dans le deck, réparties sur plusieurs éditions dans la collection.
+  const current = { set: "rav", cn: "87", finish: "nonFoil", quantity: 11 };
+  const spread = [
+    { set: "war", cn: "1", qty: 4, finishes: { nonFoil: 4 } },
+    { set: "m21", cn: "2", qty: 5, finishes: { nonFoil: 5 } },
+  ];
+  assert.equal(chooseOwnedEdition(spread, current), null, "aucune n'en a 11");
+  const enough = [...spread, { set: "dmu", cn: "3", qty: 11, finishes: { nonFoil: 11 } }];
+  assert.deepEqual(chooseOwnedEdition(enough, current), { set: "dmu", cn: "3" });
+  // Foil seulement pour une partie : la finition du deck est gardée.
+  const mixed = [{ set: "dmu", cn: "3", qty: 11, finishes: { foil: 1, nonFoil: 10 } }];
+  assert.deepEqual(chooseOwnedEdition(mixed, { ...current, quantity: 10 }), { set: "dmu", cn: "3" });
+  // Même édition, pas assez d'exemplaires dans l'autre finition : rien.
+  const sameFoil = [{ set: "rav", cn: "87", qty: 1, finishes: { foil: 1 } }];
+  assert.equal(chooseOwnedEdition(sameFoil, { ...current, quantity: 2 }), null);
+  assert.deepEqual(chooseOwnedEdition(sameFoil, { ...current, quantity: 1 }), { set: "rav", cn: "87", finish: "foil" });
+});
+
+test("chooseOwnedEdition : entre éditions également libres, celle possédée en foil d'abord", () => {
+  const current = { set: "rav", cn: "87", finish: "nonFoil" };
+  const owned = [
+    { set: "znr", cn: "1", qty: 1, finishes: { foil: 1 } },
+    { set: "dds", cn: "50", qty: 1, finishes: { nonFoil: 1 } },
+  ];
+  assert.deepEqual(chooseOwnedEdition(owned, current), { set: "znr", cn: "1", finish: "foil" });
+  // Plus d'exemplaires libres l'emporte sur le foil.
+  const more = [owned[0], { set: "dds", cn: "50", qty: 3, finishes: { nonFoil: 3 } }];
+  assert.deepEqual(chooseOwnedEdition(more, current), { set: "dds", cn: "50" });
 });
