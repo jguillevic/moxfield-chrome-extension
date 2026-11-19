@@ -129,8 +129,9 @@ contenu du CSV. Même effet qu'une récupération automatique.
     additionnées.
 - Le bouton est une icône **boîte ouverte** (**cercle coché** quand le deck est monté) ajoutée à la
   barre d'actions flottante de Moxfield, en bas à droite, juste après le
-  bouton like (cœur). Si cette barre est introuvable, un bouton flottant
-  « 🧰 Marquer comme monté physiquement » prend le relais.
+  bouton like (cœur). Quand Moxfield n'affiche pas cette barre (menu du
+  deck masqué), le bouton n'est pas affiché non plus : il revient avec
+  elle.
 - **Faisabilité visible sans ouvrir la fenêtre** : sur un deck pas encore
   monté, une pastille sur le bouton indique si le deck est montable avec le
   stock libre — **✓ verte** s'il l'est, **rouge avec un nombre** sinon (nombre
@@ -246,9 +247,13 @@ contenu du CSV. Même effet qu'une récupération automatique.
     du deck sur Moxfield, réversible à la main), puis la page est rechargée
     toute seule, avec le nombre de cartes changées. Pendant ce temps, une
     fenêtre bloque la page et montre l'avancement (recherche des éditions,
-    puis cartes changées : « 12 / 66 »). Si tu as plusieurs
-    éditions, l'extension prend celle qui n'est pas déjà dans un autre deck
-    monté. **Finition** (colonne « Foil » de ta collection) : une carte que
+    puis cartes changées : « 12 / 66 »). **Decks montés** : une édition
+    n'est choisie que s'il t'en reste assez d'exemplaires libres, sans
+    ceux que tes autres decks montés tiennent dans cette édition ; sinon
+    la carte reste telle quelle (« déjà dans d'autres decks montés »).
+    Seuls comptent les decks montés dont l'édition est connue (montés
+    depuis la page du deck, avec la session Moxfield) : dans le doute,
+    l'extension laisse faire. **Finition** (colonne « Foil » de ta collection) : une carte que
     tu as dans l'édition du deck mais dans une autre finition (ex. foil
     alors que le deck demande la non-foil) garde son édition, et seule sa
     finition change dans le deck. **Foil d'abord** : si tu as un
@@ -536,9 +541,8 @@ en cas de conflit : rien ne s'y perd).
   édition notée autrement n'est pas trouvée (carte laissée telle quelle).
   Les cartes sont modifiées une à une (Moxfield exige la version du deck,
   qui change à chaque modification) : compter une demi-seconde par carte
-  environ. Le bouton n'existe que dans
-  la barre d'actions de Moxfield : quand elle est introuvable (bouton de
-  montage flottant), il n'est pas affiché. Il se fie à l'indicateur
+  environ. Comme le bouton de montage, il n'est affiché qu'avec la barre
+  d'actions de Moxfield. Il se fie à l'indicateur
   « Partially in collection » de Moxfield, donc pas à une liste collée.
 - **Proxies** : suivis dans l'extension seulement, pas sur Moxfield (le
   drapeau proxy de Moxfield n'est ni lu ni écrit). Le remplacement par la

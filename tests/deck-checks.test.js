@@ -665,6 +665,25 @@ test("chooseOwnedEdition : seulement une édition qui couvre toute la quantité 
   assert.deepEqual(chooseOwnedEdition(sameFoil, { ...current, quantity: 1 }), { set: "rav", cn: "87", finish: "foil" });
 });
 
+test("chooseOwnedEdition : jamais une édition déjà prise par d'autres decks montés (constaté en vrai)", () => {
+  const current = { set: "rav", cn: "87", finish: "nonFoil", quantity: 1 };
+  const owned = [{ set: "dds", cn: "50", qty: 1, finishes: { nonFoil: 1 } }];
+  const taken = [{ code: "X", qty: 1, deck: "A", set: "dds", cn: "50" }];
+  assert.equal(chooseOwnedEdition(owned, current, taken), null, "seule édition, déjà prise");
+  assert.deepEqual(chooseOwnedEdition(owned, current), { set: "dds", cn: "50" }, "libre sans les autres decks");
+  // 3 possédées, 2 prises : une ligne de 2 n'y tient plus, une de 1 si.
+  const three = [{ set: "dds", cn: "50", qty: 3, finishes: { nonFoil: 3 } }];
+  const two = [{ code: "X", qty: 2, deck: "A", set: "dds", cn: "50" }];
+  assert.equal(chooseOwnedEdition(three, { ...current, quantity: 2 }, two), null);
+  assert.deepEqual(chooseOwnedEdition(three, current, two), { set: "dds", cn: "50" });
+  // Version d'édition inconnue : ne compte pas (dans le doute, on laisse faire).
+  assert.deepEqual(chooseOwnedEdition(owned, current, [{ code: "Y", qty: 1, deck: "B" }]), { set: "dds", cn: "50" });
+  // Même édition, autre finition : aussi refusée si ses exemplaires sont pris.
+  const sameFoil = [{ set: "rav", cn: "87", qty: 1, finishes: { foil: 1 } }];
+  const rav = [{ code: "Z", qty: 1, deck: "A", set: "rav", cn: "87" }];
+  assert.equal(chooseOwnedEdition(sameFoil, current, rav), null);
+});
+
 test("chooseOwnedEdition : entre éditions également libres, celle possédée en foil d'abord", () => {
   const current = { set: "rav", cn: "87", finish: "nonFoil" };
   const owned = [

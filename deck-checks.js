@@ -209,15 +209,22 @@ function createDeckChecks(normalizeName, { t, tn }) {
       if (finishes.length === 0 || finishes.includes(current.finish)) return undefined;
       return finishes.sort((a, b) => p.finishes[b] - p.finishes[a] || a.localeCompare(b))[0];
     };
+    // Exemplaires libres : possédés, moins ceux que les autres decks montés
+    // tiennent dans cette édition. Une édition sans assez d'exemplaires
+    // libres n'est jamais choisie : le deck pointerait vers des cartes déjà
+    // ailleurs (constaté en vrai, novembre 2026 : une Chaos Warp déjà dans
+    // un autre deck monté). Les versions d'édition inconnue ne comptent pas
+    // (dans le doute, on laisse faire).
+    const used = (p) => others.filter((o) => o.set === p.set && (o.cn || "") === p.cn).reduce((n, o) => n + o.qty, 0);
+    const free = (p) => p.qty - used(p);
     const same = owned.find((p) => p.set === current.set && p.cn === current.cn);
-    if (same && current.finish) {
+    if (same && current.finish && free(same) >= needed) {
       const finish = ownedFinish(same);
       if (finish) return { set: same.set, cn: same.cn, finish };
     }
-    const used = (p) => others.filter((o) => o.set === p.set && (o.cn || "") === p.cn).reduce((n, o) => n + o.qty, 0);
     const candidates = owned
-      .filter((p) => !(p.set === current.set && p.cn === current.cn) && p.qty >= needed)
-      .map((p) => ({ ...p, free: p.qty - used(p) }));
+      .filter((p) => !(p.set === current.set && p.cn === current.cn) && p.qty >= needed && free(p) >= needed)
+      .map((p) => ({ ...p, free: free(p) }));
     if (candidates.length === 0) return null;
     candidates.sort(
       (a, b) => b.free - a.free || ownsFoil(b) - ownsFoil(a) || b.qty - a.qty || a.set.localeCompare(b.set) || a.cn.localeCompare(b.cn)

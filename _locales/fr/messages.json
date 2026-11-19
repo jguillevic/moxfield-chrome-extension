@@ -698,9 +698,6 @@
   "buttonBuilt": {
     "message": "Monté physiquement (cliquer pour démonter)"
   },
-  "buttonAvailableShort": {
-    "message": "$1/$2 dispo"
-  },
   "clipboardEmpty": {
     "message": "Presse-papiers vide ou format non reconnu — colle manuellement avec Ctrl+V."
   },
@@ -910,5 +907,8 @@
   },
   "ownedEditionsSkipNotEnough": {
     "message": "pas assez d'exemplaires dans une même édition de ta collection pour toute la ligne du deck"
+  },
+  "ownedEditionsSkipTaken": {
+    "message": "tes exemplaires des éditions possédées sont déjà dans d'autres decks montés"
   }
 }

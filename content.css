@@ -3,8 +3,7 @@
    ne rien changer au reste de la page. */
 .msm-overlay,
 .msm-progress-overlay,
-.msm-toast,
-.msm-floating-btn {
+.msm-toast {
   --msm-surface: #ffffff;
   --msm-surface-muted: #f7f8fa;
   --msm-border: #e3e5ea;
@@ -27,8 +26,7 @@
 @media (prefers-color-scheme: dark) {
   .msm-overlay,
   .msm-progress-overlay,
-  .msm-toast,
-  .msm-floating-btn {
+  .msm-toast {
     --msm-surface: #1f2229;
     --msm-surface-muted: #262a32;
     --msm-border: #333844;
@@ -49,36 +47,6 @@
 
 .msm-overlay [hidden] {
   display: none !important;
-}
-
-/* --- Bouton flottant (repli quand la barre d'actions est introuvable) --- */
-
-.msm-floating-btn {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 999999;
-  padding: 10px 16px;
-  border: none;
-  border-radius: 10px;
-  background: var(--msm-accent-fill);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-.msm-floating-btn:hover {
-  background: var(--msm-accent-fill-hover);
-}
-
-.msm-floating-btn.msm-btn-built {
-  background: var(--msm-ok);
-}
-
-.msm-floating-btn.msm-btn-outdated {
-  background: #c77c02;
 }
 
 /* --- Bouton intégré à la barre d'actions de Moxfield : juste une icône SVG

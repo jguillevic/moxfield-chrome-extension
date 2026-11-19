@@ -38,7 +38,9 @@ const FULL_STOCK = stockOf({
 // page.handle).
 // beforeScripts(win) : préparation de la page avant les scripts de
 // l'extension (ex. sessionStorage laissé par un rechargement).
-function openDeckPage(state, lang = "fr", handle = null, format = "Commander", beforeScripts = null) {
+// barIcons : icônes de la barre d'actions de Moxfield (cf. addActionBar),
+// null pour une page sans barre.
+function openDeckPage(state, lang = "fr", handle = null, format = "Commander", beforeScripts = null, barIcons = undefined) {
   const html = fs.readFileSync(path.join(FIXTURES_DIR, "text.html"), "utf8");
   // jsdom ne sait pas recharger une page : il le signale sur sa console, ce
   // qui permet de vérifier qu'un rechargement a été demandé.
@@ -69,7 +71,7 @@ function openDeckPage(state, lang = "fr", handle = null, format = "Commander", b
       page.state = { ...page.state, stock };
       for (const fn of storageListeners) fn({ [STATE_KEY]: { newValue: page.state } }, "local");
     },
-    button: () => win.document.querySelector(".msm-floating-btn, .msm-bar-btn:not(.msm-editions-bar-btn)"),
+    button: () => win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)"),
     close: () => win.close(),
     sent: [],
     // Réponse imposée à un message (ex. erreur levée), sinon comportement normal.
@@ -108,6 +110,7 @@ function openDeckPage(state, lang = "fr", handle = null, format = "Commander", b
     },
     storage: { onChanged: { addListener: (fn) => storageListeners.push(fn) } },
   };
+  if (barIcons !== null) addActionBar(win, barIcons);
   if (beforeScripts) beforeScripts(win);
   for (const source of SCRIPTS) win.eval(source);
   return page;
@@ -124,16 +127,36 @@ async function waitFor(predicate, timeoutMs, label) {
 
 // Sans barre d'actions Moxfield dans la page de test, le bouton est le
 // bouton flottant : faisabilité dans son texte, détail dans son infobulle.
-const buttonText = (page) => (page.button() ? page.button().textContent : "");
-const buttonTitle = (page) => (page.button() ? page.button().title : "");
+// Libellé complet du bouton (état et faisabilité), comme le lit un lecteur d'écran.
+const buttonText = (page) => (page.button() ? page.button().getAttribute("aria-label") || "" : "");
+// Faisabilité seule (après « libellé — »).
+const buttonTitle = (page) => (page.button() ? page.button().title.split(" — ").slice(1).join(" — ") : "");
 
 test("deck non monté : faisabilité affichée, terrains de base exclus", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
   await waitFor(() => buttonText(page).includes("dispo"), 2000, "faisabilité affichée");
-  assert.match(buttonText(page), /· 3\/4 dispo$/);
+  assert.match(buttonText(page), /^Marquer comme monté physiquement — .*\(3\/4 cartes disponibles en stock libre/);
   assert.match(buttonTitle(page), /^1 carte bloque le montage : 1 dans une autre version/);
   assert.match(buttonTitle(page), /version différente : Birds of Paradise/);
+});
+
+test("barre d'actions de Moxfield absente : aucun bouton, ni flottant ni ailleurs", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", null, "Commander", null, null);
+  t.after(page.close);
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.equal(page.win.document.querySelectorAll(".msm-bar-btn, button.msm-floating-btn").length, 0);
+});
+
+test("barre d'actions affichée plus tard : boutons ajoutés dans le bon état, puis retirés quand elle disparaît", async (t) => {
+  const deck = { name: "Deck", url: "", cards: [{ name: "Birds of Paradise", qty: 1 }], builtAt: 1 };
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: { abc123: deck } }, "fr", null, "Commander", null, null);
+  t.after(page.close);
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  addActionBar(page.win);
+  await waitFor(() => buttonText(page).includes("Monté physiquement"), 2000, "bouton de deck monté");
+  page.win.document.querySelector(".msm-test-bar").remove();
+  await waitFor(() => page.win.document.querySelectorAll(".msm-bar-btn").length === 0, 2000, "boutons retirés");
 });
 
 test("deck monté : pas de faisabilité", async (t) => {
@@ -148,12 +171,12 @@ test("deck monté : pas de faisabilité", async (t) => {
 test("version changée sur la page : recalcul sans attendre le contrôle périodique", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
   // Moxfield remplace le marqueur « Partially in collection » par « Found
   // in collection » quand on choisit une version possédée.
   const marker = page.win.document.querySelector('[id^="collection_pt_"]');
   marker.id = marker.id.replace("collection_pt_", "collection_full_");
-  const elapsed = await waitFor(() => buttonText(page).includes("4/4 dispo"), 2500, "recalcul après changement de version");
+  const elapsed = await waitFor(() => buttonText(page).includes("4/4 cartes disponibles"), 2500, "recalcul après changement de version");
   assert.ok(elapsed < 1500, `recalcul en ${elapsed} ms : trop lent pour venir du changement de la page`);
   assert.match(buttonTitle(page), /^montable/);
 });
@@ -161,10 +184,10 @@ test("version changée sur la page : recalcul sans attendre le contrôle périod
 test("stock modifié ailleurs : recalcul immédiat", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
   const { ["golgari thug"]: _removed, ...withoutThug } = FULL_STOCK;
   page.setStock(withoutThug);
-  const elapsed = await waitFor(() => buttonText(page).includes("2/4 dispo"), 2500, "recalcul après changement du stock");
+  const elapsed = await waitFor(() => buttonText(page).includes("2/4 cartes disponibles"), 2500, "recalcul après changement du stock");
   assert.ok(elapsed < 1000, `recalcul en ${elapsed} ms`);
   assert.match(buttonTitle(page), /manque Golgari Thug \(1\)/);
 });
@@ -172,7 +195,7 @@ test("stock modifié ailleurs : recalcul immédiat", async (t) => {
 test("liste brièvement incohérente : la faisabilité reste affichée", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
   // Ligne en double le temps d'un rendu : le total ne correspond plus à
   // celui annoncé par Moxfield.
   const row = page.win.document.querySelector('a.table-deck-row-link[href^="/cards/"]').closest("li");
@@ -180,16 +203,16 @@ test("liste brièvement incohérente : la faisabilité reste affichée", async (
   copy.removeAttribute("data-hash");
   row.after(copy);
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  assert.match(buttonText(page), /3\/4 dispo/, "pastille retirée trop tôt");
+  assert.match(buttonText(page), /3\/4 cartes disponibles/, "pastille retirée trop tôt");
   copy.remove();
   await new Promise((resolve) => setTimeout(resolve, 800));
-  assert.match(buttonText(page), /3\/4 dispo/);
+  assert.match(buttonText(page), /3\/4 cartes disponibles/);
 });
 
 test("la page ne demande que le stock des cartes du deck, jamais l'état complet", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
   assert.ok(!page.sent.some((m) => m.type === "GET_STATE"), "état complet demandé");
   const request = page.sent.filter((m) => m.type === "GET_DECK_CONTEXT").pop();
   assert.deepEqual(
@@ -251,7 +274,7 @@ const reportsOf = (page) => page.sent.filter((m) => m.type === "REPORT_ERROR").m
 test("erreur pendant le contrôle de la page : rapportée, sauf extension rechargée ou service worker injoignable", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 dispo"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
   page.handle = (msg) => {
     if (msg.type === "GET_DECK_CONTEXT") throw new Error("Extension context invalidated.");
   };
@@ -300,7 +323,7 @@ test("navigateur en anglais : bouton et fenêtre de montage en anglais", async (
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "en");
   t.after(page.close);
   await waitFor(() => buttonText(page).includes("available"), 2000, "faisabilité affichée");
-  assert.equal(buttonText(page), "🧰 Mark as physically built · 3/4 available");
+  assert.match(buttonText(page), /^Mark as physically built — .*\(3\/4 cards available in the free stock/);
   assert.match(buttonTitle(page), /^1 card blocks the build: 1 in another printing/);
   assert.match(buttonTitle(page), /different printing: Birds of Paradise/);
 
@@ -403,14 +426,14 @@ test("deck monté sans versions enregistrées : celles de la page lui sont ajout
   page.setStock(FULL_STOCK);
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.equal(sentOf(page, "SET_DECK_VERSIONS").length, 1);
-  assert.ok(!buttonText(page).includes("⚠️"), "deck pas signalé comme modifié");
+  assert.ok(!buttonText(page).includes("la liste a changé"), "deck pas signalé comme modifié");
 });
 
 test("deck monté : version changée sur Moxfield, signalé comme modifié sans toucher aux versions enregistrées", async (t) => {
   const cards = BUILT_CARDS.map((c) => (c.name === "Golgari Thug" ? { ...c, versions: [{ code: "ANCIEN", qty: 1 }] } : c));
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  await waitFor(() => buttonText(page).includes("la liste a changé"), 2000, "deck signalé comme modifié");
   assert.deepEqual(sentOf(page, "SET_DECK_PAGE_CHANGES").pop(), {
     deckId: "abc123",
     changes: [{ name: "Golgari Thug", from: 1, to: 1, version: true }],
@@ -517,7 +540,7 @@ test("deck monté avant la lecture des éditions : elles sont ajoutées à ses v
   page.setStock({ ...FULL_STOCK });
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.equal(sentOf(page, "GET_DECK_PRINTINGS").length, 1);
-  assert.ok(!buttonText(page).includes("⚠️"), "deck pas signalé comme modifié");
+  assert.ok(!buttonText(page).includes("la liste a changé"), "deck pas signalé comme modifié");
 });
 
 test("deck d'un autre format que Commander : bouton et faisabilité affichés", async (t) => {
@@ -588,7 +611,7 @@ test("mise à jour d'un deck monté : prix des cartes ajoutées qui manquent", a
   const stock = { ...FULL_STOCK, ...stockOf({ "Sidisi, Brood Tyrant": 0 }) };
   const page = openDeckPage({ stock, builtDecks: builtDeck(cards) }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  await waitFor(() => buttonText(page).includes("la liste a changé"), 2000, "deck signalé comme modifié");
   page.button().click();
   const doc = page.win.document;
   await waitFor(() => doc.querySelector(".msm-price-total"), 3000, "total affiché");
@@ -710,7 +733,7 @@ test("mise à jour avec des proxies : nouveaux proxies, et ceux du montage gard�
   const stock = { ...FULL_STOCK, ...stockOf({ "Sidisi, Brood Tyrant": 0 }) };
   const page = openDeckPage({ stock, builtDecks: builtDeck(cards) }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  await waitFor(() => buttonText(page).includes("la liste a changé"), 2000, "deck signalé comme modifié");
   page.button().click();
   const doc = page.win.document;
   await waitFor(() => doc.querySelector("#msm-shortage-warning .msm-proxy-btn"), 3000, "bouton des proxies");
@@ -738,7 +761,7 @@ test("mise à jour sans changement de stock : les proxies du montage sont report
   );
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("⚠️"), 2000, "deck signalé comme modifié");
+  await waitFor(() => buttonText(page).includes("la liste a changé"), 2000, "deck signalé comme modifié");
   page.button().click();
   const doc = page.win.document;
   await waitFor(() => doc.querySelector("#msm-update") && !doc.querySelector("#msm-update").hidden, 3000, "mise à jour proposée");
@@ -784,10 +807,16 @@ function addActionBar(win, icons = ["arrow-up-to-line", "comment", "heart"]) {
 
 // Page avec la barre d'actions ; saved : bilan laissé avant un rechargement.
 function openBarPage(handle = null, saved = null, state = { stock: FULL_STOCK, builtDecks: {} }, icons = undefined) {
-  return openDeckPage(state, "fr", handle, "Commander", (win) => {
-    addActionBar(win, icons);
-    if (saved) win.sessionStorage.setItem("msmOwnedEditionsDone", JSON.stringify(saved));
-  });
+  return openDeckPage(
+    state,
+    "fr",
+    handle,
+    "Commander",
+    (win) => {
+      if (saved) win.sessionStorage.setItem("msmOwnedEditionsDone", JSON.stringify(saved));
+    },
+    icons
+  );
 }
 
 const editionsButton = (page) => page.win.document.querySelector(".msm-editions-bar-btn");
@@ -1015,12 +1044,22 @@ test("éditions de la collection : bilan d'un arrêt en cours de route après le
 });
 
 test("éditions de la collection : cartes impossibles à changer plus comptées sur le bouton (terrains de base)", async (t) => {
-  const answers = { PLAN_OWNED_EDITIONS: { ok: true, plan: [], skipped: [{ name: "Birds of Paradise", reason: "not-enough" }] } };
+  const answers = {
+    PLAN_OWNED_EDITIONS: {
+      ok: true,
+      plan: [],
+      skipped: [
+        { name: "Birds of Paradise", reason: "not-enough" },
+        { name: "Golgari Thug", reason: "taken" },
+      ],
+    },
+  };
   const page = openBarPage((msg) => answers[msg.type]);
   t.after(page.close);
   (await waitEditionsButton(page)).click();
   await waitFor(() => toasts(page).length > 0, 2000, "raison affichée");
   assert.ok(toasts(page).some((m) => m.includes("Birds of Paradise — pas assez d'exemplaires dans une même édition")));
+  assert.ok(toasts(page).some((m) => m.includes("Golgari Thug — tes exemplaires des éditions possédées sont déjà dans d'autres decks montés")));
   await waitFor(() => !editionsShown(page), 2000, "bouton masqué");
   // Toujours masqué au contrôle suivant de la page.
   await new Promise((r) => setTimeout(r, 700));
@@ -1030,7 +1069,6 @@ test("éditions de la collection : cartes impossibles à changer plus comptées 
 test("éditions de la collection : cartes impossibles à changer, retenues par deck jusqu'à la fermeture de l'onglet", async (t) => {
   const remembered = (unfixable) =>
     openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", null, "Commander", (win) => {
-      addActionBar(win);
       win.sessionStorage.setItem("msmOwnedEditionsUnfixable", JSON.stringify(unfixable));
     });
   const same = remembered({ abc123: ["birds of paradise"] });

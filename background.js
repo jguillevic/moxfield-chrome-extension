@@ -1286,9 +1286,15 @@ async function handlePlanOwnedEditions({ deckId, names }, progress = () => {}) {
         steps.push({ entry, choice });
         continue;
       }
-      // Possédée ailleurs, mais aucune édition n'en a assez pour la ligne.
-      const partly = chooseOwnedEdition(ownedEditions, { ...entry, quantity: 1 }, usage.get(cardKey) || []);
-      steps.push({ skip: { name: entry.name, reason: partly ? "not-enough" : "no-other-edition" } });
+      // Raison du refus, de la plus précise à la plus générale : une édition
+      // conviendrait sans les autres decks montés ("taken"), ou en ne
+      // demandant qu'un exemplaire ("not-enough"), ou aucune.
+      const reason = chooseOwnedEdition(ownedEditions, entry)
+        ? "taken"
+        : chooseOwnedEdition(ownedEditions, { ...entry, quantity: 1 })
+          ? "not-enough"
+          : "no-other-edition";
+      steps.push({ skip: { name: entry.name, reason } });
     }
     const chosen = steps.filter((step) => step.entry);
     let read = 0;

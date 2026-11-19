@@ -44,8 +44,9 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
   encore tout l'état (compressé : quelques centaines de Ko à 50 000 cartes).
   Si ça devient gênant : séparer l'historique dans son propre fichier.
 - **Tests manquants** : la synchro Google Drive, le popup (hors section
-  « Collection Moxfield »), la fenêtre de montage et l'intégration à la
-  barre d'actions Moxfield n'ont pas de tests automatisés.
+  « Collection Moxfield ») et la fenêtre de montage n'ont pas de tests
+  automatisés. La barre d'actions Moxfield des tests est reconstituée à
+  partir de ses repères (icônes), pas enregistrée depuis une vraie page.
 
 ## Livré
 

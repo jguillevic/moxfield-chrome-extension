@@ -1635,6 +1635,20 @@ test("éditions de la collection : finition seule changée, édition gardée", a
   assert.equal(deck.version, 7);
 });
 
+test("éditions de la collection : édition déjà dans un autre deck monté, carte laissée avec la raison", async () => {
+  const { options } = editableDeck();
+  // La seule Golgari Thug DDS possédée est dans un deck monté.
+  const state = {
+    stock: { "golgari thug": { name: "Golgari Thug", qty: 0 } },
+    builtDecks: {
+      autre: { name: "Autre", url: "", builtAt: 1, cards: [{ name: "Golgari Thug", qty: 1, versions: [{ code: "GtDds", qty: 1, set: "dds", cn: "50" }] }] },
+    },
+  };
+  const bg = loadBackground(state, options);
+  const res = await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names: ["Golgari Thug"] } });
+  assert.deepEqual(res, { ok: true, plan: [], skipped: [{ name: "Golgari Thug", reason: "taken" }] });
+});
+
 test("éditions de la collection : pas assez d'exemplaires dans une même édition, carte laissée", async () => {
   const { deck, options } = editableDeck();
   // 2 Golgari Thug dans le deck, une seule DDS possédée.

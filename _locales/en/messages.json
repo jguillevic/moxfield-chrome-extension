@@ -698,9 +698,6 @@
   "buttonBuilt": {
     "message": "Physically built (click to unbuild)"
   },
-  "buttonAvailableShort": {
-    "message": "$1/$2 available"
-  },
   "clipboardEmpty": {
     "message": "Clipboard empty or format not recognized — paste manually with Ctrl+V."
   },
@@ -910,5 +907,8 @@
   },
   "ownedEditionsSkipNotEnough": {
     "message": "not enough copies in a single printing of your collection for the whole deck line"
+  },
+  "ownedEditionsSkipTaken": {
+    "message": "your copies of the owned printings are already in other built decks"
   }
 }

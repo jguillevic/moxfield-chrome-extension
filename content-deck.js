@@ -107,6 +107,7 @@
     "edition-unknown": "ownedEditionsSkipUnknown",
     changed: "ownedEditionsSkipChanged",
     "not-enough": "ownedEditionsSkipNotEnough",
+    taken: "ownedEditionsSkipTaken",
   };
   // sessionStorage : survit au rechargement de l'onglet, pas au-delà.
   const OWNED_EDITIONS_KEY = "msmOwnedEditionsDone";
@@ -1066,7 +1067,7 @@
 
   function isOwnNode(node) {
     const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
-    return Boolean(el && el.closest(".msm-bar-btn, .msm-floating-btn, .msm-overlay, .msm-progress-overlay, .msm-toast"));
+    return Boolean(el && el.closest(".msm-bar-btn, .msm-overlay, .msm-progress-overlay, .msm-toast"));
   }
 
   function isOwnMutation(m) {
@@ -1166,29 +1167,25 @@
     const outdated = btnBuilt && btnOutdated;
     const availability = btnBuilt ? null : btnAvailability;
     const label = t(!btnBuilt ? "buttonBuild" : outdated ? "buttonBuiltOutdated" : "buttonBuilt");
-    if (btn.dataset.mode === "bar") {
-      btn.replaceChildren(createBarIcon(btnBuilt ? "built" : "build"));
-      if (availability) {
-        // Pastille : ✓ si montable, sinon nombre d'exemplaires bloquants.
-        const badge = document.createElement("span");
-        badge.className = "msm-avail-badge" + (availability.blocking === 0 ? " msm-avail-ok" : "");
-        badge.textContent = availability.blocking === 0 ? "✓" : String(availability.blocking);
-        badge.setAttribute("aria-hidden", "true");
-        btn.appendChild(badge);
-      }
-      const fullLabel = availability ? `${label} — ${availabilityLabel(availability)}` : label;
-      btn.title = fullLabel;
-      btn.setAttribute("aria-label", fullLabel);
-    } else {
-      const counts = availability ? ` · ${t("buttonAvailableShort", availability.available, availability.total)}` : "";
-      btn.textContent = (outdated ? "⚠️ " : btnBuilt ? "✅ " : "🧰 ") + label + counts;
-      btn.title = availability ? availabilityLabel(availability) : "";
+    btn.replaceChildren(createBarIcon(btnBuilt ? "built" : "build"));
+    if (availability) {
+      // Pastille : ✓ si montable, sinon nombre d'exemplaires bloquants.
+      const badge = document.createElement("span");
+      badge.className = "msm-avail-badge" + (availability.blocking === 0 ? " msm-avail-ok" : "");
+      badge.textContent = availability.blocking === 0 ? "✓" : String(availability.blocking);
+      badge.setAttribute("aria-hidden", "true");
+      btn.appendChild(badge);
     }
+    const fullLabel = availability ? `${label} — ${availabilityLabel(availability)}` : label;
+    btn.title = fullLabel;
+    btn.setAttribute("aria-label", fullLabel);
     btn.classList.toggle("msm-btn-built", btnBuilt);
-    btn.classList.toggle("msm-btn-outdated", outdated);  }
+    btn.classList.toggle("msm-btn-outdated", outdated);
+  }
 
+  // Aussi sans bouton (barre d'actions pas encore affichée) : l'état est
+  // prêt quand elle apparaît.
   async function refreshButtonState(deckId) {
-    if (!btn) return;
     btnBuilt = await getIsBuilt(deckId);
     if (!btnBuilt) btnOutdated = false;
     btnAvailability = null;
@@ -1421,10 +1418,12 @@
     return null;
   }
 
-  // Le bouton vit dans la barre Moxfield quand elle existe, sinon en bouton
-  // flottant (repli). Rappelée à chaque tick du polling : si React a re-rendu
-  // la barre et effacé notre bouton, ou si la barre est apparue/disparue, on
-  // le recrée au bon endroit.
+  // Le bouton vit dans la barre d'actions de Moxfield, et nulle part
+  // ailleurs : sans elle (menu du deck masqué), pas de bouton — l'ancien
+  // bouton flottant de repli gênait (retour utilisateur, novembre 2026).
+  // Rappelée à chaque tick du polling : si React a re-rendu la barre et
+  // effacé notre bouton, ou si la barre est apparue/disparue, on le recrée
+  // au bon endroit ou on le retire.
   // Position dans la barre : juste après le bouton "like" (cœur). Sur ses
   // propres decks c'est le dernier bouton ; sur ceux des autres, ça place le
   // nôtre avant l'avatar et le menu "..." (4e position). Sans cœur trouvé,
@@ -1458,48 +1457,42 @@
 
   function ensureButton() {
     const bar = findActionBar();
-    const mode = bar ? "bar" : "floating";
-    const upToDate =
-      btn && btn.isConnected && btn.dataset.mode === mode && (mode === "floating" || isButtonWellPlaced(bar));
-    if (upToDate) return btn;
+    if (!bar) {
+      removeButton();
+      return null;
+    }
+    if (btn && btn.isConnected && isButtonWellPlaced(bar)) return btn;
 
     removeButton();
-    if (bar) {
-      // Mêmes classes utilitaires que les boutons natifs de la barre, pour en
-      // reprendre l'apparence.
-      btn = document.createElement("a");
-      btn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn";
-      btn.setAttribute("role", "button");
-      btn.setAttribute("tabindex", "0");
-      btn.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          openOverlay();
-        }
-      });
-      const anchor = findBarAnchor(bar);
-      if (anchor) anchor.after(btn);
-      else bar.appendChild(btn);
-      editionsBtn = document.createElement("a");
-      editionsBtn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn msm-editions-bar-btn";
-      editionsBtn.setAttribute("role", "button");
-      editionsBtn.setAttribute("tabindex", "0");
-      const useEditions = () => useOwnedEditions(currentDeckId, btnEditionNames);
-      editionsBtn.addEventListener("click", useEditions);
-      editionsBtn.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          useEditions();
-        }
-      });
-      btn.before(editionsBtn);
-      renderEditionsButton();
-    } else {
-      btn = document.createElement("button");
-      btn.className = "msm-floating-btn";
-      document.body.appendChild(btn);
-    }
-    btn.dataset.mode = mode;
+    // Mêmes classes utilitaires que les boutons natifs de la barre, pour en
+    // reprendre l'apparence.
+    btn = document.createElement("a");
+    btn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn";
+    btn.setAttribute("role", "button");
+    btn.setAttribute("tabindex", "0");
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openOverlay();
+      }
+    });
+    const anchor = findBarAnchor(bar);
+    if (anchor) anchor.after(btn);
+    else bar.appendChild(btn);
+    editionsBtn = document.createElement("a");
+    editionsBtn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn msm-editions-bar-btn";
+    editionsBtn.setAttribute("role", "button");
+    editionsBtn.setAttribute("tabindex", "0");
+    const useEditions = () => useOwnedEditions(currentDeckId, btnEditionNames);
+    editionsBtn.addEventListener("click", useEditions);
+    editionsBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        useEditions();
+      }
+    });
+    btn.before(editionsBtn);
+    renderEditionsButton();
     btn.addEventListener("click", () => openOverlay());
     renderButton();
     return btn;
