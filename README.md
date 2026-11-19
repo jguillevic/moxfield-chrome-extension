@@ -216,15 +216,19 @@ contenu du CSV. Même effet qu'une récupération automatique.
     chère s'il en utilise plusieurs —, tel que Moxfield le donne en ouvrant
     le deck. Une carte sans prix connu est signalée (« au moins … », avec
     le nombre de cartes sans prix) plutôt que comptée pour zéro.
-  - **Monter avec des proxies** : le bouton **« 🃏 Monter avec des
-    proxies »** de cet encadré monte quand même le deck, les exemplaires
-    manquants étant joués en **proxy** (carte imprimée). Seuls les
+  - **Monter avec des proxies** : quand seul le stock manque, le bouton
+    principal de la fenêtre devient **« Confirmer le montage avec N
+    proxies »** : il monte quand même le deck, les N exemplaires
+    manquants étant joués en **proxy** (carte imprimée). Il redevient
+    « Confirmer le montage » dès que plus rien ne manque. Seuls les
     exemplaires qui manquent le sont : avec 1 Sol Ring sur 2, le deck prend
     le vrai et 1 proxy. Un proxy n'est jamais pris à ton stock, ni rendu au
     démontage. Une carte en « version différente » ou « version déjà
-    utilisée » bloque toujours : un proxy ne règle pas une question
-    d'édition. Même bouton (**« Mettre à jour avec des proxies »**) pour
-    la mise à jour d'un deck monté ; les proxies déjà en place sont gardés.
+    utilisée » bloque toujours (le bouton reste alors « Confirmer le
+    montage » et refuse) : un proxy ne règle pas une question d'édition —
+    « Utiliser mes éditions » est là pour ça. Même chose pour la mise à
+    jour d'un deck monté (**« Mettre à jour avec N proxies »**) ; les
+    proxies déjà en place sont gardés.
     Voir « Proxies » ci-dessous pour les imprimer et les remplacer.
 - **Version différente de ta collection** (encadré rouge, bloquant) : parmi
   les cartes dont le stock est déjà suffisant, si Moxfield indique que tu la
@@ -313,7 +317,9 @@ contenu du CSV. Même effet qu'une récupération automatique.
 
 #### Proxies
 
-- Un deck monté avec des proxies affiche leur nombre : badge **« 🃏 3 »**
+- Un deck monté avec des proxies affiche leur nombre : pastille violette
+  sur le bouton du ruban de Moxfield (« Monté physiquement avec 3
+  proxies » au survol), badge **« 🃏 3 »**
   dans la liste « Decks montés » du popup (détail au survol), et
   **« Ce deck compte 3 proxies »** dans la fenêtre du deck sur Moxfield.
 - **Imprimer** : bouton **« 🖨️ Imprimer »** du popup, ou **« 🖨️ Imprimer
@@ -667,9 +673,10 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   faisabilité affichée, recalcul en direct quand la page ou le stock
   change, tolérance à une liste brièvement incohérente, erreurs
   rapportées (contrôle de la page, sauf extension rechargée ou service
-  worker injoignable ; erreurs de l'extension mais pas du site), montage
-  refusé quand une carte est déjà prise par un autre deck monté (ou sa
-  version, alors qu'il en reste une d'une autre édition) et accepté quand
+  worker injoignable ; erreurs de l'extension mais pas du site), carte
+  déjà prise par un autre deck monté jamais reprise au stock (montée en
+  proxy), montage refusé pour une version déjà prise alors qu'il en reste
+  une d'une autre édition, et accepté quand
   tout est en stock libre, versions enregistrées au montage, complétées sur
   un deck monté qui n'en a pas, deck signalé modifié quand une version
   change, éditions demandées au service worker (montage refusé pour une
@@ -677,10 +684,12 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   répétée), prix des cartes manquantes (montage, mise à jour, total
   partiel, quantité modifiée à la main, carte absente de la collection ou
   d'une autre édition, sans réponse de Moxfield), montage et mise à jour
-  avec des proxies (version différente toujours bloquante, proxies du
-  montage gardés), proxies d'un deck monté et leur impression, passage
-  sur les éditions de la collection (proposition, confirmation, annulation,
-  arrêt en cours, erreur), bouton et fenêtre de montage en anglais.
+  avec N proxies depuis le bouton principal (libellé selon les manques,
+  version différente toujours bloquante, proxies du montage gardés),
+  proxies d'un deck monté (pastille du bouton) et leur impression,
+  « Utiliser mes éditions » (bouton du ruban, jauge, rechargement, cartes
+  impossibles à changer, arrêt en cours, erreur), boutons absents sans la
+  barre d'actions, bouton et fenêtre de montage en anglais.
 - `tests/proxies.test.js` : page d'impression des proxies (`proxies.html`
   + `proxies.js`, Scryfall simulé à partir de vraies réponses réduites
   dans `tests/fixtures/api/scryfall-cards.json`) — recherche par version

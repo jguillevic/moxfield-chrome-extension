@@ -239,9 +239,10 @@ async function openBuildModal(page) {
   return doc;
 }
 
-test("montage : refusé si une carte possédée en un exemplaire est déjà dans un autre deck monté", async (t) => {
+test("montage : carte possédée en un exemplaire déjà dans un autre deck monté, jamais reprise au stock", async (t) => {
   // Cas constaté en vrai (novembre 2026) : un terrain possédé en x1, déjà
-  // pris par un deck monté, ne doit pas pouvoir partir dans un second deck.
+  // pris par un deck monté, ne doit pas pouvoir partir dans un second deck ;
+  // il ne peut y entrer qu'en proxy.
   const other = { name: "Autre deck", url: "", cards: [{ name: "Golgari Thug", qty: 1 }], builtAt: 1 };
   const page = openDeckPage({ stock: { ...FULL_STOCK, "golgari thug": { name: "Golgari Thug", qty: 0 } }, builtDecks: { other } });
   t.after(page.close);
@@ -249,10 +250,11 @@ test("montage : refusé si une carte possédée en un exemplaire est déjà dans
   await waitFor(() => doc.querySelector("#msm-shortage-warning").textContent.includes("Golgari Thug"), 2000, "manque affiché");
   assert.match(doc.querySelector("#msm-shortage-warning").textContent, /Autre deck \(1\)/, "deck qui détient la carte");
 
+  assert.equal(doc.querySelector("#msm-confirm").textContent, "Confirmer le montage avec 1 proxy");
   doc.querySelector("#msm-confirm").click();
-  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
-  assert.deepEqual(toasts(page), ["Montage impossible — stock insuffisant : Golgari Thug (manque 1)"]);
-  assert.deepEqual(builds(page), [], "deck monté malgré le stock insuffisant");
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const golgari = builds(page)[0].payload.cards.find((c) => c.name === "Golgari Thug");
+  assert.equal(golgari.proxyQty, 1, "en proxy, pas pris au stock");
 });
 
 test("montage : accepté quand tout est en stock libre", async (t) => {
@@ -687,10 +689,11 @@ test("montage avec des proxies : les exemplaires manquants partent en proxy, ave
   const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
   t.after(page.close);
   const doc = await openBuildModal(page);
-  const warning = doc.querySelector("#msm-shortage-warning");
-  await waitFor(() => warning.querySelector(".msm-proxy-btn"), 2000, "bouton des proxies");
-  assert.match(warning.querySelector(".msm-proxy-btn").textContent, /Monter avec des proxies/);
-  warning.querySelector(".msm-proxy-btn").click();
+  const confirm = doc.querySelector("#msm-confirm");
+  await waitFor(() => confirm.textContent === "Confirmer le montage avec 3 proxies", 2000, "bouton principal avec les proxies");
+  assert.match(confirm.title, /joués en proxy/);
+  assert.equal(doc.querySelector("#msm-shortage-warning button.msm-proxy-btn"), null, "plus de bouton à part dans l'encadré");
+  confirm.click();
   await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
   const cards = builds(page)[0].payload.cards;
   const byName = (name) => cards.find((c) => c.name === name);
@@ -718,11 +721,51 @@ test("montage avec des proxies : une version différente bloque toujours", async
   await waitFor(() => buttonText(page).includes("dispo"), 2000, "faisabilité affichée");
   page.button().click();
   const doc = page.win.document;
-  await waitFor(() => doc.querySelector("#msm-shortage-warning .msm-proxy-btn"), 2000, "bouton des proxies");
-  doc.querySelector("#msm-shortage-warning .msm-proxy-btn").click();
+  await waitFor(() => doc.querySelector("#msm-shortage-warning") && /Golgari/.test(doc.querySelector("#msm-shortage-warning").textContent), 2000, "manques affichés");
+  const confirm = doc.querySelector("#msm-confirm");
+  assert.equal(confirm.textContent, "Confirmer le montage", "pas de proxies tant qu'une version différente bloque");
+  confirm.click();
   await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
   assert.deepEqual(toasts(page), ["Montage impossible — version différente de ta collection pour : Birds of Paradise"]);
   assert.deepEqual(builds(page), []);
+});
+
+test("montage avec des proxies : libellé normal dès que les cartes arrivent en stock", async (t) => {
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const confirm = doc.querySelector("#msm-confirm");
+  await waitFor(() => confirm.textContent === "Confirmer le montage avec 3 proxies", 2000, "avec les proxies");
+  const textarea = doc.querySelector("#msm-cards-textarea");
+  // Liste vidée : rien à monter, libellé normal.
+  textarea.value = "";
+  textarea.dispatchEvent(new page.win.Event("input"));
+  await waitFor(() => confirm.textContent === "Confirmer le montage", 2000, "liste vide");
+  textarea.value = "1 Golgari Thug";
+  textarea.dispatchEvent(new page.win.Event("input"));
+  await waitFor(() => confirm.textContent === "Confirmer le montage avec 1 proxy", 2000, "de nouveau avec un proxy");
+  // Les cartes manquantes retirées de la liste : plus rien ne manque.
+  textarea.value = "1 Birds of Paradise\n3 Swamp";
+  textarea.dispatchEvent(new page.win.Event("input"));
+  await waitFor(() => confirm.textContent === "Confirmer le montage", 2000, "libellé normal");
+  assert.equal(confirm.title, "");
+  confirm.click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  assert.ok(builds(page)[0].payload.cards.every((c) => c.proxyQty === undefined), "aucun proxy");
+});
+
+test("deck monté avec des proxies : nombre affiché sur le bouton, mis à jour quand ils sont remplacés", async (t) => {
+  const cards = BUILT_CARDS.map((c) => (c.name === "Golgari Thug" ? { ...c, proxyQty: 1, proxyPrinting: { set: "dds", cn: "50" } } : c));
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("avec 1 proxy"), 2000, "proxies sur le bouton");
+  assert.equal(buttonText(page), "Monté physiquement avec 1 proxy (cliquer pour démonter)");
+  assert.equal(page.button().querySelector(".msm-proxy-badge").textContent, "1");
+  // Proxy remplacé depuis le popup : le bouton suit.
+  page.state = { ...page.state, builtDecks: builtDeck(BUILT_CARDS) };
+  page.setStock(FULL_STOCK);
+  await waitFor(() => buttonText(page) === "Monté physiquement (cliquer pour démonter)", 3000, "plus de proxy");
+  assert.equal(page.button().querySelector(".msm-proxy-badge"), null);
 });
 
 test("mise à jour avec des proxies : nouveaux proxies, et ceux du montage gardés", async (t) => {
@@ -736,10 +779,11 @@ test("mise à jour avec des proxies : nouveaux proxies, et ceux du montage gard�
   await waitFor(() => buttonText(page).includes("la liste a changé"), 2000, "deck signalé comme modifié");
   page.button().click();
   const doc = page.win.document;
-  await waitFor(() => doc.querySelector("#msm-shortage-warning .msm-proxy-btn"), 3000, "bouton des proxies");
+  const update = () => doc.querySelector("#msm-update");
+  await waitFor(() => update() && update().textContent === "Mettre à jour avec 1 proxy", 3000, "bouton principal avec les proxies");
   assert.match(doc.querySelector("#msm-proxy-info").textContent, /Ce deck compte 1 proxy/);
-  assert.ok(doc.querySelector("#msm-update").disabled, "sans proxies : bloquée");
-  doc.querySelector("#msm-shortage-warning .msm-proxy-btn").click();
+  assert.ok(!update().disabled, "seul le stock manque : proposée avec des proxies");
+  update().click();
   await waitFor(() => sentOf(page, "UPDATE_BUILT_DECK").length > 0, 2000, "mise à jour envoyée");
   const updated = sentOf(page, "UPDATE_BUILT_DECK")[0].cards;
   assert.deepEqual(updated.find((c) => c.name === "Sidisi, Brood Tyrant"), {

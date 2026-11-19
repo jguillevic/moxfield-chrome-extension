@@ -722,12 +722,6 @@
   "buildDone": {
     "message": "Deck marqué comme monté, stock décrémenté."
   },
-  "buildWithProxies": {
-    "message": "Monter avec des proxies"
-  },
-  "updateWithProxies": {
-    "message": "Mettre à jour avec des proxies"
-  },
   "proxiesHint": {
     "message": "Les exemplaires manquants sont joués en proxy : ils ne sont pas pris à ton stock, et tu pourras les imprimer."
   },
@@ -910,5 +904,23 @@
   },
   "ownedEditionsSkipTaken": {
     "message": "tes exemplaires des éditions possédées sont déjà dans d'autres decks montés"
+  },
+  "confirmBuildWithProxies_one": {
+    "message": "Confirmer le montage avec $1 proxy"
+  },
+  "confirmBuildWithProxies_other": {
+    "message": "Confirmer le montage avec $1 proxies"
+  },
+  "updateBuildWithProxies_one": {
+    "message": "Mettre à jour avec $1 proxy"
+  },
+  "updateBuildWithProxies_other": {
+    "message": "Mettre à jour avec $1 proxies"
+  },
+  "buttonBuiltWithProxies_one": {
+    "message": "Monté physiquement avec $1 proxy (cliquer pour démonter)"
+  },
+  "buttonBuiltWithProxies_other": {
+    "message": "Monté physiquement avec $1 proxies (cliquer pour démonter)"
   }
 }

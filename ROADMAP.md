@@ -9,7 +9,7 @@ README).
 
 | Rang | Fonctionnalité | Effort | Pourquoi |
 |---|---|---|---|
-| 1 | **Monter avec N proxies depuis le bouton principal** — remplacer « Confirmer le montage » par « Monter avec N proxies » quand des cartes bloquent ; proposer aussi le proxy pour une carte d'une autre édition (son remplacement ne doit alors être proposé que quand la bonne édition arrive dans la collection, pas avec l'exemplaire de l'autre édition déjà en stock). | Faible | Demandé. « Utiliser mes éditions » règle déjà la plupart des cartes d'une autre édition, sans proxy à imprimer. |
+| 1 | **Proxy pour une carte d'une autre édition** — la proposer en proxy quand « Utiliser mes éditions » ne peut rien (exemplaires déjà dans d'autres decks montés, pas assez dans une même édition) ; son remplacement ne doit alors être proposé que quand la bonne édition arrive dans la collection, pas avec l'exemplaire de l'autre édition déjà en stock. | Moyen | Reste de la demande « Monter avec N proxies » (bouton principal livré). Cas devenu rare depuis « Utiliser mes éditions ». |
 | 2 | **Faisabilité de tous mes decks** — lister ses decks Moxfield dans le popup avec, pour chacun, monté / montable / nombre de cartes bloquantes, via l'API (session déjà réutilisée pour la collection). Remplace l'idée « faisabilité mémorisée des decks consultés » et la pastille sur les listes de decks. | Moyen | Répond à « que puis-je monter ? » sans ouvrir chaque deck ; réutilise `computeDeckAvailability`. Appels de l'API des decks à capturer d'abord. |
 | 3 | **Annuler depuis l'historique** — « Remonter » un deck démonté, « Démonter » un deck monté, « Revenir à la liste précédente » après une mise à jour, « Remonter les decks » après une réinitialisation ; mêmes contrôles de stock qu'au montage, une seule fois, et seulement si le deck est resté dans l'état produit. Les actions sur la collection restent non annulables (Moxfield fait référence). | Moyen | Rattraper une erreur sur les decks montés. Les entrées enregistrent déjà les données nécessaires. Écarté de la première version de l'historique. |
 | 4 | **Liste de cartes à sortir / ranger** — cases à cocher triées par couleur, type ou édition, au montage et au démontage. | Moyen | Sert à chaque montage physique. |
@@ -49,6 +49,12 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
   partir de ses repères (icônes), pas enregistrée depuis une vraie page.
 
 ## Livré
+
+- Montage avec des proxies depuis le bouton principal : « Confirmer le
+  montage avec N proxies » (et « Mettre à jour avec N proxies ») quand
+  seul le stock manque, à la place d'un bouton à part dans l'encadré des
+  manques ; nombre de proxies affiché sur le bouton du ruban d'un deck
+  monté — novembre 2026.
 
 - Passer un deck sur les éditions de la collection : les cartes possédées
   dans une autre édition sont changées dans le deck Moxfield en un clic

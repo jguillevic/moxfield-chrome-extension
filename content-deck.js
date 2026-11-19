@@ -480,9 +480,9 @@
 
   // codesByName : nom normalisé → codes des impressions du deck, pour le
   // prix des cartes manquantes (cf. computeShortagePrices) ; vide (liste
-  // collée) : pas de prix. onProxies : action du bouton « … avec des
-  // proxies » (proxyLabel : son libellé), absent : pas de bouton.
-  function renderShortageWarning(el, shortages, deckUsage = new Map(), codesByName = new Map(), onProxies = null, proxyLabel = "buildWithProxies") {
+  // collée) : pas de prix. Le montage avec des proxies passe par le bouton
+  // principal de la fenêtre (cf. setProxyAction), pas par cet encadré.
+  function renderShortageWarning(el, shortages, deckUsage = new Map(), codesByName = new Map()) {
     if (shortages.length === 0) {
       el.style.display = "none";
       el.innerHTML = "";
@@ -513,9 +513,6 @@
     el.innerHTML =
       `<strong>⚠️ ${escapeHtml(tn("shortageTitle", shortages.length))}</strong>` +
       `<button type="button" class="msm-secondary msm-export-btn">🛒 ${escapeHtml(t("cardmarketCopyButton"))}</button>` +
-      (onProxies
-        ? `<button type="button" class="msm-secondary msm-export-btn msm-proxy-btn" title="${escapeHtml(t("proxiesHint"))}">🃏 ${escapeHtml(t(proxyLabel))}</button>`
-        : "") +
       // Avant la liste : le cadre défile, le total resterait sinon caché.
       totalLine +
       "<ul>" +
@@ -527,7 +524,24 @@
         .join("") +
       "</ul>";
     el.querySelector(".msm-export-btn").addEventListener("click", () => exportShortagesToCardmarket(shortages));
-    if (onProxies) el.querySelector(".msm-proxy-btn").addEventListener("click", onProxies);
+  }
+
+  // Bouton principal de la fenêtre (montage ou mise à jour) : quand seul le
+  // stock manque (proxies > 0), il devient « … avec N proxies » plutôt que
+  // de proposer les proxies dans un bouton à part, au milieu de l'encadré
+  // des manques (retour utilisateur, novembre 2026). Son libellé dit qu'il
+  // monte avec des proxies : un clic vaut accord.
+  function setProxyAction(button, proxies, plainKey, proxiesKey) {
+    button.dataset.proxies = proxies > 0 ? "1" : "";
+    button.textContent = proxies > 0 ? tn(proxiesKey, proxies) : t(plainKey);
+    button.title = proxies > 0 ? t("proxiesHint") : "";
+  }
+
+  // Exemplaires manquants qu'un montage avec des proxies compléterait, ou 0
+  // si autre chose bloque (version différente ou déjà utilisée : un proxy
+  // ne règle pas une question d'édition, cf. CLAUDE.md).
+  function proxiesNeeded(shortages, otherBlocking) {
+    return otherBlocking ? 0 : shortages.reduce((n, s) => n + s.missing, 0);
   }
 
   // Export vers Cardmarket : pas d'API utilisable sans identifiants
@@ -686,9 +700,9 @@
   // Modale d'un deck monté : compare la liste de la page à celle du montage
   // et, si elle a changé, affiche la différence et active « Mettre à jour le
   // montage ». Renvoie la nouvelle liste à enregistrer (proxies du montage
-  // reportés), ou null. onProxies : mise à jour avec des proxies pour les
-  // cartes en stock insuffisant.
-  async function prepareDeckUpdate(overlay, deckId, onProxies = null) {
+  // reportés), ou null. Stock insuffisant seulement : « Mettre à jour avec
+  // N proxies » (cf. setProxyAction).
+  async function prepareDeckUpdate(overlay, deckId) {
     const changesEl = overlay.querySelector("#msm-deck-changes");
     changesEl.innerHTML = `<p class="msm-card-count">${escapeHtml(t("deckChecking"))}</p>`;
     // Juste après un chargement ou une modification, Moxfield peut ne pas
@@ -740,15 +754,17 @@
       renderDeckDiff(changes) +
       `<p>${escapeHtml(t("deckUpdateHint", t("updateBuild")))}</p></div>`;
     lastPrintingCodes = printingCodesByName(scraped);
-    renderShortageWarning(overlay.querySelector("#msm-shortage-warning"), check.shortages, deckUsage, lastPrintingCodes, onProxies, "updateWithProxies");
+    renderShortageWarning(overlay.querySelector("#msm-shortage-warning"), check.shortages, deckUsage, lastPrintingCodes);
     renderPrintingWarning(overlay.querySelector("#msm-printing-warning"), check.wrongEdition);
     renderVersionWarning(overlay.querySelector("#msm-version-warning"), check.versionTaken);
     renderBasicLandNotice(overlay.querySelector("#msm-basic-land-warning"), check.basicWrongEdition, check.basicShortages);
 
     const updateBtn = overlay.querySelector("#msm-update");
     updateBtn.hidden = false;
-    updateBtn.disabled = check.blocked;
-    if (check.blocked) updateBtn.title = t("deckUpdateBlocked");
+    const proxies = proxiesNeeded(check.shortages, check.wrongEdition.length > 0 || check.versionTaken.length > 0);
+    setProxyAction(updateBtn, proxies, "updateBuild", "updateBuildWithProxies");
+    updateBtn.disabled = check.blocked && proxies === 0;
+    if (updateBtn.disabled) updateBtn.title = t("deckUpdateBlocked");
     overlay.querySelector("#msm-confirm").classList.remove("msm-primary");
     const cards = scraped.map(({ name, qty, versions }) => (versions && versions.length > 0 ? { name, qty, versions } : { name, qty }));
     return carryProxies(cards, deck.cards);
@@ -890,9 +906,14 @@
     }
   }
 
-  async function getIsBuilt(deckId) {
+  // Deck monté (cartes comprises), ou null.
+  async function getBuiltDeck(deckId) {
     const context = await getDeckContext([], deckId);
-    return Boolean(context && context.builtDecks[deckId]);
+    return (context && context.builtDecks[deckId]) || null;
+  }
+
+  async function getIsBuilt(deckId) {
+    return Boolean(await getBuiltDeck(deckId));
   }
 
   // Dernier état connu du deck (monté ou non), gardé pour pouvoir redessiner
@@ -910,6 +931,11 @@
   // fiable. Réévaluée elle aussi régulièrement : le stock peut changer
   // ailleurs (autre onglet, synchro Drive, popup).
   let btnAvailability = null;
+
+  // Proxies du deck monté (cf. proxyTotal), affichés sur le bouton.
+  // Réévalués avec le reste : ils changent quand un proxy est remplacé
+  // depuis le popup.
+  let btnProxies = 0;
 
   let lastStatusCheck = 0;
   let statusCheckRunning = false;
@@ -1019,9 +1045,11 @@
         // sont à coup sûr celles du montage.
         const missingVersions = outdated ? null : versionsToRecord(deck.cards, scraped);
         if (missingVersions) recordDeckVersions(deckId, missingVersions);
-        if (outdated !== btnOutdated || btnAvailability) {
+        const proxies = proxyTotal(deck.cards);
+        if (outdated !== btnOutdated || btnAvailability || proxies !== btnProxies) {
           btnOutdated = outdated;
           btnAvailability = null;
+          btnProxies = proxies;
           renderButton();
         }
       } else {
@@ -1166,8 +1194,18 @@
     if (!btn) return;
     const outdated = btnBuilt && btnOutdated;
     const availability = btnBuilt ? null : btnAvailability;
-    const label = t(!btnBuilt ? "buttonBuild" : outdated ? "buttonBuiltOutdated" : "buttonBuilt");
+    const proxies = btnBuilt ? btnProxies : 0;
+    const label =
+      !btnBuilt ? t("buttonBuild") : outdated ? t("buttonBuiltOutdated") : proxies > 0 ? tn("buttonBuiltWithProxies", proxies) : t("buttonBuilt");
     btn.replaceChildren(createBarIcon(btnBuilt ? "built" : "build"));
+    if (proxies > 0) {
+      // Deck monté avec des proxies : leur nombre, à côté de l'icône.
+      const badge = document.createElement("span");
+      badge.className = "msm-avail-badge msm-proxy-badge";
+      badge.textContent = String(proxies);
+      badge.setAttribute("aria-hidden", "true");
+      btn.appendChild(badge);
+    }
     if (availability) {
       // Pastille : ✓ si montable, sinon nombre d'exemplaires bloquants.
       const badge = document.createElement("span");
@@ -1186,7 +1224,9 @@
   // Aussi sans bouton (barre d'actions pas encore affichée) : l'état est
   // prêt quand elle apparaît.
   async function refreshButtonState(deckId) {
-    btnBuilt = await getIsBuilt(deckId);
+    const deck = await getBuiltDeck(deckId);
+    btnBuilt = Boolean(deck);
+    btnProxies = deck ? proxyTotal(deck.cards) : 0;
     if (!btnBuilt) btnOutdated = false;
     btnAvailability = null;
     lastStatusCheck = 0; // réévaluer tout de suite au prochain tick
@@ -1231,7 +1271,7 @@
 
     let updatedCards = null;
     if (isBuilt) {
-      updatedCards = await prepareDeckUpdate(overlay, deckId, () => submitUpdate(true));
+      updatedCards = await prepareDeckUpdate(overlay, deckId);
     } else {
       const textarea = overlay.querySelector("#msm-cards-textarea");
       const warningEl = overlay.querySelector("#msm-shortage-warning");
@@ -1241,12 +1281,14 @@
       const cardCountEl = overlay.querySelector("#msm-card-count");
       const blockingSummaryEl = overlay.querySelector("#msm-blocking-summary");
       const siteDeclaredTotal = getSiteDeclaredTotal();
+      const confirmBtn = overlay.querySelector("#msm-confirm");
 
       const updateWarnings = async () => {
         const cards = withVersions(parseCardsText(textarea.value));
         renderCardCount(cardCountEl, cards, siteDeclaredTotal);
         if (cards.length === 0) {
           blockingSummaryEl.hidden = true;
+          setProxyAction(confirmBtn, 0, "confirmBuild", "confirmBuildWithProxies");
           renderShortageWarning(warningEl, []);
           renderPrintingWarning(printingWarningEl, []);
           renderVersionWarning(versionWarningEl, []);
@@ -1264,9 +1306,13 @@
         blockingSummaryEl.textContent = summary ? `🚫 ${summary}.` : "";
         // Impressions détectées sur la page, pas les versions de la liste :
         // une quantité modifiée à la main garde le prix de la carte.
-        renderShortageWarning(warningEl, computeShortages(nonBasicCards, stockMap), deckUsage, lastPrintingCodes, () => submitBuild(true));
-        renderPrintingWarning(printingWarningEl, computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames));
-        renderVersionWarning(versionWarningEl, computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames));
+        const shortages = computeShortages(nonBasicCards, stockMap);
+        const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
+        const versionTaken = computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames);
+        setProxyAction(confirmBtn, proxiesNeeded(shortages, wrongEdition.length > 0 || versionTaken.length > 0), "confirmBuild", "confirmBuildWithProxies");
+        renderShortageWarning(warningEl, shortages, deckUsage, lastPrintingCodes);
+        renderPrintingWarning(printingWarningEl, wrongEdition);
+        renderVersionWarning(versionWarningEl, versionTaken);
         renderBasicLandNotice(
           basicLandWarningEl,
           computeWrongEditionCards(basicCards, stockMap, lastWrongEditionNames),
@@ -1389,10 +1435,15 @@
       toast(!payload.built ? t("unbuildDone") : proxies > 0 ? tn("buildDoneWithProxies", proxies) : t("buildDone"));
     }
 
-    if (updatedCards) overlay.querySelector("#msm-update").addEventListener("click", () => submitUpdate(false));
+    // Avec ou sans proxies selon le libellé affiché (cf. setProxyAction).
+    const withProxies = (button) => button.dataset.proxies === "1";
+    if (updatedCards) {
+      const updateBtn = overlay.querySelector("#msm-update");
+      updateBtn.addEventListener("click", () => submitUpdate(withProxies(updateBtn)));
+    }
 
-    overlay.querySelector("#msm-confirm").addEventListener("click", async () => {
-      if (!isBuilt) return submitBuild(false);
+    overlay.querySelector("#msm-confirm").addEventListener("click", async (e) => {
+      if (!isBuilt) return submitBuild(withProxies(e.currentTarget));
       try {
         await sendToggle({ deckId, deckName: getDeckName(), url: window.location.href, cards: [], built: false });
       } catch (e) {

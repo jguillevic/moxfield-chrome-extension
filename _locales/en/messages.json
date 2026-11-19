@@ -722,12 +722,6 @@
   "buildDone": {
     "message": "Deck marked as built, cards taken out of the stock."
   },
-  "buildWithProxies": {
-    "message": "Build with proxies"
-  },
-  "updateWithProxies": {
-    "message": "Update with proxies"
-  },
   "proxiesHint": {
     "message": "The missing copies are played as proxies: they are not taken from your stock, and you can print them."
   },
@@ -910,5 +904,23 @@
   },
   "ownedEditionsSkipTaken": {
     "message": "your copies of the owned printings are already in other built decks"
+  },
+  "confirmBuildWithProxies_one": {
+    "message": "Confirm build with $1 proxy"
+  },
+  "confirmBuildWithProxies_other": {
+    "message": "Confirm build with $1 proxies"
+  },
+  "updateBuildWithProxies_one": {
+    "message": "Update with $1 proxy"
+  },
+  "updateBuildWithProxies_other": {
+    "message": "Update with $1 proxies"
+  },
+  "buttonBuiltWithProxies_one": {
+    "message": "Physically built with $1 proxy (click to unbuild)"
+  },
+  "buttonBuiltWithProxies_other": {
+    "message": "Physically built with $1 proxies (click to unbuild)"
   }
 }
