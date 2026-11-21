@@ -52,13 +52,13 @@
 }
 
 /* --- Bandeau flottant (repli quand la barre d'actions de Moxfield est
-   introuvable) : mêmes boutons-icônes, blancs sur fond sombre comme dans la
+   introuvable), en bas à gauche : mêmes boutons-icônes, blancs sur fond sombre comme dans la
    barre de Moxfield. --- */
 
 .msm-floating-bar {
   position: fixed;
   bottom: 20px;
-  right: 20px;
+  left: 20px;
   z-index: 999999;
   display: flex;
   align-items: center;

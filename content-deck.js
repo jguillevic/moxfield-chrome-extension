@@ -1035,6 +1035,13 @@
       if (!context || deckId !== currentDeckId) return;
       const stockMap = context.stock;
       const deck = context.builtDecks[deckId];
+      // Filet de sécurité : l'état « monté » du bouton suit celui qu'on vient
+      // de lire (deck monté ou démonté depuis un autre onglet, le popup, ou
+      // un autre PC via Drive).
+      if (Boolean(deck) !== btnBuilt) {
+        await refreshButtonState(deckId);
+        return;
+      }
       if (deck) {
         const scraped = withPrintings(completeCardNames(detection.cards, Object.values(stockMap), deck.cards));
         setEditionNames(ownedEditionNames(scraped, deckId));
@@ -1228,6 +1235,11 @@
   // prêt quand elle apparaît.
   async function refreshButtonState(deckId) {
     const deck = await getBuiltDeck(deckId);
+    // Passage à un autre deck pendant la lecture (navigation dans Moxfield) :
+    // cette réponse est celle de l'ancien deck, elle ne doit pas écraser
+    // l'état du nouveau (constaté en vrai : icône « monté » sur un deck qui
+    // ne l'était pas).
+    if (deckId !== currentDeckId) return btnBuilt;
     btnBuilt = Boolean(deck);
     btnProxies = deck ? proxyTotal(deck.cards) : 0;
     if (!btnBuilt) btnOutdated = false;

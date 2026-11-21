@@ -1178,3 +1178,34 @@ test("fenêtre de montage : cartes d'une autre édition listées, sans bouton de
   await waitFor(() => box() && /Birds of Paradise/.test(box().textContent), 2000, "liste affichée");
   assert.equal(box().querySelector("button"), null);
 });
+
+// Cas réel (novembre 2026) : un deck pas monté affichait l'icône « monté ».
+// En passant d'un deck monté à un autre dans Moxfield (sans rechargement),
+// la réponse « monté ? » de l'ancien deck arrivait après celle du nouveau
+// (service worker en réveil) et écrasait son état, sans correction ensuite.
+test("navigation d'un deck monté vers un autre : réponse tardive de l'ancien deck ignorée", async (t) => {
+  const deck = { name: "Deck A", url: "", cards: [{ name: "Birds of Paradise", qty: 1 }], builtAt: 1 };
+  let delayed = 0;
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: { abc123: deck } }, "fr", async (msg) => {
+    // Premières lectures du deck monté (abc123) : lentes.
+    if (msg.type === "GET_DECK_CONTEXT" && msg.payload.deckId === "abc123" && delayed++ < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    return undefined;
+  });
+  t.after(page.close);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  page.win.history.pushState({}, "", "/decks/zzz999"); // autre deck, pas monté
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  assert.match(buttonText(page), /^Marquer comme monté physiquement/, "deck zzz999 pas monté");
+});
+
+test("deck démonté ailleurs (popup, autre PC) pendant que sa page est ouverte : bouton mis à jour", async (t) => {
+  const deck = { name: "Deck", url: "", cards: [{ name: "Birds of Paradise", qty: 1 }], builtAt: 1 };
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: { abc123: deck } });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).startsWith("Monté physiquement"), 2000, "deck monté");
+  page.state = { ...page.state, builtDecks: {} };
+  page.setStock(FULL_STOCK); // signale le changement de l'état, comme chrome.storage
+  await waitFor(() => buttonText(page).startsWith("Marquer comme monté physiquement"), 2000, "deck affiché comme pas monté");
+});

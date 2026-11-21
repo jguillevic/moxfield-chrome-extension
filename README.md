@@ -132,7 +132,7 @@ contenu du CSV. Même effet qu'une récupération automatique.
   bouton like (cœur). Quand Moxfield n'affiche pas cette barre (elle a
   disparu de la page d'un deck en novembre 2026), les boutons « Monter » et
   « Utiliser mes éditions » sont dans un petit bandeau sombre en bas à
-  droite de la page ; ils retournent dans la barre si elle réapparaît.
+  gauche de la page ; ils retournent dans la barre si elle réapparaît.
 - **Faisabilité visible sans ouvrir la fenêtre** : sur un deck pas encore
   monté, une pastille sur le bouton indique si le deck est montable avec le
   stock libre — **✓ verte** s'il l'est, **rouge avec un nombre** sinon (nombre
@@ -690,7 +690,9 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   proxies d'un deck monté (pastille du bouton) et leur impression,
   « Utiliser mes éditions » (bouton du ruban, jauge, rechargement, cartes
   impossibles à changer, arrêt en cours, erreur), boutons dans un bandeau
-  flottant sans la barre d'actions (et passage de l'un à l'autre), bouton
+  flottant sans la barre d'actions (et passage de l'un à l'autre), état
+  « monté » juste en passant d'un deck à l'autre et quand un deck est
+  démonté ailleurs, bouton
   et fenêtre de montage en anglais.
 - `tests/proxies.test.js` : page d'impression des proxies (`proxies.html`
   + `proxies.js`, Scryfall simulé à partir de vraies réponses réduites
