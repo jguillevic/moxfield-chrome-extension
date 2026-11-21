@@ -403,7 +403,11 @@ en cas de conflit : rien ne s'y perd).
   Gérer les applications** (lien « Ouvrir les paramètres de Drive » dans le
   popup), sans permettre de l'ouvrir. Pour en voir le contenu, clique sur
   **« Télécharger la sauvegarde »** : un fichier JSON lisible (stock, decks
-  montés, historique) arrive dans tes téléchargements.
+  montés, historique) arrive dans tes téléchargements. Pour chaque carte,
+  le stock y donne les exemplaires possédés par édition et numéro
+  (`printings`, ex. `{ "set": "c21", "cn": "263", "qty": 2 }`), complétés à
+  la récupération suivante de la collection après la mise à jour de
+  l'extension ; le stock libre, lui, reste compté par nom.
 - **Premier PC connecté** : son stock est envoyé sur Drive. **PC suivants** :
   si ce PC n'a pas encore de stock, celui de Drive est récupéré ; s'il en a
   déjà un, le popup te demande lequel garder.

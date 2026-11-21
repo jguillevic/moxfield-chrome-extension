@@ -50,6 +50,8 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- Édition de chaque carte dans le stock (et donc dans la sauvegarde), même
+  possédée dans une seule édition — novembre 2026.
 - Sauvegarde Google Drive retrouvable : lien vers les paramètres de Drive
   (le dossier de l'extension y est invisible) et téléchargement en JSON de
   la sauvegarde et de chaque version de l'historique — novembre 2026.

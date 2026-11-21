@@ -1285,13 +1285,21 @@ const TWO_EDITIONS_CSV = csv(
 );
 const STEAM_VENTS_PRINTINGS = [{ set: "grn", cn: "257", qty: 1 }, { set: "rna", cn: "257", qty: 1 }];
 
-test("import CSV : détail par édition gardé seulement pour les cartes possédées en plusieurs éditions", async () => {
+// La sauvegarde téléchargée montre l'édition de chaque carte, même
+// possédée dans une seule.
+test("import CSV : détail par édition gardé pour toutes les cartes", async () => {
   const bg = loadBackground();
   await bg.send({ type: "IMPORT_CSV_TEXT", csvText: TWO_EDITIONS_CSV });
   const { stock } = await bg.state();
   assert.deepEqual(stock["steam vents"], { name: "Steam Vents", qty: 2, printings: STEAM_VENTS_PRINTINGS });
   // Même édition en deux langues et deux finitions : une seule édition.
-  assert.deepEqual(stock["sol ring"], { name: "Sol Ring", qty: 3 });
+  assert.deepEqual(stock["sol ring"], { name: "Sol Ring", qty: 3, printings: [{ set: "c21", cn: "263", qty: 3 }] });
+});
+
+test("import CSV : carte sans édition dans la collection, pas de détail", async () => {
+  const bg = loadBackground();
+  await bg.send({ type: "IMPORT_CSV_TEXT", csvText: "Name,Count\nSol Ring,2" });
+  assert.deepEqual((await bg.state()).stock["sol ring"], { name: "Sol Ring", qty: 2 });
 });
 
 test("détail par édition : possédé, donc inchangé par un montage, et transmis à la page du deck", async () => {
@@ -1310,6 +1318,7 @@ test("récupération : détail par édition enregistré même si les quantités 
   const res = await bg.send({ type: "COLLECTION_FETCH_NOW" });
   assert.deepEqual(res, { ok: true, changes: [] });
   assert.deepEqual((await bg.state()).stock["steam vents"].printings, STEAM_VENTS_PRINTINGS);
+  assert.deepEqual((await bg.state()).stock["sol ring"].printings, [{ set: "c21", cn: "263", qty: 3 }], "aussi une carte en une seule édition");
   assert.deepEqual(await historyOf(bg), [], "aucune quantité n'a changé : rien dans l'historique");
 
   const writes = bg.counts.stateWrites;

@@ -1,9 +1,9 @@
 // background.js — service worker (MV3)
 // Source de vérité unique pour le state : chrome.storage.local
 //   stock       : { [normalizedName]: { name: string, qty: number, printings?: [{set, cn, qty}] } }
-//     qty : exemplaires libres ; printings : exemplaires POSSÉDÉS par édition,
-//     seulement pour une carte possédée en plusieurs éditions (cf.
-//     parseCollectionCSV).
+//     qty : exemplaires libres ; printings : exemplaires POSSÉDÉS par édition
+//     (cf. parseCollectionCSV), pour toute carte dont la collection donne
+//     l'édition.
 //   builtDecks  : { [deckId]: { name: string, url: string, cards: [{name, qty, versions?, proxyQty?, proxyPrinting?}], builtAt: number,
 //     versions : [{code, qty, set?, cn?}], impressions Moxfield lues sur la
 //     page au montage (cf. ownedVersionOf dans deck-scraper.js) ; set et cn :
@@ -190,8 +190,12 @@ function parseCSVLine(line) {
 
 function parseCollectionCSV(csvText) {
   const { aggregated, editions } = parseCollectionRows(csvText);
+  // Toute carte, même possédée dans une seule édition : la sauvegarde
+  // (téléchargeable depuis le popup) montre ainsi l'édition de chaque
+  // carte. Les anciennes versions de l'extension ignorent ce champ ; elles
+  // le perdent seulement en réimportant la collection, et la récupération
+  // suivante d'une version à jour le remet (cf. printingsChanged).
   for (const [key, byEdition] of editions) {
-    if (byEdition.size < 2) continue;
     // Finitions laissées de côté : le stock ne les distingue pas.
     aggregated[key].printings = [...byEdition.values()]
       .map(({ set, cn, qty }) => ({ set, cn, qty }))

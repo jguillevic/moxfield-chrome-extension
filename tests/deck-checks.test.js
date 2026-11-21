@@ -695,3 +695,14 @@ test("chooseOwnedEdition : entre éditions également libres, celle possédée e
   const more = [owned[0], { set: "dds", cn: "50", qty: 3, finishes: { nonFoil: 3 } }];
   assert.deepEqual(chooseOwnedEdition(more, current), { set: "dds", cn: "50" });
 });
+
+// Le détail par édition est maintenant gardé pour toute carte (sauvegarde
+// lisible) : une carte possédée dans une seule édition ne doit pas pour
+// autant passer par le contrôle des versions. Un exemplaire foil et un non
+// foil de la même édition ont deux codes Moxfield : le recoupement y verrait
+// à tort une version déjà utilisée.
+test("version déjà utilisée : une seule édition possédée, jamais de conflit (finitions aux codes différents)", () => {
+  const usage = buildVersionUsage(builtWith([{ code: "FOIL1", qty: 1 }]));
+  const card = { name: "Steam Vents", qty: 1, versions: [{ code: "NONFOIL", qty: 1 }] };
+  assert.deepEqual(computeVersionConflicts([card], steamVentsStock(1, [{ set: "grn", cn: "257", qty: 2 }]), usage), []);
+});

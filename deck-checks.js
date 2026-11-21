@@ -245,8 +245,7 @@ function createDeckChecks(normalizeName, { t, tn }) {
   // le code Moxfield de l'impression (cf. ownedVersionOf dans
   // deck-scraper.js), la collection une édition et un numéro (cf.
   // parseCollectionCSV dans background.js : entrée de stock
-  // { printings: [{ set, cn, qty }] } quand la carte est possédée en
-  // plusieurs éditions).
+  // { printings: [{ set, cn, qty }] }).
   //
   // Contrôle exact : l'API du deck relie les deux (cf. extractDeckPrintings
   // dans moxfield-collection.js), et une version porte alors son édition et
@@ -342,7 +341,10 @@ function createDeckChecks(normalizeName, { t, tn }) {
     for (const c of cards) {
       const key = normalizeName(c.name);
       const entry = stockMap[key];
-      if (!c.versions || c.versions.length === 0 || !entry || !entry.printings) continue;
+      // Une seule édition possédée : le stock par nom suffit. Le recoupement
+      // y verrait même des conflits qui n'en sont pas (un exemplaire foil et
+      // un non foil de la même édition ont deux codes Moxfield).
+      if (!c.versions || c.versions.length === 0 || !entry || !entry.printings || entry.printings.length < 2) continue;
       if (entry.qty < c.qty || wrongEditionNames.has(key)) continue;
       const others = versionUsage.get(key) || [];
       const exact = exactVersionConflict(c.versions, others, entry.printings);
