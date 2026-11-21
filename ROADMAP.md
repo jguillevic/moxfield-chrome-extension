@@ -5,6 +5,10 @@ ou risque de fausser le stock, puis l'usage quotidien, puis le confort.
 Une idée livrée passe dans la section « Livré » (et est décrite dans le
 README).
 
+Étude de marché (concurrents, forces et manques, fonctionnalités notées
+par attrait × simplicité, dont des idées absentes de cette liste) :
+[`docs/etude-de-marche.md`](docs/etude-de-marche.md), novembre 2026.
+
 ## À faire
 
 | Rang | Fonctionnalité | Effort | Pourquoi |
