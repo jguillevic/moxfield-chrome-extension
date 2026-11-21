@@ -2048,3 +2048,29 @@ test("version affichée : numéro du manifest et commit du clone (lien vers GitH
   const copy = loadBackground();
   assert.deepEqual(await copy.send({ type: "GET_VERSION_INFO" }), { ok: true, version: "0.2.0", commit: null, commitUrl: null });
 });
+
+// --- Guide de démarrage ---
+
+test("guide de démarrage : proposé à une nouvelle installation, et encore après la récupération de la collection", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, step: 0 });
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.equal((await bg.send({ type: "GET_ONBOARDING" })).done, false, "le stock n'est plus vide, mais le guide n'est pas fini");
+});
+
+test("guide de démarrage : pas proposé à une installation qui a déjà un stock", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: true, step: 0 });
+});
+
+test("guide de démarrage : étape et fin retenues, rejouable, sans écrire l'état synchronisé", async () => {
+  const bg = loadBackground();
+  await bg.send({ type: "GET_ONBOARDING" });
+  await bg.send({ type: "SET_ONBOARDING", payload: { done: false, step: 2 } });
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, step: 2 });
+  await bg.send({ type: "SET_ONBOARDING", payload: { done: true, step: 0 } });
+  assert.equal((await bg.send({ type: "GET_ONBOARDING" })).done, true);
+  await bg.send({ type: "SET_ONBOARDING", payload: { done: false, step: 0 } }); // rejoué
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, step: 0 });
+  assert.equal(bg.counts.stateWrites, 0, "propre à ce PC : rien n'est envoyé sur Drive");
+});

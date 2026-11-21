@@ -967,5 +967,80 @@
   },
   "updateVersions": {
     "message": "Version $1 available (you have $2)."
+  },
+  "onboardingProgress": {
+    "message": "Getting started — step $1 of $2"
+  },
+  "onboardingPrevious": {
+    "message": "Previous"
+  },
+  "onboardingNext": {
+    "message": "Next"
+  },
+  "onboardingFinish": {
+    "message": "Finish"
+  },
+  "onboardingSkip": {
+    "message": "Skip the guide"
+  },
+  "onboardingReplay": {
+    "message": "Replay the getting started guide"
+  },
+  "onboardingCollectionTitle": {
+    "message": "Fetch your Moxfield collection"
+  },
+  "onboardingCollectionText": {
+    "message": "The stock starts from your Moxfield collection: it tells which cards you own. Sign in to Moxfield in this browser, then fetch it. After that, it updates by itself."
+  },
+  "onboardingCollectionDone": {
+    "message": "Collection fetched: $1."
+  },
+  "onboardingFetch": {
+    "message": "Fetch my collection"
+  },
+  "onboardingButtonsTitle": {
+    "message": "Find the buttons on a deck page"
+  },
+  "onboardingButtonsText": {
+    "message": "Open one of your decks on Moxfield: the extension adds its buttons there, at the bottom left of the page (or in Moxfield's action bar when it is shown)."
+  },
+  "onboardingLegendBuild": {
+    "message": "Open box: the deck is not built. Click it to build the deck."
+  },
+  "onboardingLegendOk": {
+    "message": "on the box: every card is in your free stock, the deck can be built."
+  },
+  "onboardingLegendBlocked": {
+    "message": "on the box: number of cards blocking the build (missing, or owned in another printing). Hover the button for details."
+  },
+  "onboardingLegendBuilt": {
+    "message": "Green check circle: the deck is built. Click it to unbuild or update it."
+  },
+  "onboardingLegendEditions": {
+    "message": "Arrows: switch the deck to the printings you own."
+  },
+  "onboardingBuildTitle": {
+    "message": "Build your first deck"
+  },
+  "onboardingBuildText": {
+    "message": "On the deck page, click the open box, check the detected list, then confirm. The deck's cards leave your free stock; unbuild the deck to put them back. If cards are missing, the window tells which built deck holds them and their price."
+  },
+  "onboardingBuildDone": {
+    "message": "You have $1."
+  },
+  "onboardingMoreTitle": {
+    "message": "Going further"
+  },
+  "onboardingMoreSync": {
+    "message": "Google Drive sync (further down): automatic backup, and the same stock on all your computers."
+  },
+  "onboardingMoreHistory": {
+    "message": "History: every build, unbuild and collection change."
+  },
+  "onboardingMoreProxies": {
+    "message": "Proxies: build a deck despite missing cards, and print them."
+  },
+  "onboardingMoreReplay": {
+    "message": "This guide stays available at the bottom of the popup."
   }
 }

@@ -967,5 +967,80 @@
   },
   "updateVersions": {
     "message": "Version $1 disponible (tu as la $2)."
+  },
+  "onboardingProgress": {
+    "message": "Guide de démarrage — étape $1 sur $2"
+  },
+  "onboardingPrevious": {
+    "message": "Précédent"
+  },
+  "onboardingNext": {
+    "message": "Suivant"
+  },
+  "onboardingFinish": {
+    "message": "Terminer"
+  },
+  "onboardingSkip": {
+    "message": "Passer le guide"
+  },
+  "onboardingReplay": {
+    "message": "Revoir le guide de démarrage"
+  },
+  "onboardingCollectionTitle": {
+    "message": "Récupère ta collection Moxfield"
+  },
+  "onboardingCollectionText": {
+    "message": "Le stock part de ta collection Moxfield : c'est elle qui dit quelles cartes tu possèdes. Connecte-toi à Moxfield dans ce navigateur, puis récupère-la. Ensuite, elle se met à jour toute seule."
+  },
+  "onboardingCollectionDone": {
+    "message": "Collection récupérée : $1."
+  },
+  "onboardingFetch": {
+    "message": "Récupérer ma collection"
+  },
+  "onboardingButtonsTitle": {
+    "message": "Repère les boutons sur la page d'un deck"
+  },
+  "onboardingButtonsText": {
+    "message": "Ouvre un de tes decks sur Moxfield : l'extension y ajoute ses boutons, en bas à gauche de la page (ou dans la barre d'actions de Moxfield quand elle est affichée)."
+  },
+  "onboardingLegendBuild": {
+    "message": "Boîte ouverte : le deck n'est pas monté. Clique dessus pour le monter."
+  },
+  "onboardingLegendOk": {
+    "message": "sur la boîte : toutes les cartes sont dans ton stock libre, le deck est montable."
+  },
+  "onboardingLegendBlocked": {
+    "message": "sur la boîte : nombre de cartes qui bloquent le montage (manquantes, ou possédées dans une autre édition). Survole le bouton pour le détail."
+  },
+  "onboardingLegendBuilt": {
+    "message": "Rond coché vert : le deck est monté. Clique dessus pour le démonter ou le mettre à jour."
+  },
+  "onboardingLegendEditions": {
+    "message": "Flèches : passe le deck sur les éditions que tu possèdes."
+  },
+  "onboardingBuildTitle": {
+    "message": "Monte ton premier deck"
+  },
+  "onboardingBuildText": {
+    "message": "Sur la page du deck, clique sur la boîte ouverte, vérifie la liste détectée, puis confirme. Les cartes du deck sortent de ton stock libre ; démonte le deck pour les y remettre. S'il manque des cartes, la fenêtre indique dans quel deck monté elles se trouvent et leur prix."
+  },
+  "onboardingBuildDone": {
+    "message": "Tu as $1."
+  },
+  "onboardingMoreTitle": {
+    "message": "Pour aller plus loin"
+  },
+  "onboardingMoreSync": {
+    "message": "Synchronisation Google Drive (plus bas) : sauvegarde automatique, et même stock sur tous tes PC."
+  },
+  "onboardingMoreHistory": {
+    "message": "Historique : chaque montage, démontage et changement de la collection."
+  },
+  "onboardingMoreProxies": {
+    "message": "Proxies : monte un deck malgré des cartes manquantes, et imprime-les."
+  },
+  "onboardingMoreReplay": {
+    "message": "Ce guide reste disponible en bas du popup."
   }
 }

@@ -717,3 +717,108 @@ test("nouvelle version : numéro de la nouvelle version et de la version install
   await settle();
   assert.equal(p.$("update-summary").textContent, "Version 0.4.0 disponible (tu as la 0.3.0). 2 modifications sur GitHub depuis ta version :");
 });
+
+// --- Guide de démarrage ---
+
+// Popup d'une nouvelle installation ; onboarding : réponse du service worker.
+function openGuide(onboarding = { ok: true, done: false, step: 0 }, extra = {}) {
+  let saved = onboarding;
+  return openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_ONBOARDING: () => saved,
+    SET_ONBOARDING: (msg) => (saved = { ok: true, ...msg.payload }),
+    ...extra,
+  });
+}
+const guideTitle = (p) => p.$("onboarding-title").textContent;
+const savedGuide = (p) => p.sent.filter((m) => m.type === "SET_ONBOARDING").map((m) => m.payload);
+
+test("guide de démarrage : affiché à la première installation, étape par étape jusqu'à la fin", async (t) => {
+  const p = openGuide();
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("onboarding").hidden, false);
+  assert.equal(p.$("onboarding-progress").textContent, "Guide de démarrage — étape 1 sur 4");
+  assert.equal(guideTitle(p), "Récupère ta collection Moxfield");
+  assert.equal(p.$("onboarding-previous").hidden, true);
+  const titles = [];
+  for (let i = 0; i < 3; i++) {
+    p.$("onboarding-next").click();
+    await settle();
+    titles.push(guideTitle(p));
+  }
+  assert.deepEqual(titles, ["Repère les boutons sur la page d'un deck", "Monte ton premier deck", "Pour aller plus loin"]);
+  assert.equal(p.$("onboarding-next").textContent, "Terminer");
+  assert.equal(p.$("onboarding-skip").hidden, true);
+  p.$("onboarding-previous").click();
+  await settle();
+  assert.equal(guideTitle(p), "Monte ton premier deck");
+  p.$("onboarding-next").click();
+  p.$("onboarding-next").click(); // Terminer
+  await settle();
+  assert.equal(p.$("onboarding").hidden, true);
+  assert.deepEqual(savedGuide(p).at(-1), { done: true, step: 0 });
+});
+
+test("guide de démarrage : repris à l'étape où le popup a été fermé ; « Passer » le termine", async (t) => {
+  const p = openGuide({ ok: true, done: false, step: 2 });
+  t.after(p.close);
+  await settle();
+  assert.equal(guideTitle(p), "Monte ton premier deck");
+  p.$("onboarding-skip").click();
+  await settle();
+  assert.equal(p.$("onboarding").hidden, true);
+  assert.deepEqual(savedGuide(p), [{ done: true, step: 0 }]);
+});
+
+test("guide de démarrage : pas affiché une fois terminé, rejouable depuis le bas du popup", async (t) => {
+  const p = openGuide({ ok: true, done: true, step: 0 });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("onboarding").hidden, true);
+  p.$("onboarding-replay").click();
+  await settle();
+  assert.equal(p.$("onboarding").hidden, false);
+  assert.equal(guideTitle(p), "Récupère ta collection Moxfield");
+  assert.deepEqual(savedGuide(p), [{ done: false, step: 0 }]);
+});
+
+test("guide de démarrage : chaque étape montre où en est l'utilisateur", async (t) => {
+  const p = openGuide({ ok: true, done: false, step: 0 }, { GET_STATE: { ok: true, state: MOUNTED_STATE } });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("onboarding-body").querySelector(".onboarding-status.done").textContent, "✓ Collection récupérée : 2 cartes différentes.");
+  assert.equal(p.$("onboarding-fetch"), null, "collection déjà là : pas de bouton de récupération");
+  p.$("onboarding-next").click();
+  await settle();
+  assert.deepEqual([...p.$("onboarding-body").querySelectorAll(".legend-badge")].map((b) => b.textContent), ["OK", "3"]);
+  p.$("onboarding-next").click();
+  await settle();
+  assert.equal(p.$("onboarding-body").querySelector(".onboarding-status.done").textContent, "✓ Tu as 2 decks montés.");
+});
+
+test("guide de démarrage : récupération de la collection depuis la première étape, erreur affichée", async (t) => {
+  let state = EMPTY_STATE;
+  let result = { ok: false, error: "Pas de session Moxfield : connecte-toi sur moxfield.com dans ce navigateur.", code: "not-logged-in" };
+  const p = openGuide(undefined, { GET_STATE: () => ({ ok: true, state }), COLLECTION_FETCH_NOW: () => result });
+  t.after(p.close);
+  await settle();
+  assert.ok(p.$("onboarding-body").querySelector('a[href="https://moxfield.com/account/signin"]'), "lien de connexion à Moxfield");
+  p.$("onboarding-fetch").click();
+  await settle();
+  assert.match(p.$("onboarding-body").querySelector(".onboarding-status").textContent, /^Pas de session Moxfield/);
+
+  state = MOUNTED_STATE;
+  result = { ok: true, changes: [] };
+  p.$("onboarding-fetch").click();
+  await settle();
+  assert.match(p.$("onboarding-body").querySelector(".onboarding-status.done").textContent, /Collection récupérée/);
+});
+
+test("guide de démarrage : en anglais", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_ONBOARDING: { ok: true, done: false, step: 0 } }, "en");
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("onboarding-progress").textContent, "Getting started — step 1 of 4");
+  assert.equal(guideTitle(p), "Fetch your Moxfield collection");
+});

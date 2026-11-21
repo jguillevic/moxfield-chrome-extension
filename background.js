@@ -1554,6 +1554,33 @@ async function handleGetUpdateStatus() {
   return { ok: true, update };
 }
 
+// --- Guide de démarrage (popup) ---
+// { done, step } : guide terminé ou passé, et étape où l'utilisateur s'est
+// arrêté (le popup se ferme dès qu'on va sur Moxfield : le guide reprend là
+// à sa réouverture). Propre à ce PC, pas synchronisé.
+const ONBOARDING_KEY = "moxfieldStockManagerOnboarding";
+
+// Premier appel : une installation qui a déjà un stock ou des decks montés
+// (extension mise à jour, ou état venu de Drive) n'a pas besoin du guide ;
+// le constat est enregistré, pour qu'une nouvelle installation garde son
+// guide une fois la collection récupérée.
+async function handleGetOnboarding() {
+  const data = await chrome.storage.local.get(ONBOARDING_KEY);
+  let record = data[ONBOARDING_KEY];
+  if (!record) {
+    const { stock, builtDecks } = await getState();
+    record = { done: Object.keys(stock).length > 0 || Object.keys(builtDecks).length > 0, step: 0 };
+    await chrome.storage.local.set({ [ONBOARDING_KEY]: record });
+  }
+  return { ok: true, done: Boolean(record.done), step: Number(record.step) || 0 };
+}
+
+async function handleSetOnboarding({ done, step }) {
+  const record = { done: Boolean(done), step: Math.max(0, Number(step) || 0) };
+  await chrome.storage.local.set({ [ONBOARDING_KEY]: record });
+  return { ok: true, ...record };
+}
+
 // Version affichée en bas du popup : numéro du manifest, et commit du clone
 // quand il y en a un (deux PC au même numéro peuvent différer entre deux
 // livraisons).
@@ -1609,6 +1636,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, state: { stock, builtDecks } });
           break;
         }
+        case "GET_ONBOARDING":
+          sendResponse(await handleGetOnboarding());
+          break;
+        case "SET_ONBOARDING":
+          sendResponse(await handleSetOnboarding(msg.payload || {}));
+          break;
         case "GET_VERSION_INFO":
           sendResponse(await handleGetVersionInfo());
           break;

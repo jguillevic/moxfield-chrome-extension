@@ -424,6 +424,47 @@ button:focus-visible,
   cursor: help;
 }
 
+/* Guide de démarrage. */
+.onboarding-card {
+  border-color: var(--accent);
+}
+
+.onboarding-card ul {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.onboarding-card li {
+  margin-bottom: 4px;
+}
+
+.onboarding-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.onboarding-status.done {
+  color: var(--ok);
+}
+
+/* Pastilles du bouton de la page d'un deck, reproduites dans la légende. */
+.legend-badge {
+  display: inline-block;
+  min-width: 15px;
+  padding: 0 5px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  background: #c0392b;
+}
+
+.legend-badge.ok {
+  background: #1f8a4c;
+}
+
 /* Version de l'extension, en bas du popup. */
 .app-footer {
   text-align: center;

@@ -22,6 +22,17 @@
     <p class="hint" data-i18n="updateHowTo"></p>
     <a id="update-link" href="https://github.com/jguillevic/moxfield-chrome-extension" target="_blank" data-i18n="updateSeeChanges"></a>
   </section>
+  <!-- Guide de démarrage : première installation, ou rejoué depuis le bas du popup. -->
+  <section class="card onboarding-card" id="onboarding" hidden>
+    <p class="hint" id="onboarding-progress"></p>
+    <h2 id="onboarding-title"></h2>
+    <div id="onboarding-body"></div>
+    <div class="actions">
+      <button id="onboarding-previous" data-i18n="onboardingPrevious"></button>
+      <button id="onboarding-next" class="primary"></button>
+      <button id="onboarding-skip" class="ghost" data-i18n="onboardingSkip"></button>
+    </div>
+  </section>
   <div class="stats">
     <div class="stat">
       <span class="stat-value" id="stock-owned">0</span>
@@ -197,6 +208,7 @@
   <!-- Version de l'extension (manifest) et commit du clone. -->
   <footer class="app-footer">
     <a id="version-link" href="https://github.com/jguillevic/moxfield-chrome-extension" target="_blank"></a>
+    · <a id="onboarding-replay" href="#" data-i18n="onboardingReplay"></a>
   </footer>
 
   <script src="i18n.js"></script>

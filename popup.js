@@ -256,8 +256,13 @@ function renderStock(state, filter, onlyInDecks) {
   }
 }
 
+// Dernier état lu, pour le guide de démarrage (cf. renderOnboarding).
+let lastState = null;
+
 async function refresh() {
   const state = await loadState();
+  lastState = state;
+  renderOnboarding();
   const filter = document.getElementById("stock-filter").value;
   const onlyInDecks = document.getElementById("stock-only-in-decks").checked;
   renderBuiltDecks(state);
@@ -647,6 +652,148 @@ async function renderUpdate() {
   document.getElementById("update-link").href = update.compareUrl;
 }
 
+// --- Guide de démarrage ---
+// Affiché à la première installation (cf. handleGetOnboarding dans
+// background.js) et rejouable depuis le bas du popup. Chaque étape montre où
+// en est vraiment l'utilisateur (collection récupérée, deck monté).
+let onboarding = { done: true, step: 0 };
+
+function onboardingParagraph(key, ...subs) {
+  const p = document.createElement("p");
+  p.className = "hint";
+  p.textContent = t(key, ...subs);
+  return p;
+}
+
+function onboardingStatus(done, text) {
+  const p = document.createElement("p");
+  p.className = "onboarding-status" + (done ? " done" : "");
+  p.textContent = (done ? "✓ " : "") + text;
+  return p;
+}
+
+// items : textes, ou [classe de pastille, contenu de la pastille, texte].
+function onboardingList(items) {
+  const ul = document.createElement("ul");
+  for (const item of items) {
+    const li = document.createElement("li");
+    if (Array.isArray(item)) {
+      const badge = document.createElement("span");
+      badge.className = `legend-badge ${item[0]}`;
+      badge.textContent = item[1];
+      li.append(badge, ` ${item[2]}`);
+    } else {
+      li.textContent = item;
+    }
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+const ONBOARDING_STEPS = [
+  {
+    title: "onboardingCollectionTitle",
+    body() {
+      const cardCount = lastState ? Object.keys(lastState.stock).length : 0;
+      const nodes = [onboardingParagraph("onboardingCollectionText")];
+      if (cardCount > 0) {
+        nodes.push(onboardingStatus(true, t("onboardingCollectionDone", tn("distinctCards", cardCount))));
+        return nodes;
+      }
+      const status = onboardingStatus(false, t("collectionNeverFetched"));
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const signIn = document.createElement("a");
+      signIn.className = "button";
+      signIn.href = "https://moxfield.com/account/signin";
+      signIn.target = "_blank";
+      signIn.textContent = t("collectionSignIn");
+      const fetchBtn = actionButton(t("onboardingFetch"), "", async () => {
+        fetchBtn.disabled = true;
+        status.textContent = t("collectionFetching");
+        const res = await send("COLLECTION_FETCH_NOW");
+        fetchBtn.disabled = false;
+        if (res && res.ok) refresh();
+        else status.textContent = (res && res.error) || t("unknownError");
+        renderCollection();
+      });
+      fetchBtn.id = "onboarding-fetch";
+      actions.append(signIn, fetchBtn);
+      nodes.push(status, actions);
+      return nodes;
+    },
+  },
+  {
+    title: "onboardingButtonsTitle",
+    body: () => [
+      onboardingParagraph("onboardingButtonsText"),
+      onboardingList([
+        t("onboardingLegendBuild"),
+        ["ok", "OK", t("onboardingLegendOk")],
+        ["", "3", t("onboardingLegendBlocked")],
+        t("onboardingLegendBuilt"),
+        t("onboardingLegendEditions"),
+      ]),
+    ],
+  },
+  {
+    title: "onboardingBuildTitle",
+    body() {
+      const deckCount = lastState ? Object.keys(lastState.builtDecks).length : 0;
+      return [
+        onboardingParagraph("onboardingBuildText"),
+        deckCount > 0
+          ? onboardingStatus(true, t("onboardingBuildDone", tn("builtDecksCount", deckCount)))
+          : onboardingStatus(false, t("builtDecksNone")),
+      ];
+    },
+  },
+  {
+    title: "onboardingMoreTitle",
+    body: () => [onboardingList([t("onboardingMoreSync"), t("onboardingMoreHistory"), t("onboardingMoreProxies"), t("onboardingMoreReplay")])],
+  },
+];
+
+function renderOnboarding() {
+  const card = document.getElementById("onboarding");
+  card.hidden = onboarding.done;
+  if (onboarding.done) return;
+  const index = Math.min(onboarding.step, ONBOARDING_STEPS.length - 1);
+  const step = ONBOARDING_STEPS[index];
+  const last = index === ONBOARDING_STEPS.length - 1;
+  document.getElementById("onboarding-progress").textContent = t("onboardingProgress", index + 1, ONBOARDING_STEPS.length);
+  document.getElementById("onboarding-title").textContent = t(step.title);
+  document.getElementById("onboarding-body").replaceChildren(...step.body());
+  document.getElementById("onboarding-previous").hidden = index === 0;
+  document.getElementById("onboarding-next").textContent = t(last ? "onboardingFinish" : "onboardingNext");
+  document.getElementById("onboarding-skip").hidden = last;
+}
+
+async function setOnboarding(done, step) {
+  onboarding = { done, step };
+  renderOnboarding();
+  await send("SET_ONBOARDING", onboarding);
+}
+
+async function loadOnboarding() {
+  const res = await send("GET_ONBOARDING");
+  // Pas de réponse exploitable : pas de guide plutôt qu'un guide à tort.
+  onboarding = res && res.done === false ? { done: false, step: Number(res.step) || 0 } : { done: true, step: 0 };
+  renderOnboarding();
+}
+
+document.getElementById("onboarding-previous").addEventListener("click", () => setOnboarding(false, Math.max(0, onboarding.step - 1)));
+document.getElementById("onboarding-next").addEventListener("click", () => {
+  const last = onboarding.step >= ONBOARDING_STEPS.length - 1;
+  setOnboarding(last, last ? 0 : onboarding.step + 1);
+});
+document.getElementById("onboarding-skip").addEventListener("click", () => setOnboarding(true, 0));
+document.getElementById("onboarding-replay").addEventListener("click", (e) => {
+  e.preventDefault();
+  setOnboarding(false, 0);
+  window.scrollTo(0, 0);
+});
+
 async function renderVersion() {
   const res = await send("GET_VERSION_INFO");
   if (!res || !res.ok) return;
@@ -658,6 +805,7 @@ async function renderVersion() {
 refresh();
 renderUpdate();
 renderVersion();
+loadOnboarding();
 renderCollection();
 renderSync().then(() => {
   if (syncMeta.enabled) send("SYNC_NOW"); // récupère tout de suite les changements d'un autre PC
