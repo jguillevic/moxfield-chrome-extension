@@ -54,6 +54,8 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- Guide de démarrage dans le popup (4 étapes, état réel de l'utilisateur,
+  rejouable) — rang 1 de l'étude de marché — novembre 2026.
 - Notification d'une nouvelle version sur GitHub : pastille sur l'icône et
   carte dans le popup, avec les modifications — novembre 2026.
 - Numéro de version géré (0.3.0) et affiché en bas du popup avec le commit

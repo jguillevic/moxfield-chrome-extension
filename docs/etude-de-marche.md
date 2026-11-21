@@ -87,7 +87,7 @@ issue de cette étude.
 
 | Rang | Fonctionnalité | Attrait | Simplicité | Score | Origine | Pourquoi ces notes |
 |---|---|---|---|---|---|---|
-| 1 | **Premier lancement guidé** : connexion à Moxfield, première récupération, premier deck monté, explication des pastilles | 4 | 4 | **16** | nouveau | Sans lui, un nouvel utilisateur ne comprend ni le bouton ni la pastille (confusion constatée entre « montable » et « monté ») ; surtout de l'affichage |
+| 1 | **Premier lancement guidé** (livré, version 0.4.0) : connexion à Moxfield, première récupération, premier deck monté, explication des pastilles | 4 | 4 | **16** | nouveau | Sans lui, un nouvel utilisateur ne comprend ni le bouton ni la pastille (confusion constatée entre « montable » et « monté ») ; surtout de l'affichage |
 | 2 | **Publication sur le Chrome Web Store** : installation en un clic, mises à jour automatiques | 5 | 3 | **15** | nouveau | Condition pour avoir des utilisateurs ; préparation déjà faite une fois (commit `fc46bc4`), à reprendre ; relecture de Google et compte Google Cloud à prévoir |
 | 3 | **Faisabilité de tous mes decks** dans le popup : monté, montable, nombre de cartes bloquantes | 5 | 3 | **15** | ROADMAP n°2 | La vue d'ensemble est l'atout principal de Collection Lens ; l'API des decks est déjà lue pour un deck |
 | 4 | **Liste de cartes à sortir / ranger** avec cases à cocher, triée, au montage et au démontage | 4 | 3 | **12** | ROADMAP n°4 | Le geste physique que ManaBox et Grimoria accompagnent ; sert à chaque montage |

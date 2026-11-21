@@ -67,6 +67,18 @@ données restent sur ce PC).
 
 ## Utilisation
 
+**Guide de démarrage.** À la première installation, le popup affiche un
+guide en 4 étapes : récupérer ta collection Moxfield (avec le lien de
+connexion et le bouton de récupération), repérer les boutons sur la page
+d'un deck (avec la légende des pastilles : « OK » vert = montable, nombre
+rouge = cartes bloquantes, rond coché vert = monté), monter ton premier
+deck, et les fonctions pour aller plus loin. Chaque étape indique où tu en
+es (collection récupérée, decks montés). Le guide reprend à l'étape où tu
+t'étais arrêté quand tu rouvres le popup, se ferme avec **« Terminer »** ou
+**« Passer le guide »**, et se rejoue à tout moment avec **« Revoir le
+guide de démarrage »**, en bas du popup. Il n'est pas proposé à une
+installation qui a déjà un stock.
+
 ### 1. Récupérer ta collection (initialiser le stock)
 
 **Automatiquement** : il suffit d'être connecté à Moxfield dans le navigateur.
@@ -692,6 +704,8 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   compris), chiffres clés (exemplaires possédés, libres, dans des decks),
   affichage du stock (tableau limité, filtre, total possédé d'une carte),
   changement de version d'une carte (badge « Modifié », historique),
+  guide de démarrage (étapes, reprise, fin, rejeu, état de l'utilisateur,
+  récupération de la collection, anglais),
   proxies des decks montés (nombre, impression, remplacement proposé ou
   refusé, jamais comptés dans les decks), sauvegarde Drive (lien vers les
   paramètres de Drive, téléchargement de la sauvegarde et d'une version),
