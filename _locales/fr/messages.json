@@ -1047,7 +1047,7 @@
     "message": "Mes decks"
   },
   "decksHint": {
-    "message": "Chaque deck que tu ouvres sur Moxfield s'ajoute ici, avec les decks montés : vois d'un coup d'œil ce que tu peux monter avec ton stock libre. Tu peux aussi coller l'adresse d'un deck."
+    "message": "Les decks que tu gardes avec le cœur ♥ (en bas à gauche de la page d'un deck Moxfield), avec les decks montés : vois d'un coup d'œil ce que tu peux monter avec ton stock libre. Tu peux aussi coller l'adresse d'un deck."
   },
   "decksAddPlaceholder": {
     "message": "Adresse d'un deck Moxfield"
@@ -1062,7 +1062,7 @@
     "message": "Lecture des decks sur Moxfield…"
   },
   "decksNone": {
-    "message": "Aucun deck pour le moment : ouvre un de tes decks sur Moxfield, ou colle son adresse ci-dessus."
+    "message": "Aucun deck pour le moment : clique sur le cœur ♥ d'un deck sur Moxfield, ou colle son adresse ci-dessus."
   },
   "decksStatusBuilt": {
     "message": "Monté"
@@ -1090,5 +1090,17 @@
   },
   "decksInvalidUrl": {
     "message": "Adresse de deck Moxfield non reconnue (ex. https://moxfield.com/decks/…)."
+  },
+  "likeAdd": {
+    "message": "Garder ce deck dans « Mes decks » (popup de l'extension), pour le monter plus tard"
+  },
+  "likeRemove": {
+    "message": "Retirer ce deck de « Mes decks »"
+  },
+  "likeAdded": {
+    "message": "Deck ajouté à « Mes decks »."
+  },
+  "likeRemoved": {
+    "message": "Deck retiré de « Mes decks »."
   }
 }

@@ -1047,7 +1047,7 @@
     "message": "My decks"
   },
   "decksHint": {
-    "message": "Every deck you open on Moxfield is added here, along with built decks: see at a glance what you can build with your free stock. You can also paste a deck's address."
+    "message": "The decks you keep with the heart ♥ (bottom left of a Moxfield deck page), along with built decks: see at a glance what you can build with your free stock. You can also paste a deck's address."
   },
   "decksAddPlaceholder": {
     "message": "Moxfield deck address"
@@ -1062,7 +1062,7 @@
     "message": "Reading decks on Moxfield…"
   },
   "decksNone": {
-    "message": "No decks yet: open one of your decks on Moxfield, or paste its address above."
+    "message": "No decks yet: click the heart ♥ of a deck on Moxfield, or paste its address above."
   },
   "decksStatusBuilt": {
     "message": "Built"
@@ -1090,5 +1090,17 @@
   },
   "decksInvalidUrl": {
     "message": "Moxfield deck address not recognized (e.g. https://moxfield.com/decks/…)."
+  },
+  "likeAdd": {
+    "message": "Keep this deck in “My decks” (extension popup), to build it later"
+  },
+  "likeRemove": {
+    "message": "Remove this deck from “My decks”"
+  },
+  "likeAdded": {
+    "message": "Deck added to “My decks”."
+  },
+  "likeRemoved": {
+    "message": "Deck removed from “My decks”."
   }
 }

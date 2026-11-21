@@ -363,10 +363,14 @@ contenu du CSV. Même effet qu'une récupération automatique.
   détail au survol, comme sur le bouton de la page du deck), **Monté**, ou
   **À vérifier** (pas encore lu). Les montables d'abord, puis les moins
   bloqués ; les montés à la fin.
-- La liste se remplit toute seule : **chaque deck que tu ouvres sur
-  Moxfield y est ajouté**, et les decks montés y sont d'office. Tu peux
-  aussi **coller l'adresse d'un deck** (`https://moxfield.com/decks/…`) et
-  cliquer sur **« Ajouter »**. Le **×** retire un deck de la liste.
+- Pour y mettre un deck : sur sa page Moxfield, clique sur le **cœur ♥**
+  de l'extension (le premier des boutons, en bas à gauche ou dans la barre
+  d'actions de Moxfield). Cœur **plein violet** = deck gardé ; un second
+  clic le retire. Ce n'est pas le « j'aime » de Moxfield : rien n'est
+  envoyé à Moxfield, personne d'autre ne le voit. Les decks montés y sont
+  d'office. Tu peux aussi **coller l'adresse d'un deck**
+  (`https://moxfield.com/decks/…`) et cliquer sur **« Ajouter »**. Le
+  **×** retire un deck de la liste.
 - Chaque deck est lu sur Moxfield à l'ouverture de la section s'il ne l'a
   pas été depuis 6 heures (bouton **« Actualiser »** pour tout relire). La
   faisabilité est recalculée avec ton stock du moment, sans relire
@@ -543,8 +547,7 @@ en cas de conflit : rien ne s'y perd).
 ## Limites connues
 
 - **Mes decks** : Moxfield n'a pas d'appel connu qui liste les decks d'un
-  compte, donc un deck jamais ouvert (ni collé) n'y figure pas. Les decks
-  des autres que tu ouvres y sont aussi ajoutés (retire-les avec ×). Il faut
+  compte : un deck n'y entre que par le cœur ou une adresse collée. Il faut
   être connecté à Moxfield pour lire les decks. La « version différente »
   y est déduite de l'édition du deck et de celle de ta collection, et non
   du repère de Moxfield sur la page : dans de rares cas, le chiffre peut
@@ -732,7 +735,8 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   synchronisation), `tests/popup.test.js` (tri, relecture à l'ouverture,
   ajout, retrait), `tests/deck-checks.test.js` (`cardsFromDeckApi`),
   `tests/moxfield-collection.test.js` (`deckCardList`) et
-  `tests/content-deck.test.js` (deck ouvert ajouté).
+  `tests/content-deck.test.js` (cœur : ajout, retrait, état suivi depuis
+  le popup, pas d'ajout sans clic).
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
   de test avec un faux `chrome`) — sections « Collection Moxfield » et
   « Historique » et « Rapports d'erreurs » (lien de connexion à Moxfield

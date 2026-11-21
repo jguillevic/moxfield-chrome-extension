@@ -442,7 +442,7 @@
   async function getDeckContext(cards, deckId = null, send = safeSendMessage) {
     const names = cards.map((c) => c.name);
     const res = await send({ type: "GET_DECK_CONTEXT", payload: { deckId, names } });
-    return res && res.ok ? { stock: res.stock || {}, builtDecks: res.builtDecks || {} } : null;
+    return res && res.ok ? { stock: res.stock || {}, builtDecks: res.builtDecks || {}, followed: Boolean(res.followed) } : null;
   }
 
   async function getStockMap(cards) {
@@ -1033,6 +1033,7 @@
       // contrôle en fond afficherait son toast toutes les 3 secondes.
       const context = await getDeckContext(detection.cards, deckId, (m) => chrome.runtime.sendMessage(m));
       if (!context || deckId !== currentDeckId) return;
+      setLiked(context.followed); // ajouté ou retiré depuis le popup
       const stockMap = context.stock;
       const deck = context.builtDecks[deckId];
       // Filet de sécurité : l'état « monté » du bouton suit celui qu'on vient
@@ -1142,6 +1143,15 @@
       path: "M58.9 42.1c3-6.1 9.6-9.6 16.3-8.7L320 64 564.8 33.4c6.7-.8 13.3 2.7 16.3 8.7l41.7 83.4c9 17.9-.6 39.6-19.8 45.1L439.6 217.3c-13.9 4-28.8-1.9-36.2-14.3L320 64 236.6 203c-7.4 12.4-22.3 18.3-36.2 14.3L37.1 170.6c-19.3-5.5-28.8-27.2-19.8-45.1L58.9 42.1zM321.1 128l54.9 91.4c14.9 24.8 44.6 36.6 72.5 28.6L576 211.6l0 167c0 22-15 41.2-36.4 46.6l-204.1 51c-10.2 2.6-20.9 2.6-31 0l-204.1-51C79 419.7 64 400.5 64 378.5l0-167L191.6 248c27.8 8 57.6-3.8 72.5-28.6L318.9 128l2.2 0z",
     },
     // arrows-rotate
+    // Cœur vide / plein (Font Awesome Free 6.7.2, heart regular / solid).
+    like: {
+      viewBox: "0 0 512 512",
+      path: "M225.8 468.2l-2.5-2.3L48.1 303.2C17.4 274.7 0 234.7 0 192.8l0-3.3c0-70.4 50-130.8 119.2-144C158.6 37.9 198.9 47 231 69.6c9 6.4 17.4 13.8 25 22.3c4.2-4.8 8.7-9.2 13.5-13.3c3.7-3.2 7.5-6.2 11.5-9c0 0 0 0 0 0C313.1 47 353.4 37.9 392.8 45.4C462 58.6 512 119.1 512 189.5l0 3.3c0 41.9-17.4 81.9-48.1 110.4L288.7 465.9l-2.5 2.3c-8.2 7.6-19 11.9-30.2 11.9s-22-4.2-30.2-11.9zM239.1 145c-.4-.3-.7-.7-1-1.1l-17.8-20-.1-.1s0 0 0 0c-23.1-25.9-58-37.7-92-31.2C81.6 101.5 48 142.1 48 189.5l0 3.3c0 28.5 11.9 55.8 32.8 75.2L256 430.7 431.2 268c20.9-19.4 32.8-46.7 32.8-75.2l0-3.3c0-47.3-33.6-88-80.1-96.9c-34-6.5-68.9 5.4-92 31.2c0 0 0 0-.1 .1s0 0-.1 .1l-17.8 20c-.3 .4-.7 .7-1 1.1c-4.5 4.5-10.6 7-16.9 7s-12.4-2.5-16.9-7z",
+    },
+    liked: {
+      viewBox: "0 0 512 512",
+      path: "M47.6 300.4L228.3 469.1c7.5 7 17.4 10.9 27.7 10.9s20.2-3.9 27.7-10.9L464.4 300.4c30.4-28.3 47.6-68 47.6-109.5l0-5.8c0-69.9-50.5-129.5-119.4-141C347 36.5 300.6 51.4 268 84L256 96 244 84c-32.6-32.6-79-47.5-124.6-39.9C50.5 55.6 0 115.2 0 185.1l0 5.8c0 41.5 17.2 81.2 47.6 109.5z",
+    },
     editions: {
       viewBox: "0 0 512 512",
       path: "M105.1 202.6c7.7-21.8 20.2-42.3 37.8-59.8c62.5-62.5 163.8-62.5 226.3 0L386.3 160 352 160c-17.7 0-32 14.3-32 32s14.3 32 32 32l111.5 0c0 0 0 0 0 0l.4 0c17.7 0 32-14.3 32-32l0-112c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 35.2L414.4 97.6c-87.5-87.5-229.3-87.5-316.8 0C73.2 122 55.6 150.7 44.8 181.4c-5.9 16.7 2.9 34.9 19.5 40.8s34.9-2.9 40.8-19.5zM39 289.3c-5 1.5-9.8 4.2-13.7 8.2c-4 4-6.7 8.8-8.1 14c-.3 1.2-.6 2.5-.8 3.8c-.3 1.7-.4 3.4-.4 5.1L16 432c0 17.7 14.3 32 32 32s32-14.3 32-32l0-35.1 17.6 17.5c0 0 0 0 0 0c87.5 87.4 229.3 87.4 316.7 0c24.4-24.4 42.1-53.1 52.9-83.8c5.9-16.7-2.9-34.9-19.5-40.8s-34.9 2.9-40.8 19.5c-7.7 21.8-20.2 42.3-37.8 59.8c-62.5 62.5-163.8 62.5-226.3 0l-.1-.1L125.6 352l34.4 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L48.4 288c-1.6 0-3.2 .1-4.8 .3s-3.1 .5-4.6 1z",
@@ -1151,6 +1161,45 @@
       path: "M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z",
     },
   };
+
+  // Cœur (à gauche des autres boutons, cf. ensureButton) : garder ce deck
+  // dans « Mes decks » du popup, pour le monter plus tard. Propre à
+  // l'extension : rien n'est envoyé à Moxfield, ce n'est pas son « j'aime »
+  // (public). Remplace l'ajout automatique de chaque deck ouvert, qui
+  // ajoutait aussi les decks des autres consultés en passant.
+  let likeBtn = null;
+  let btnLiked = false;
+
+  function setLiked(liked) {
+    if (liked === btnLiked) return; // pas de redessin inutile (infobulle)
+    btnLiked = liked;
+    renderLikeButton();
+  }
+
+  function renderLikeButton() {
+    if (!likeBtn) return;
+    likeBtn.replaceChildren(createBarIcon(btnLiked ? "liked" : "like"));
+    const label = t(btnLiked ? "likeRemove" : "likeAdd");
+    likeBtn.title = label;
+    likeBtn.setAttribute("aria-label", label);
+    likeBtn.setAttribute("aria-pressed", String(btnLiked));
+    likeBtn.classList.toggle("msm-liked", btnLiked);
+  }
+
+  async function toggleLike() {
+    const deckId = currentDeckId;
+    if (!deckId) return;
+    const liked = !btnLiked;
+    const res = await safeSendMessage({ type: liked ? "FOLLOW_DECK" : "UNFOLLOW_DECK", payload: { deckId, name: getDeckName() } });
+    if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
+    if (!res.ok) {
+      toast(t("errorPrefix", res.error || t("unknownError")), true);
+      return;
+    }
+    if (deckId !== currentDeckId) return;
+    setLiked(liked);
+    toast(t(liked ? "likeAdded" : "likeRemoved"));
+  }
 
   // Bouton « Utiliser mes éditions » (à côté de « Monter », cf. ensureButton)
   // et cartes qu'il changerait (cf. ownedEditionNames).
@@ -1236,12 +1285,14 @@
   // Aussi sans bouton (barre d'actions pas encore affichée) : l'état est
   // prêt quand elle apparaît.
   async function refreshButtonState(deckId) {
-    const deck = await getBuiltDeck(deckId);
+    const context = await getDeckContext([], deckId);
     // Passage à un autre deck pendant la lecture (navigation dans Moxfield) :
     // cette réponse est celle de l'ancien deck, elle ne doit pas écraser
     // l'état du nouveau (constaté en vrai : icône « monté » sur un deck qui
     // ne l'était pas).
     if (deckId !== currentDeckId) return btnBuilt;
+    const deck = (context && context.builtDecks[deckId]) || null;
+    if (context) setLiked(context.followed);
     btnBuilt = Boolean(deck);
     btnProxies = deck ? proxyTotal(deck.cards) : 0;
     if (!btnBuilt) btnOutdated = false;
@@ -1520,14 +1571,19 @@
   }
 
   // « Utiliser mes éditions » juste à gauche de notre bouton.
+  // Ordre : cœur, « Utiliser mes éditions », « Monter ».
+  function isInOrder() {
+    return Boolean(editionsBtn && likeBtn && btn.previousElementSibling === editionsBtn && editionsBtn.previousElementSibling === likeBtn);
+  }
+
   function isButtonWellPlaced(bar) {
-    if (btn.parentElement !== bar || !editionsBtn || btn.previousElementSibling !== editionsBtn) return false;
+    if (btn.parentElement !== bar || !isInOrder()) return false;
     const anchor = findBarAnchor(bar);
-    return anchor ? editionsBtn.previousElementSibling === anchor : true;
+    return anchor ? likeBtn.previousElementSibling === anchor : true;
   }
 
   function isFloatingBarUpToDate() {
-    return Boolean(floatingBar && floatingBar.isConnected && btn && btn.parentElement === floatingBar && editionsBtn && btn.previousElementSibling === editionsBtn);
+    return Boolean(floatingBar && floatingBar.isConnected && btn && btn.parentElement === floatingBar && isInOrder());
   }
 
   function ensureButton() {
@@ -1572,6 +1628,19 @@
     });
     btn.before(editionsBtn);
     renderEditionsButton();
+    likeBtn = document.createElement("a");
+    likeBtn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn msm-like-bar-btn";
+    likeBtn.setAttribute("role", "button");
+    likeBtn.setAttribute("tabindex", "0");
+    likeBtn.addEventListener("click", toggleLike);
+    likeBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleLike();
+      }
+    });
+    editionsBtn.before(likeBtn);
+    renderLikeButton();
     btn.addEventListener("click", () => openOverlay());
     renderButton();
     return btn;
@@ -1586,20 +1655,13 @@
       editionsBtn.remove();
       editionsBtn = null;
     }
+    if (likeBtn) {
+      likeBtn.remove();
+      likeBtn = null;
+    }
     if (floatingBar) {
       floatingBar.remove();
       floatingBar = null;
-    }
-  }
-
-  // Deck ouvert : ajouté à « Mes decks » du popup (cf. handleFollowDeck dans
-  // background.js). En fond, silencieux après un rechargement de
-  // l'extension.
-  function followDeck(deckId) {
-    try {
-      chrome.runtime.sendMessage({ type: "FOLLOW_DECK", payload: { deckId, name: getDeckName() } }).catch(() => {});
-    } catch (e) {
-      // contexte d'extension invalidé
     }
   }
 
@@ -1612,7 +1674,8 @@
       ensureButton();
       if (deckId !== currentDeckId) {
         currentDeckId = deckId;
-        followDeck(deckId);
+        btnLiked = false;
+        renderLikeButton();
         btnEditionNames = [];
         renderEditionsButton();
         btnOutdated = false;

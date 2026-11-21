@@ -847,7 +847,7 @@ test("page de deck : seulement le stock de ses cartes et de son montage, decks m
 test("page de deck : sans deck ni carte, aucun stock envoyé", async () => {
   const bg = loadBackground(SOL_RING_STOCK());
   const res = await bg.send({ type: "GET_DECK_CONTEXT", payload: { deckId: "inconnu", names: [] } });
-  assert.deepEqual(res, { ok: true, stock: {}, builtDecks: {} });
+  assert.deepEqual(res, { ok: true, stock: {}, builtDecks: {}, followed: false });
 });
 
 test("collection de 50 000 cartes : import, historique et page de deck restent légers", async () => {
@@ -2173,4 +2173,14 @@ test("Mes decks : retirer un deck suivi ; liste synchronisée via Drive et gard�
   // Relue, avec une entrée invalide écartée.
   doc.state.followedDecks["../x"] = { name: "invalide" };
   assert.deepEqual(Object.keys(plain(bg.context.parseDoc(doc).state.followedDecks)), ["d2"]);
+});
+
+test("Mes decks : cœur sur un deck monté, il reste dans la liste une fois démonté ; état transmis à la page", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  assert.equal((await bg.send({ type: "GET_DECK_CONTEXT", payload: { deckId: "a", names: [] } })).followed, false);
+  assert.equal((await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "a", name: "Deck a" } })).changed, true);
+  assert.equal((await bg.send({ type: "GET_DECK_CONTEXT", payload: { deckId: "a", names: [] } })).followed, true);
+  await unbuild(bg, "a");
+  assert.deepEqual((await decksOf(bg)).map((d) => [d.deckId, d.status]), [["a", "unknown"]]);
 });

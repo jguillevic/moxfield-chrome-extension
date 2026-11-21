@@ -71,7 +71,7 @@ function openDeckPage(state, lang = "fr", handle = null, format = "Commander", b
       page.state = { ...page.state, stock };
       for (const fn of storageListeners) fn({ [STATE_KEY]: { newValue: page.state } }, "local");
     },
-    button: () => win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)"),
+    button: () => win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)"),
     close: () => win.close(),
     sent: [],
     // Réponse imposée à un message (ex. erreur levée), sinon comportement normal.
@@ -91,7 +91,7 @@ function openDeckPage(state, lang = "fr", handle = null, format = "Commander", b
     for (const [key, c] of Object.entries(page.state.stock)) {
       if (wanted.has(key) || wanted.has(key.split(" // ")[0])) stock[key] = c;
     }
-    return { ok: true, stock, builtDecks: page.state.builtDecks };
+    return { ok: true, stock, builtDecks: page.state.builtDecks, followed: Boolean(deckId && (page.state.followedDecks || {})[deckId]) };
   }
   win.chrome = {
     i18n: { getMessage: fakeGetMessage(lang) },
@@ -170,7 +170,7 @@ test("barre d'actions affichée plus tard : boutons déplacés dans la barre, pu
   await waitFor(() => page.button() && page.button().closest(".msm-test-bar"), 2000, "bouton dans la barre");
   assert.equal(doc.querySelector(".msm-floating-bar"), null, "bandeau retiré");
   assert.match(buttonText(page), /^Monté physiquement/);
-  assert.equal(doc.querySelectorAll(".msm-bar-btn:not(.msm-editions-bar-btn)").length, 1);
+  assert.equal(doc.querySelectorAll(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)").length, 1);
 
   doc.querySelector(".msm-test-bar").remove();
   await waitFor(() => page.button() && page.button().closest(".msm-floating-bar"), 2000, "bouton rendu au bandeau");
@@ -895,9 +895,11 @@ test("éditions de la collection : bouton du ruban juste à gauche de « Monter 
   const page = openBarPage();
   t.after(page.close);
   const button = await waitEditionsButton(page);
-  const buildButton = page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)");
+  const buildButton = page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)");
   assert.equal(button.nextElementSibling, buildButton, "à gauche du bouton de montage");
-  assert.equal(button.previousElementSibling.querySelector("svg").getAttribute("data-icon"), "heart");
+  // Ordre : « j'aime » de Moxfield, notre cœur, nos éditions, « Monter ».
+  assert.ok(button.previousElementSibling.classList.contains("msm-like-bar-btn"), "notre cœur à gauche");
+  assert.equal(button.previousElementSibling.previousElementSibling.querySelector("svg").getAttribute("data-icon"), "heart");
   assert.equal(button.querySelector(".msm-editions-badge").textContent, "1");
   assert.match(button.title, /^Utiliser mes éditions — 1 carte possédée dans une autre édition\n.*Le deck n'est pas monté/);
 });
@@ -907,10 +909,10 @@ test("éditions de la collection : bouton masqué sans carte d'une autre éditio
   t.after(page.close);
   await waitEditionsButton(page);
   // React re-rend la barre : notre bouton de montage disparaît.
-  page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)").remove();
-  await waitFor(() => page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)"), 2000, "bouton recréé");
+  page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)").remove();
+  await waitFor(() => page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)"), 2000, "bouton recréé");
   assert.equal(page.win.document.querySelectorAll(".msm-editions-bar-btn").length, 1, "un seul bouton des éditions");
-  assert.equal(editionsButton(page).nextElementSibling, page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)"));
+  assert.equal(editionsButton(page).nextElementSibling, page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)"));
   // Plus aucune carte d'une autre édition sur la page.
   const marker = page.win.document.querySelector('[id^="collection_pt_"]');
   marker.id = marker.id.replace("collection_pt_", "collection_full_");
@@ -923,7 +925,7 @@ test("éditions de la collection : bouton retiré par un re-rendu de la barre, r
     t.after(page.close);
     (await waitEditionsButton(page)).remove();
     await waitFor(() => editionsShown(page), 2000, "bouton des éditions recréé");
-    const buildButton = page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn)");
+    const buildButton = page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)");
     assert.equal(editionsButton(page).nextElementSibling, buildButton);
   }
 });
@@ -1230,13 +1232,45 @@ test("pastille « montable » sans coche ; deck monté signalé à part, sans pa
   assert.equal(built.button().querySelector(".msm-avail-badge:not(.msm-proxy-badge)"), null, "aucune pastille de faisabilité");
 });
 
-// Vue « Mes decks » du popup : chaque deck ouvert y est ajouté.
-test("deck ouvert : ajouté à « Mes decks », une fois par deck", async (t) => {
+// Vue « Mes decks » du popup : un deck y entre par le cœur du bandeau,
+// plus à l'ouverture (qui ajoutait aussi les decks des autres consultés).
+const likeButton = (page) => page.win.document.querySelector(".msm-like-bar-btn");
+
+test("deck ouvert : pas ajouté à « Mes decks » sans clic sur le cœur", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-  const follows = page.sent.filter((m) => m.type === "FOLLOW_DECK");
-  assert.equal(follows.length, 1);
-  assert.equal(follows[0].payload.deckId, "abc123");
-  assert.equal(typeof follows[0].payload.name, "string");
+  await waitFor(() => likeButton(page), 2000, "cœur affiché");
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  assert.equal(page.sent.filter((m) => m.type === "FOLLOW_DECK").length, 0);
+  assert.equal(likeButton(page).getAttribute("aria-pressed"), "false");
+  assert.match(likeButton(page).title, /^Garder ce deck dans « Mes decks »/);
+});
+
+test("cœur : ajoute le deck à « Mes decks », puis l'en retire", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {}, followedDecks: {} });
+  t.after(page.close);
+  page.handle = (msg) => {
+    if (msg.type === "FOLLOW_DECK") page.state.followedDecks[msg.payload.deckId] = { name: msg.payload.name };
+    if (msg.type === "UNFOLLOW_DECK") delete page.state.followedDecks[msg.payload.deckId];
+    return undefined;
+  };
+  await waitFor(() => likeButton(page), 2000, "cœur affiché");
+  likeButton(page).click();
+  await waitFor(() => likeButton(page).classList.contains("msm-liked"), 2000, "cœur plein");
+  assert.equal(page.sent.find((m) => m.type === "FOLLOW_DECK").payload.deckId, "abc123");
+  assert.match(page.win.document.querySelector(".msm-toast").textContent, /ajouté à « Mes decks »/);
+  assert.match(likeButton(page).title, /^Retirer ce deck/);
+
+  likeButton(page).click();
+  await waitFor(() => !likeButton(page).classList.contains("msm-liked"), 2000, "cœur vide");
+  assert.equal(page.sent.find((m) => m.type === "UNFOLLOW_DECK").payload.deckId, "abc123");
+});
+
+test("cœur : plein à l'ouverture d'un deck déjà gardé, et suit un retrait fait dans le popup", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {}, followedDecks: { abc123: { name: "Deck" } } });
+  t.after(page.close);
+  await waitFor(() => likeButton(page) && likeButton(page).classList.contains("msm-liked"), 2000, "cœur plein");
+  page.state.followedDecks = {};
+  page.setStock(FULL_STOCK); // changement de l'état signalé, comme chrome.storage
+  await waitFor(() => !likeButton(page).classList.contains("msm-liked"), 2000, "cœur vidé");
 });

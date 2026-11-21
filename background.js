@@ -1088,7 +1088,8 @@ async function handleGetDeckContext({ deckId, names }) {
   for (const [key, c] of Object.entries(state.stock)) {
     if (wanted.has(key) || (key.includes(" // ") && wanted.has(key.split(" // ")[0]))) stock[key] = c;
   }
-  return { ok: true, stock, builtDecks: state.builtDecks };
+  // followed : deck dans « Mes decks » (cœur du bandeau de la page).
+  return { ok: true, stock, builtDecks: state.builtDecks, followed: Boolean(deckId && state.followedDecks[deckId]) };
 }
 
 // Historique pour le popup, avec les libellés calculés ici.
@@ -1642,14 +1643,15 @@ async function followDeck(deckId, name) {
   return true;
 }
 
-// Visite de la page d'un deck : ajouté s'il n'est pas déjà suivi, jamais
-// renommé — le nom lu sur la page (cf. getDeckName dans content-deck.js)
-// n'est pas toujours celui du deck, et le corriger à chaque visite
-// écrirait l'état (donc Drive) en boucle avec le nom lu par l'API.
+// Cœur de la page d'un deck (cf. toggleLike dans content-deck.js) : deck
+// ajouté à « Mes decks », même monté (il y reste une fois démonté). Déjà
+// suivi : jamais renommé — le nom lu sur la page (cf. getDeckName) n'est
+// pas toujours celui du deck, et le corriger écrirait l'état (donc Drive)
+// en concurrence avec le nom lu par l'API.
 async function handleFollowDeck({ deckId, name }) {
   if (!isDeckId(deckId)) return { ok: false, code: "invalid-deck" };
   const state = await getState();
-  if (state.followedDecks[deckId] || state.builtDecks[deckId]) return { ok: true, changed: false };
+  if (state.followedDecks[deckId]) return { ok: true, changed: false };
   return { ok: true, changed: await followDeck(deckId, typeof name === "string" ? name.trim().slice(0, 200) : "") };
 }
 

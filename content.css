@@ -150,6 +150,16 @@
   background: #2f6fd6;
 }
 
+/* Cœur : deck gardé dans « Mes decks » (couleur de l'extension, pour ne pas
+   le confondre avec le « j'aime » blanc de Moxfield). */
+.msm-like-bar-btn {
+  margin-right: 10px;
+}
+
+.msm-bar-btn.msm-liked {
+  color: #b9a9ff !important;
+}
+
 .msm-editions-bar-btn {
   margin-right: 10px;
 }
