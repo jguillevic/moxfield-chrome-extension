@@ -142,6 +142,9 @@ function loadBackground(initialState, options = {}) {
       if (file === undefined) throw new TypeError("Failed to fetch"); // comme Chrome pour un fichier absent
       return new Response(file);
     }
+    if (url.startsWith("https://raw.githubusercontent.com/")) {
+      return new Response(JSON.stringify({ version: options.githubVersion || "9.9.9" }));
+    }
     if (url.startsWith("https://api.github.com/")) {
       github.calls.push(url);
       if (!options.github) throw new Error(`appel GitHub inattendu : ${url}`);
@@ -2000,6 +2003,7 @@ test("nouvelle version sur GitHub : pastille sur l'icône et détail pour le pop
     count: 1,
     commits: ["Add something"],
     compareUrl: `https://github.com/jguillevic/moxfield-chrome-extension/compare/${LOCAL_SHA.slice(0, 12)}...main`,
+    latestVersion: "9.9.9",
   });
   assert.equal(bg.github.calls.length, 1, "constat récent : le popup ne redemande pas à GitHub");
 });
@@ -2031,4 +2035,16 @@ test("nouvelle version : pastille retirée après le git pull et le rechargement
   await bg.installed();
   assert.equal(bg.badge.text, "");
   assert.deepEqual(await bg.send({ type: "GET_UPDATE_STATUS" }), { ok: true, update: null });
+});
+
+test("version affichée : numéro du manifest et commit du clone (lien vers GitHub)", async () => {
+  const clone = loadBackground(undefined, { gitFiles: CLONE_FILES });
+  assert.deepEqual(await clone.send({ type: "GET_VERSION_INFO" }), {
+    ok: true,
+    version: "0.2.0",
+    commit: LOCAL_SHA,
+    commitUrl: `https://github.com/jguillevic/moxfield-chrome-extension/commit/${LOCAL_SHA}`,
+  });
+  const copy = loadBackground();
+  assert.deepEqual(await copy.send({ type: "GET_VERSION_INFO" }), { ok: true, version: "0.2.0", commit: null, commitUrl: null });
 });

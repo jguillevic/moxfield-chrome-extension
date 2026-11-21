@@ -136,6 +136,12 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 - Pas de Python sur le poste : scripts en Node ou shell.
 - Les tests tournent sur GitHub Actions à chaque push, sur toutes les branches
   (`.github/workflows/tests.yml`).
+- Version (`version` du manifest, affichée dans le popup) : augmentée dans
+  le même commit que toute modification de l'extension livrée sur `main`
+  — correctif (0.3.0 → 0.3.1) pour une correction, mineur (→ 0.4.0) pour
+  une fonctionnalité, majeur pour une étape (publication sur le Store).
+  Contrôlé sur GitHub Actions à chaque push sur `main`
+  (`scripts/check-version.js`).
 - `package-lock.json` ne doit référencer que `https://registry.npmjs.org/` :
   le registre npm du poste est un Artifactory interne, inaccessible depuis
   GitHub. npm redirige tout seul vers le registre configuré en local ; après

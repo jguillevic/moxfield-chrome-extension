@@ -424,6 +424,22 @@ button:focus-visible,
   cursor: help;
 }
 
+/* Version de l'extension, en bas du popup. */
+.app-footer {
+  text-align: center;
+  font-size: 11px;
+  margin: 4px 0 2px;
+}
+
+.app-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  text-decoration: underline;
+}
+
 /* Nouvelle version de l'extension disponible. */
 .update-card {
   border-color: var(--accent);

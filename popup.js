@@ -631,7 +631,11 @@ async function renderUpdate() {
   const update = res && res.ok ? res.update : null;
   document.getElementById("update-available").hidden = !update;
   if (!update) return;
-  document.getElementById("update-summary").textContent = tn("updateSummary", update.count);
+  const summary = tn("updateSummary", update.count);
+  document.getElementById("update-summary").textContent =
+    update.latestVersion && update.latestVersion !== chrome.runtime.getManifest().version
+      ? `${t("updateVersions", update.latestVersion, chrome.runtime.getManifest().version)} ${summary}`
+      : summary;
   const list = document.getElementById("update-commits");
   list.replaceChildren(
     ...update.commits.slice(0, MAX_UPDATE_COMMITS).map((title) => {
@@ -643,8 +647,17 @@ async function renderUpdate() {
   document.getElementById("update-link").href = update.compareUrl;
 }
 
+async function renderVersion() {
+  const res = await send("GET_VERSION_INFO");
+  if (!res || !res.ok) return;
+  const link = document.getElementById("version-link");
+  link.textContent = res.commit ? t("versionWithCommit", res.version, res.commit.slice(0, 7)) : t("versionLabel", res.version);
+  if (res.commitUrl) link.href = res.commitUrl;
+}
+
 refresh();
 renderUpdate();
+renderVersion();
 renderCollection();
 renderSync().then(() => {
   if (syncMeta.enabled) send("SYNC_NOW"); // récupère tout de suite les changements d'un autre PC

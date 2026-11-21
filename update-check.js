@@ -40,7 +40,21 @@ function createUpdateCheck({ fetch, readFile, repo = UPDATE_REPO, branch = UPDAT
     return null;
   }
 
-  // → { localSha, available, count, commits: [titre], compareUrl } ;
+  // Version de main (champ version de son manifest), null si illisible :
+  // un plus, la notification s'en passe.
+  async function latestVersion() {
+    try {
+      const res = await fetch(`https://raw.githubusercontent.com/${repo}/${branch}/manifest.json`);
+      if (!res.ok) return null;
+      const manifest = await res.json();
+      return typeof manifest.version === "string" ? manifest.version : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // → { localSha, available, count, commits: [titre], compareUrl,
+  // latestVersion } ;
   // available : main a des commits que le clone n'a pas. null si on ne peut
   // pas conclure (pas de dossier .git, commit local inconnu de GitHub — pas
   // encore poussé —, réseau coupé, réponse anormale) : situation normale,
@@ -63,16 +77,23 @@ function createUpdateCheck({ fetch, readFile, repo = UPDATE_REPO, branch = UPDAT
       .map((c) => String((c && c.commit && c.commit.message) || "").split("\n")[0])
       .filter(Boolean)
       .reverse(); // le plus récent en premier
+    const available = body.ahead_by > 0;
     return {
       localSha,
-      available: body.ahead_by > 0,
+      available,
       count: body.ahead_by,
       commits: commits.slice(0, 10),
       compareUrl: `https://github.com/${repo}/compare/${localSha.slice(0, 12)}...${branch}`,
+      latestVersion: available ? await latestVersion() : null,
     };
   }
 
-  return { localCommit, check };
+  // Page GitHub d'un commit (version affichée dans le popup).
+  function commitUrl(sha) {
+    return `https://github.com/${repo}/commit/${sha}`;
+  }
+
+  return { localCommit, check, commitUrl };
 }
 
 if (typeof module !== "undefined") module.exports = { createUpdateCheck };

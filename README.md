@@ -498,8 +498,12 @@ en cas de conflit : rien ne s'y perd).
   `.git`) à la branche `main` du dépôt sur GitHub.
 - S'il y a du nouveau : une pastille bleue **↑** sur l'icône de
   l'extension, et en haut du popup une carte **« Nouvelle version de
-  l'extension disponible »** avec le nombre de modifications, les plus
-  récentes, et un lien vers leur détail sur GitHub.
+  l'extension disponible »** avec le numéro de la nouvelle version et le
+  tien, le nombre de modifications, les plus récentes, et un lien vers leur
+  détail sur GitHub.
+- **Ta version** est affichée en bas du popup : **« Version 0.3.0 ·
+  ccfe066 »** (numéro, puis commit de ton clone, lien vers ce commit sur
+  GitHub).
 - Pour l'installer : `git pull` dans le dossier de l'extension, recharge-la
   dans `chrome://extensions` et rafraîchis tes onglets Moxfield. La
   pastille disparaît au rechargement.
@@ -731,6 +735,10 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   « monté » juste en passant d'un deck à l'autre et quand un deck est
   démonté ailleurs, bouton
   et fenêtre de montage en anglais.
+- `tests/check-version.test.js` : contrôle de version
+  (`scripts/check-version.js`, sur un petit dépôt git temporaire) — format
+  accepté par Chrome, comparaison, extension modifiée sans augmenter la
+  version refusée, tests ou documentation seuls acceptés.
 - `tests/update-check.test.js` : détection d'une nouvelle version
   (`update-check.js`, dossier `.git` et GitHub simulés) — commit du clone
   (branche, `packed-refs`, commit détaché, pas de clone), nouvelle version
@@ -770,6 +778,16 @@ des cartes manquantes, proxies, mise à jour après un changement de version
 et textes en anglais), l'intégration à la barre d'actions de
 Moxfield, le rendu réel de l'impression (taille des cartes sur papier),
 et la qualité des traductions elles-mêmes (relecture humaine).
+
+### Versions
+
+Le numéro de version (`version` dans `manifest.json`) suit
+`majeur.mineur.correctif` : correctif pour une correction de bug (0.3.0 →
+0.3.1), mineur pour une fonctionnalité (→ 0.4.0), majeur pour une étape
+(ex. publication sur le Chrome Web Store). Il augmente dans le même commit
+que toute modification de l'extension livrée sur `main` : à chaque push
+sur `main`, GitHub Actions lance `node scripts/check-version.js` et
+échoue si l'extension a changé sans que sa version augmente.
 
 ## Crédits
 

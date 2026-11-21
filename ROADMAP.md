@@ -52,6 +52,8 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 - Notification d'une nouvelle version sur GitHub : pastille sur l'icône et
   carte dans le popup, avec les modifications — novembre 2026.
+- Numéro de version géré (0.3.0) et affiché en bas du popup avec le commit
+  du clone ; contrôlé à chaque livraison sur `main` — novembre 2026.
 - Édition de chaque carte dans le stock (et donc dans la sauvegarde), même
   possédée dans une seule édition — novembre 2026.
 - Sauvegarde Google Drive retrouvable : lien vers les paramètres de Drive

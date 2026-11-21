@@ -958,5 +958,14 @@
   },
   "updateBadgeTitle": {
     "message": "Moxfield Stock Manager — nouvelle version disponible"
+  },
+  "versionLabel": {
+    "message": "Version $1"
+  },
+  "versionWithCommit": {
+    "message": "Version $1 · $2"
+  },
+  "updateVersions": {
+    "message": "Version $1 disponible (tu as la $2)."
   }
 }

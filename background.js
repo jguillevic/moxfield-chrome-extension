@@ -1549,9 +1549,17 @@ async function handleGetUpdateStatus() {
     meta = await checkForUpdate();
   }
   const update = meta.available && meta.localSha === localSha
-    ? { count: meta.count, commits: meta.commits, compareUrl: meta.compareUrl }
+    ? { count: meta.count, commits: meta.commits, compareUrl: meta.compareUrl, latestVersion: meta.latestVersion || null }
     : null;
   return { ok: true, update };
+}
+
+// Version affichée en bas du popup : numéro du manifest, et commit du clone
+// quand il y en a un (deux PC au même numéro peuvent différer entre deux
+// livraisons).
+async function handleGetVersionInfo() {
+  const commit = await updateCheck.localCommit();
+  return { ok: true, version: chrome.runtime.getManifest().version, commit, commitUrl: commit ? updateCheck.commitUrl(commit) : null };
 }
 
 function startUpdateChecks() {
@@ -1601,6 +1609,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, state: { stock, builtDecks } });
           break;
         }
+        case "GET_VERSION_INFO":
+          sendResponse(await handleGetVersionInfo());
+          break;
         case "GET_UPDATE_STATUS":
           sendResponse(await handleGetUpdateStatus());
           break;

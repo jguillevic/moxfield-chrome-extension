@@ -33,6 +33,7 @@ function openPopup(responses, lang = "fr") {
   win.chrome = {
     i18n: { getMessage: fakeGetMessage(lang) },
     runtime: {
+      getManifest: () => ({ version: "0.3.0" }),
       sendMessage: async (msg) => {
         // Sérialisé comme par Chrome (et ramené dans le contexte des tests).
         sent.push(JSON.parse(JSON.stringify(msg)));
@@ -688,4 +689,31 @@ test("nouvelle version : pas de carte quand l'extension est à jour", async (t) 
   t.after(p.close);
   await settle();
   assert.equal(p.$("update-available").hidden, true);
+});
+
+test("version de l'extension en bas du popup : numéro et commit, lien vers le commit", async (t) => {
+  const sha = "c".repeat(40);
+  const p = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_VERSION_INFO: { ok: true, version: "0.3.0", commit: sha, commitUrl: `https://github.com/jguillevic/moxfield-chrome-extension/commit/${sha}` },
+  });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("version-link").textContent, "Version 0.3.0 · ccccccc");
+  assert.equal(p.$("version-link").href, `https://github.com/jguillevic/moxfield-chrome-extension/commit/${sha}`);
+});
+
+test("version de l'extension : sans clone git, le numéro seul", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_VERSION_INFO: { ok: true, version: "0.3.0", commit: null, commitUrl: null } });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("version-link").textContent, "Version 0.3.0");
+});
+
+test("nouvelle version : numéro de la nouvelle version et de la version installée", async (t) => {
+  const update = { count: 2, commits: ["Add B", "Add A"], compareUrl: "https://github.com/x", latestVersion: "0.4.0" };
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_UPDATE_STATUS: { ok: true, update } });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("update-summary").textContent, "Version 0.4.0 disponible (tu as la 0.3.0). 2 modifications sur GitHub depuis ta version :");
 });
