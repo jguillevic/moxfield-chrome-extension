@@ -1095,7 +1095,7 @@
 
   function isOwnNode(node) {
     const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
-    return Boolean(el && el.closest(".msm-bar-btn, .msm-overlay, .msm-progress-overlay, .msm-toast"));
+    return Boolean(el && el.closest(".msm-bar-btn, .msm-floating-bar, .msm-overlay, .msm-progress-overlay, .msm-toast"));
   }
 
   function isOwnMutation(m) {
@@ -1145,9 +1145,12 @@
     },
   };
 
-  // Bouton « Utiliser mes éditions » (ruban seulement, cf. ensureButton) et
-  // cartes qu'il changerait (cf. ownedEditionNames).
+  // Bouton « Utiliser mes éditions » (à côté de « Monter », cf. ensureButton)
+  // et cartes qu'il changerait (cf. ownedEditionNames).
   let editionsBtn = null;
+  // Bandeau flottant qui porte nos boutons quand la barre d'actions de
+  // Moxfield est introuvable (cf. ensureButton), null sinon.
+  let floatingBar = null;
   let btnEditionNames = [];
 
   function setEditionNames(names) {
@@ -1469,12 +1472,14 @@
     return null;
   }
 
-  // Le bouton vit dans la barre d'actions de Moxfield, et nulle part
-  // ailleurs : sans elle (menu du deck masqué), pas de bouton — l'ancien
-  // bouton flottant de repli gênait (retour utilisateur, novembre 2026).
+  // Les boutons vivent dans la barre d'actions de Moxfield quand elle existe,
+  // sinon dans un bandeau flottant en bas à droite. Le repli avait été retiré
+  // (il gênait quand le menu du deck était masqué), puis remis : Moxfield a
+  // supprimé cette barre de la page d'un deck (constaté en novembre 2026),
+  // et sans repli les boutons n'apparaissaient plus du tout.
   // Rappelée à chaque tick du polling : si React a re-rendu la barre et
   // effacé notre bouton, ou si la barre est apparue/disparue, on le recrée
-  // au bon endroit ou on le retire.
+  // au bon endroit.
   // Position dans la barre : juste après le bouton "like" (cœur). Sur ses
   // propres decks c'est le dernier bouton ; sur ceux des autres, ça place le
   // nôtre avant l'avatar et le menu "..." (4e position). Sans cœur trouvé,
@@ -1483,6 +1488,7 @@
   // barre d'actions : on remonte jusqu'à l'ancêtre en position fixed/sticky,
   // qui porte le fond coloré. null si la barre est absente.
   function getActionBarTop() {
+    if (floatingBar && floatingBar.isConnected) return floatingBar.getBoundingClientRect().top || null;
     const bar = findActionBar();
     if (!bar) return null;
     let container = bar;
@@ -1506,13 +1512,14 @@
     return anchor ? editionsBtn.previousElementSibling === anchor : true;
   }
 
+  function isFloatingBarUpToDate() {
+    return Boolean(floatingBar && floatingBar.isConnected && btn && btn.parentElement === floatingBar && editionsBtn && btn.previousElementSibling === editionsBtn);
+  }
+
   function ensureButton() {
     const bar = findActionBar();
-    if (!bar) {
-      removeButton();
-      return null;
-    }
-    if (btn && btn.isConnected && isButtonWellPlaced(bar)) return btn;
+    const upToDate = bar ? btn && btn.isConnected && !floatingBar && isButtonWellPlaced(bar) : isFloatingBarUpToDate();
+    if (upToDate) return btn;
 
     removeButton();
     // Mêmes classes utilitaires que les boutons natifs de la barre, pour en
@@ -1527,9 +1534,16 @@
         openOverlay();
       }
     });
-    const anchor = findBarAnchor(bar);
-    if (anchor) anchor.after(btn);
-    else bar.appendChild(btn);
+    if (bar) {
+      const anchor = findBarAnchor(bar);
+      if (anchor) anchor.after(btn);
+      else bar.appendChild(btn);
+    } else {
+      floatingBar = document.createElement("div");
+      floatingBar.className = "msm-floating-bar";
+      floatingBar.appendChild(btn);
+      document.body.appendChild(floatingBar);
+    }
     editionsBtn = document.createElement("a");
     editionsBtn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn msm-editions-bar-btn";
     editionsBtn.setAttribute("role", "button");
@@ -1557,6 +1571,10 @@
     if (editionsBtn) {
       editionsBtn.remove();
       editionsBtn = null;
+    }
+    if (floatingBar) {
+      floatingBar.remove();
+      floatingBar = null;
     }
   }
 

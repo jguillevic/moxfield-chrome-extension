@@ -3,7 +3,8 @@
    ne rien changer au reste de la page. */
 .msm-overlay,
 .msm-progress-overlay,
-.msm-toast {
+.msm-toast,
+.msm-floating-bar {
   --msm-surface: #ffffff;
   --msm-surface-muted: #f7f8fa;
   --msm-border: #e3e5ea;
@@ -26,7 +27,8 @@
 @media (prefers-color-scheme: dark) {
   .msm-overlay,
   .msm-progress-overlay,
-  .msm-toast {
+  .msm-toast,
+  .msm-floating-bar {
     --msm-surface: #1f2229;
     --msm-surface-muted: #262a32;
     --msm-border: #333844;
@@ -47,6 +49,31 @@
 
 .msm-overlay [hidden] {
   display: none !important;
+}
+
+/* --- Bandeau flottant (repli quand la barre d'actions de Moxfield est
+   introuvable) : mêmes boutons-icônes, blancs sur fond sombre comme dans la
+   barre de Moxfield. --- */
+
+.msm-floating-bar {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px 10px 16px;
+  border-radius: 10px;
+  background: #1f2229;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  font-size: 20px;
+}
+
+.msm-floating-bar .msm-bar-btn {
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
 }
 
 /* --- Bouton intégré à la barre d'actions de Moxfield : juste une icône SVG

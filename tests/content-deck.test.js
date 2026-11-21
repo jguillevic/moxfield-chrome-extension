@@ -125,8 +125,6 @@ async function waitFor(predicate, timeoutMs, label) {
   assert.fail(`délai dépassé (${timeoutMs} ms) : ${label}`);
 }
 
-// Sans barre d'actions Moxfield dans la page de test, le bouton est le
-// bouton flottant : faisabilité dans son texte, détail dans son infobulle.
 // Libellé complet du bouton (état et faisabilité), comme le lit un lecteur d'écran.
 const buttonText = (page) => (page.button() ? page.button().getAttribute("aria-label") || "" : "");
 // Faisabilité seule (après « libellé — »).
@@ -141,22 +139,42 @@ test("deck non monté : faisabilité affichée, terrains de base exclus", async 
   assert.match(buttonTitle(page), /version différente : Birds of Paradise/);
 });
 
-test("barre d'actions de Moxfield absente : aucun bouton, ni flottant ni ailleurs", async (t) => {
+// Moxfield a retiré la barre d'actions de la page d'un deck (novembre
+// 2026) : sans repli, plus aucun bouton n'apparaissait.
+test("barre d'actions de Moxfield absente : boutons dans le bandeau flottant", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", null, "Commander", null, null);
   t.after(page.close);
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-  assert.equal(page.win.document.querySelectorAll(".msm-bar-btn, button.msm-floating-btn").length, 0);
+  const doc = page.win.document;
+  await waitFor(() => buttonText(page).includes("dispo"), 2000, "faisabilité affichée");
+  const floating = doc.querySelector(".msm-floating-bar");
+  assert.ok(floating, "bandeau flottant");
+  assert.equal(page.button().parentElement, floating);
+  assert.equal(page.button().previousElementSibling, editionsButton(page), "« Utiliser mes éditions » à gauche de « Monter »");
+  assert.match(buttonText(page), /^Marquer comme monté physiquement — /);
+
+  page.button().click();
+  await waitFor(() => doc.querySelector(".msm-overlay"), 2000, "fenêtre de montage ouverte");
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(doc.querySelectorAll(".msm-floating-bar").length, 1, "pas de bandeau en double");
 });
 
-test("barre d'actions affichée plus tard : boutons ajoutés dans le bon état, puis retirés quand elle disparaît", async (t) => {
+test("barre d'actions affichée plus tard : boutons déplacés dans la barre, puis rendus au bandeau quand elle disparaît", async (t) => {
   const deck = { name: "Deck", url: "", cards: [{ name: "Birds of Paradise", qty: 1 }], builtAt: 1 };
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: { abc123: deck } }, "fr", null, "Commander", null, null);
   t.after(page.close);
-  await new Promise((resolve) => setTimeout(resolve, 700));
+  const doc = page.win.document;
+  await waitFor(() => buttonText(page).includes("Monté physiquement"), 2000, "bouton de deck monté, dans le bandeau");
+  assert.ok(page.button().closest(".msm-floating-bar"));
+
   addActionBar(page.win);
-  await waitFor(() => buttonText(page).includes("Monté physiquement"), 2000, "bouton de deck monté");
-  page.win.document.querySelector(".msm-test-bar").remove();
-  await waitFor(() => page.win.document.querySelectorAll(".msm-bar-btn").length === 0, 2000, "boutons retirés");
+  await waitFor(() => page.button() && page.button().closest(".msm-test-bar"), 2000, "bouton dans la barre");
+  assert.equal(doc.querySelector(".msm-floating-bar"), null, "bandeau retiré");
+  assert.match(buttonText(page), /^Monté physiquement/);
+  assert.equal(doc.querySelectorAll(".msm-bar-btn:not(.msm-editions-bar-btn)").length, 1);
+
+  doc.querySelector(".msm-test-bar").remove();
+  await waitFor(() => page.button() && page.button().closest(".msm-floating-bar"), 2000, "bouton rendu au bandeau");
+  assert.match(buttonText(page), /^Monté physiquement/);
 });
 
 test("deck monté : pas de faisabilité", async (t) => {
