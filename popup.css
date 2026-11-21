@@ -424,6 +424,17 @@ button:focus-visible,
   cursor: help;
 }
 
+/* Nouvelle version de l'extension disponible. */
+.update-card {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.update-commits {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
 /* Proxies d'un deck monté (liste au survol). */
 .badge-proxies {
   flex-shrink: 0;

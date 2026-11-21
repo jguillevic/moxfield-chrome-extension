@@ -623,7 +623,28 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.moxfieldStockManagerCollection) renderCollection();
 });
 
+// --- Nouvelle version de l'extension (cf. update-check.js) ---
+const MAX_UPDATE_COMMITS = 5;
+
+async function renderUpdate() {
+  const res = await send("GET_UPDATE_STATUS");
+  const update = res && res.ok ? res.update : null;
+  document.getElementById("update-available").hidden = !update;
+  if (!update) return;
+  document.getElementById("update-summary").textContent = tn("updateSummary", update.count);
+  const list = document.getElementById("update-commits");
+  list.replaceChildren(
+    ...update.commits.slice(0, MAX_UPDATE_COMMITS).map((title) => {
+      const li = document.createElement("li");
+      li.textContent = title;
+      return li;
+    })
+  );
+  document.getElementById("update-link").href = update.compareUrl;
+}
+
 refresh();
+renderUpdate();
 renderCollection();
 renderSync().then(() => {
   if (syncMeta.enabled) send("SYNC_NOW"); // récupère tout de suite les changements d'un autre PC

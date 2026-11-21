@@ -664,3 +664,28 @@ test("sauvegarde Drive : rien sur Drive, message affiché", async (t) => {
   await settle();
   assert.equal(p.$("sync-status").textContent, "Erreur : Aucune sauvegarde sur Drive pour le moment.");
 });
+
+// --- Nouvelle version de l'extension ---
+
+test("nouvelle version : carte en haut du popup avec les modifications et le lien GitHub", async (t) => {
+  const update = {
+    count: 7,
+    commits: ["Add G", "Fix F", "Add E", "Add D", "Add C", "Add B", "Add A"],
+    compareUrl: "https://github.com/jguillevic/moxfield-chrome-extension/compare/cccccccccccc...main",
+  };
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_UPDATE_STATUS: { ok: true, update } });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("update-available").hidden, false);
+  assert.equal(p.$("update-summary").textContent, "7 modifications sur GitHub depuis ta version :");
+  assert.deepEqual([...p.$("update-commits").children].map((li) => li.textContent), ["Add G", "Fix F", "Add E", "Add D", "Add C"]);
+  assert.equal(p.$("update-link").href, update.compareUrl);
+  assert.match(p.$("update-available").textContent, /git pull/);
+});
+
+test("nouvelle version : pas de carte quand l'extension est à jour", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_UPDATE_STATUS: { ok: true, update: null } });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("update-available").hidden, true);
+});

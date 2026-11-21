@@ -940,5 +940,23 @@
   },
   "driveNoBackup": {
     "message": "No backup on Drive yet."
+  },
+  "updateTitle": {
+    "message": "New version of the extension available"
+  },
+  "updateSummary_one": {
+    "message": "$1 change on GitHub since your version:"
+  },
+  "updateSummary_other": {
+    "message": "$1 changes on GitHub since your version:"
+  },
+  "updateHowTo": {
+    "message": "To install it: git pull in the extension's folder, then reload it in chrome://extensions and refresh your Moxfield tabs."
+  },
+  "updateSeeChanges": {
+    "message": "See the changes on GitHub"
+  },
+  "updateBadgeTitle": {
+    "message": "Moxfield Stock Manager — new version available"
   }
 }

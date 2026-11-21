@@ -940,5 +940,23 @@
   },
   "driveNoBackup": {
     "message": "Aucune sauvegarde sur Drive pour le moment."
+  },
+  "updateTitle": {
+    "message": "Nouvelle version de l'extension disponible"
+  },
+  "updateSummary_one": {
+    "message": "$1 modification sur GitHub depuis ta version :"
+  },
+  "updateSummary_other": {
+    "message": "$1 modifications sur GitHub depuis ta version :"
+  },
+  "updateHowTo": {
+    "message": "Pour l'installer : git pull dans le dossier de l'extension, puis recharge-la dans chrome://extensions et rafraîchis tes onglets Moxfield."
+  },
+  "updateSeeChanges": {
+    "message": "Voir les modifications sur GitHub"
+  },
+  "updateBadgeTitle": {
+    "message": "Moxfield Stock Manager — nouvelle version disponible"
   }
 }

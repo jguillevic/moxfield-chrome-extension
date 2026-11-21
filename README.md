@@ -15,6 +15,9 @@ your browser's language. This README is in French.*
    `brave://extensions` (Brave), `edge://extensions` (Edge)…
 3. Active le **Mode développeur** (en haut à droite).
 4. Clique **Charger l'extension non empaquetée** et sélectionne ce dossier.
+5. **Mises à jour** : l'extension te prévient quand une nouvelle version est
+   sur GitHub (cf. « 8. Nouvelle version disponible ») ; installe-la avec
+   `git pull` dans ce dossier, puis recharge l'extension.
 
 ### Installer l'extension pour son propre compte
 
@@ -488,7 +491,28 @@ en cas de conflit : rien ne s'y perd).
 - L'historique est traduit à l'affichage : une action notée sur un PC en
   français s'affiche en anglais sur un PC en anglais, et inversement.
 
+### 8. Nouvelle version disponible
+
+- Au démarrage du navigateur, au rechargement de l'extension et toutes les
+  6 heures, l'extension compare ton clone (le commit lu dans son dossier
+  `.git`) à la branche `main` du dépôt sur GitHub.
+- S'il y a du nouveau : une pastille bleue **↑** sur l'icône de
+  l'extension, et en haut du popup une carte **« Nouvelle version de
+  l'extension disponible »** avec le nombre de modifications, les plus
+  récentes, et un lien vers leur détail sur GitHub.
+- Pour l'installer : `git pull` dans le dossier de l'extension, recharge-la
+  dans `chrome://extensions` et rafraîchis tes onglets Moxfield. La
+  pastille disparaît au rechargement.
+- Rien n'est installé automatiquement : l'extension ne peut pas modifier
+  ses propres fichiers.
+
 ## Limites connues
+
+- La détection d'une nouvelle version demande un clone git du dépôt (pas
+  une simple copie du dossier) et un accès à l'API de GitHub (sans compte,
+  60 appels par heure et par adresse IP : bien assez pour une vérification
+  toutes les 6 heures). Un commit local pas encore poussé n'est pas
+  comparé : pas de notification tant qu'il n'est pas sur GitHub.
 
 - Pas de choix de la langue dans l'extension : elle suit celle du
   navigateur (le système de traduction de Chrome ne permet pas d'en
@@ -707,6 +731,13 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   « monté » juste en passant d'un deck à l'autre et quand un deck est
   démonté ailleurs, bouton
   et fenêtre de montage en anglais.
+- `tests/update-check.test.js` : détection d'une nouvelle version
+  (`update-check.js`, dossier `.git` et GitHub simulés) — commit du clone
+  (branche, `packed-refs`, commit détaché, pas de clone), nouvelle version
+  ou non, cas où l'on ne peut pas conclure (commit pas poussé, réseau
+  coupé, réponse anormale). La pastille sur l'icône (et son retrait après
+  un `git pull`) est testée dans `tests/background.test.js`, la carte du
+  popup dans `tests/popup.test.js`.
 - `tests/proxies.test.js` : page d'impression des proxies (`proxies.html`
   + `proxies.js`, Scryfall simulé à partir de vraies réponses réduites
   dans `tests/fixtures/api/scryfall-cards.json`) — recherche par version

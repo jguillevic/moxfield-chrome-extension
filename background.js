@@ -22,8 +22,8 @@
 // Modules partagés (chargés tels quels, cf. leur en-tête) :
 // createDeckChecks, createMoxfieldCollection, computeCollectionDiff,
 // createHistory, createErrorReports, createGoogleWebAuth, chooseAuthMethod,
-// createChromeI18n.
-importScripts("i18n.js", "deck-checks.js", "moxfield-collection.js", "history.js", "error-reports.js", "google-auth.js");
+// createChromeI18n, createUpdateCheck.
+importScripts("i18n.js", "deck-checks.js", "moxfield-collection.js", "history.js", "error-reports.js", "google-auth.js", "update-check.js");
 
 // Textes renvoyés au popup et à la page d'un deck (erreurs, historique),
 // dans la langue du navigateur (cf. i18n.js).
@@ -1490,7 +1490,77 @@ async function handleSetCollectionAuto({ enabled }) {
   return { ok: true, meta };
 }
 
+// --- Nouvelle version de l'extension (cf. update-check.js) ---
+// Vérifiée au démarrage, au (re)chargement de l'extension et toutes les 6
+// heures ; signalée par une pastille sur l'icône et une carte en haut du
+// popup. Constat propre à ce PC (son clone), pas synchronisé.
+const UPDATE_META_KEY = "moxfieldStockManagerUpdate";
+const UPDATE_ALARM = "update-check";
+const UPDATE_PERIOD_MINUTES = 6 * 60;
+// Constat récent : l'ouverture du popup ne redemande pas à GitHub.
+const UPDATE_FRESH_MS = 60 * 60 * 1000;
+const updateCheck = createUpdateCheck({
+  fetch: (...args) => fetch(...args),
+  readFile: async (path) => {
+    try {
+      const res = await fetch(chrome.runtime.getURL(path));
+      return res.ok ? await res.text() : null;
+    } catch (e) {
+      return null; // fichier absent
+    }
+  },
+});
+
+async function getUpdateMeta() {
+  const data = await chrome.storage.local.get(UPDATE_META_KEY);
+  return data[UPDATE_META_KEY] || {};
+}
+
+function showUpdateBadge(available) {
+  chrome.action.setBadgeText({ text: available ? "↑" : "" });
+  if (available) chrome.action.setBadgeBackgroundColor({ color: "#2f6fd6" });
+  chrome.action.setTitle({ title: available ? i18n.t("updateBadgeTitle") : i18n.t("extName") });
+}
+
+// Constat valable seulement pour le commit sur lequel il a été fait : après
+// un git pull et un rechargement, l'ancien « nouvelle version disponible »
+// ne vaut plus, même si GitHub ne répond pas.
+async function checkForUpdate() {
+  const result = await updateCheck.check();
+  let meta;
+  if (result) {
+    meta = { ...result, checkedAt: Date.now() };
+    await chrome.storage.local.set({ [UPDATE_META_KEY]: meta });
+  } else {
+    meta = await getUpdateMeta();
+    if (meta.localSha && meta.localSha !== (await updateCheck.localCommit())) {
+      meta = {};
+      await chrome.storage.local.set({ [UPDATE_META_KEY]: meta });
+    }
+  }
+  showUpdateBadge(Boolean(meta.available));
+  return meta;
+}
+
+async function handleGetUpdateStatus() {
+  let meta = await getUpdateMeta();
+  const localSha = await updateCheck.localCommit();
+  if (!meta.checkedAt || Date.now() - meta.checkedAt > UPDATE_FRESH_MS || meta.localSha !== localSha) {
+    meta = await checkForUpdate();
+  }
+  const update = meta.available && meta.localSha === localSha
+    ? { count: meta.count, commits: meta.commits, compareUrl: meta.compareUrl }
+    : null;
+  return { ok: true, update };
+}
+
+function startUpdateChecks() {
+  chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: UPDATE_PERIOD_MINUTES });
+  checkForUpdate();
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === UPDATE_ALARM) checkForUpdate();
   if (alarm.name === SYNC_ALARM) syncNow();
   if (alarm.name === COLLECTION_ALARM) fetchCollectionIfDue();
   if (alarm.name === COLLECTION_CHANGED_ALARM) fetchCollectionNow();
@@ -1498,6 +1568,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Les alarmes ne survivent pas toujours à un redémarrage du navigateur.
 chrome.runtime.onStartup.addListener(async () => {
+  startUpdateChecks();
   if ((await getSyncMeta()).enabled) {
     startSyncAlarm();
     syncNow();
@@ -1508,7 +1579,10 @@ chrome.runtime.onStartup.addListener(async () => {
   }
 });
 
+// Aussi au rechargement de l'extension (après un git pull) : la pastille
+// « nouvelle version » disparaît.
 chrome.runtime.onInstalled.addListener(async () => {
+  startUpdateChecks();
   if ((await getSyncMeta()).enabled) startSyncAlarm();
   if ((await getCollectionMeta()).enabled) {
     startCollectionAlarm();
@@ -1527,6 +1601,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, state: { stock, builtDecks } });
           break;
         }
+        case "GET_UPDATE_STATUS":
+          sendResponse(await handleGetUpdateStatus());
+          break;
         case "GET_DECK_CONTEXT":
           sendResponse(await handleGetDeckContext(msg.payload || {}));
           break;

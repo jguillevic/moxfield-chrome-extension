@@ -33,6 +33,9 @@ const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", versi
 // options.webAuth : fausse fenêtre de connexion Google, (details) => URL de
 // redirection ; par défaut un jeton pour le compte google.email.
 // options.lang : langue du navigateur (français par défaut).
+// options.gitFiles : fichiers du dossier .git de l'extension ({ chemin:
+// contenu }, aucun par défaut : pas un clone) ; options.github : fausse API
+// GitHub, (url) => réponse (cf. update-check.js).
 // Sans options.drive, un Drive vide (aucun fichier) accepte tous les envois.
 function loadBackground(initialState, options = {}) {
   const storage = {};
@@ -41,10 +44,13 @@ function loadBackground(initialState, options = {}) {
   let onMessage = null;
   const alarmListeners = [];
   const startupListeners = [];
+  const installedListeners = [];
   const alarms = new Map(); // nom → options
   const webRequestListeners = [];
   const cookieListeners = [];
   const counts = { stateWrites: 0, fetches: 0 };
+  const badge = { text: "", title: "" };
+  const github = { calls: [] };
   const sentry = [];
   const tabsCreated = [];
   const tabMessages = [];
@@ -77,7 +83,7 @@ function loadBackground(initialState, options = {}) {
     runtime: {
       onMessage: { addListener: (fn) => (onMessage = fn) },
       onStartup: listener(startupListeners),
-      onInstalled: listener(),
+      onInstalled: listener(installedListeners),
       getManifest: () => ({ version: "0.2.0" }),
       getPlatformInfo: async () => ({ os: "win" }),
       getURL: (p) => `chrome-extension://test/${p}`,
@@ -87,6 +93,11 @@ function loadBackground(initialState, options = {}) {
       create: async (info) => tabsCreated.push(clone(info)),
       // Messages envoyés à un onglet (avancement de « Utiliser mes éditions »).
       sendMessage: async (tabId, msg) => tabMessages.push({ tabId, ...clone(msg) }),
+    },
+    action: {
+      setBadgeText: ({ text }) => (badge.text = text),
+      setBadgeBackgroundColor: () => {},
+      setTitle: ({ title }) => (badge.title = title),
     },
     alarms: {
       onAlarm: listener(alarmListeners),
@@ -126,6 +137,16 @@ function loadBackground(initialState, options = {}) {
   // Faux Moxfield : jetons puis CSV (cf. tests/moxfield-collection.test.js
   // pour le détail des appels).
   async function fetch(url, init) {
+    if (url.startsWith("chrome-extension://test/")) {
+      const file = (options.gitFiles || {})[url.slice("chrome-extension://test/".length)];
+      if (file === undefined) throw new TypeError("Failed to fetch"); // comme Chrome pour un fichier absent
+      return new Response(file);
+    }
+    if (url.startsWith("https://api.github.com/")) {
+      github.calls.push(url);
+      if (!options.github) throw new Error(`appel GitHub inattendu : ${url}`);
+      return options.github(url);
+    }
     if (url.includes("googleapis.com")) return (options.drive || defaultDrive)(url, init);
     if (url.includes("sentry.io")) {
       sentry.push(JSON.parse(init.body.split("\n")[2]));
@@ -183,6 +204,8 @@ function loadBackground(initialState, options = {}) {
   }
   return {
     send,
+    badge,
+    github,
     async state() {
       return (await send({ type: "GET_STATE" })).state;
     },
@@ -217,6 +240,11 @@ function loadBackground(initialState, options = {}) {
       await Promise.all(cookieListeners.map((fn) => fn(clone(change))));
     },
     setCookies: (cookies) => (options.cookies = cookies),
+    // Extension installée ou rechargée (ex. après un git pull).
+    async installed() {
+      await Promise.all(installedListeners.map((fn) => fn({ reason: "update" })));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    },
     async startup() {
       await Promise.all(startupListeners.map((fn) => fn()));
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1952,4 +1980,55 @@ test("sauvegarde Drive : rien sur Drive, refus expliqué", async () => {
   const { drive } = driveWithStateFile([]);
   const bg = loadBackground(undefined, { drive });
   assert.deepEqual(await bg.send({ type: "DRIVE_DOWNLOAD" }), { ok: false, error: "Aucune sauvegarde sur Drive pour le moment." });
+});
+
+// --- Nouvelle version de l'extension (cf. update-check.js) ---
+
+const LOCAL_SHA = "c".repeat(40);
+const CLONE_FILES = { ".git/HEAD": "ref: refs/heads/main\n", ".git/refs/heads/main": `${LOCAL_SHA}\n` };
+const AHEAD = () => new Response(JSON.stringify({ status: "ahead", ahead_by: 1, commits: [{ commit: { message: "Add something" } }] }));
+
+test("nouvelle version sur GitHub : pastille sur l'icône et détail pour le popup", async () => {
+  const bg = loadBackground(undefined, { gitFiles: CLONE_FILES, github: AHEAD });
+  await bg.startup();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(bg.badge.text, "↑");
+  assert.match(bg.badge.title, /nouvelle version disponible/);
+  assert.ok(bg.alarms.has("update-check"), "vérification périodique");
+  const res = await bg.send({ type: "GET_UPDATE_STATUS" });
+  assert.deepEqual(res.update, {
+    count: 1,
+    commits: ["Add something"],
+    compareUrl: `https://github.com/jguillevic/moxfield-chrome-extension/compare/${LOCAL_SHA.slice(0, 12)}...main`,
+  });
+  assert.equal(bg.github.calls.length, 1, "constat récent : le popup ne redemande pas à GitHub");
+});
+
+test("nouvelle version : rien si le clone est à jour, ni sans dossier .git (GitHub pas appelé)", async () => {
+  const upToDate = loadBackground(undefined, { gitFiles: CLONE_FILES, github: () => new Response(JSON.stringify({ status: "identical", ahead_by: 0, commits: [] })) });
+  await upToDate.startup();
+  assert.deepEqual(await upToDate.send({ type: "GET_UPDATE_STATUS" }), { ok: true, update: null });
+  assert.equal(upToDate.badge.text, "");
+
+  const noClone = loadBackground();
+  await noClone.startup();
+  assert.deepEqual(await noClone.send({ type: "GET_UPDATE_STATUS" }), { ok: true, update: null });
+  assert.equal(noClone.github.calls.length, 0);
+});
+
+// Après un git pull et le rechargement de l'extension, l'ancien constat ne
+// vaut plus, même si GitHub ne répond pas.
+test("nouvelle version : pastille retirée après le git pull et le rechargement, même sans réponse de GitHub", async () => {
+  const options = { gitFiles: { ...CLONE_FILES }, github: AHEAD };
+  const bg = loadBackground(undefined, options);
+  await bg.startup();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(bg.badge.text, "↑");
+  options.gitFiles[".git/refs/heads/main"] = `${"d".repeat(40)}\n`; // git pull
+  options.github = () => {
+    throw new TypeError("Failed to fetch");
+  };
+  await bg.installed();
+  assert.equal(bg.badge.text, "");
+  assert.deepEqual(await bg.send({ type: "GET_UPDATE_STATUS" }), { ok: true, update: null });
 });

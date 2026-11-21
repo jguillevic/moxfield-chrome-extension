@@ -14,6 +14,14 @@
     </div>
     <span id="sync-pill" class="pill off" data-i18n="syncPillOff"></span>
   </header>
+  <!-- Nouvelle version sur GitHub (cf. update-check.js), affichée seulement s'il y en a une. -->
+  <section class="card update-card" id="update-available" hidden>
+    <h2 data-i18n="updateTitle"></h2>
+    <p class="hint" id="update-summary"></p>
+    <ul class="hint update-commits" id="update-commits"></ul>
+    <p class="hint" data-i18n="updateHowTo"></p>
+    <a id="update-link" href="https://github.com/jguillevic/moxfield-chrome-extension" target="_blank" data-i18n="updateSeeChanges"></a>
+  </section>
   <div class="stats">
     <div class="stat">
       <span class="stat-value" id="stock-owned">0</span>
