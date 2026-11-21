@@ -1010,6 +1010,18 @@ async function handleDriveListSnapshots() {
   };
 }
 
+// Sauvegarde à télécharger (popup) : le fichier d'état, ou une version de
+// l'historique (fileId). Le dossier de l'extension (appDataFolder) est
+// invisible dans Google Drive : c'est le seul moyen d'en voir le contenu.
+async function handleDriveDownload({ fileId } = {}) {
+  const id = fileId || ((await findStateFile()) || {}).id;
+  if (!id) return { ok: false, error: i18n.t("driveNoBackup") };
+  // Relu et vérifié, puis remis au format complet (app, version) : le
+  // fichier téléchargé reste reconnaissable comme une sauvegarde.
+  const { state, updatedAt } = await downloadDoc(id);
+  return { ok: true, doc: makeDoc(state, updatedAt) };
+}
+
 // Passe par setState : la version restaurée est ensuite envoyée sur Drive
 // et donc propagée aux autres PC.
 async function handleDriveRestoreSnapshot({ fileId }) {
@@ -1576,6 +1588,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "DRIVE_LIST_SNAPSHOTS":
           sendResponse(await handleDriveListSnapshots());
+          break;
+        case "DRIVE_DOWNLOAD":
+          sendResponse(await handleDriveDownload(msg.payload || {}));
           break;
         case "DRIVE_RESTORE_SNAPSHOT":
           sendResponse(await handleDriveRestoreSnapshot(msg.payload));

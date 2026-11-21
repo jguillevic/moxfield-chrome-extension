@@ -500,6 +500,29 @@ async function runSyncAction(type, payload, pendingText) {
 // Origine d'une version, ajoutée à sa date (rien pour l'instantané quotidien).
 const SNAPSHOT_REASONS = { conflict: "snapshotConflict", manual: "snapshotManual" };
 
+// Sauvegarde Drive (fichier d'état si fileId absent) enregistrée en JSON
+// lisible dans les téléchargements : le dossier de l'extension sur Drive est
+// invisible (cf. handleDriveDownload dans background.js).
+async function downloadBackup(fileId, at) {
+  const status = document.getElementById("sync-status");
+  status.textContent = t("syncDownloading");
+  const res = await send("DRIVE_DOWNLOAD", fileId ? { fileId } : undefined);
+  if (!res.ok) {
+    status.textContent = t("errorPrefix", res.error);
+    return;
+  }
+  status.textContent = "";
+  const day = new Date(at || res.doc.updatedAt || Date.now()).toISOString().slice(0, 10);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(res.doc, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `moxfield-stock-manager-${day}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.getElementById("sync-download-btn").addEventListener("click", () => downloadBackup());
+
 async function renderSnapshots() {
   const container = document.getElementById("sync-snapshots");
   container.innerHTML = `<p class="hint">${escapeHtml(t("loading"))}</p>`;
@@ -530,8 +553,12 @@ async function renderSnapshots() {
         document.getElementById("sync-status").textContent = t("snapshotRestored", tn("distinctCards", r.cardCount), tn("builtDecksCount", r.deckCount));
       }
     });
+    const actions = document.createElement("div");
+    actions.className = "deck-actions";
+    actions.appendChild(actionButton(t("snapshotDownload"), "", () => downloadBackup(s.id, s.createdTime)));
+    actions.appendChild(btn);
     row.appendChild(label);
-    row.appendChild(btn);
+    row.appendChild(actions);
     container.appendChild(row);
   }
 }

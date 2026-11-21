@@ -1906,3 +1906,41 @@ test("éditions de la collection : demandes invalides refusées sans appel", asy
   assert.equal((await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123" } })).ok, false);
   assert.deepEqual(bg.moxfieldCalls, []);
 });
+
+// --- Sauvegarde Drive à télécharger ---
+// Le dossier de l'extension (appDataFolder) est invisible dans Google
+// Drive : le popup permet d'en télécharger le contenu.
+
+function driveWithStateFile(files) {
+  const calls = [];
+  const drive = async (url, init = {}) => {
+    calls.push(url);
+    if (url.includes("alt=media")) return new Response(zlib.gzipSync(JSON.stringify(DOC)), { status: 200 });
+    if (url.includes("/drive/v3/files?")) return new Response(JSON.stringify({ files }), { status: 200 });
+    return new Response(JSON.stringify({ id: "f1", version: "1" }), { status: 200 });
+  };
+  return { drive, calls };
+}
+
+test("sauvegarde Drive : fichier d'état téléchargé et décompressé", async () => {
+  const { drive, calls } = driveWithStateFile([{ id: "etat1", version: "4" }]);
+  const bg = loadBackground(undefined, { drive });
+  const res = await bg.send({ type: "DRIVE_DOWNLOAD" });
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.doc, DOC);
+  assert.ok(calls.some((u) => u.includes("/files/etat1?alt=media")), "fichier d'état lu");
+});
+
+test("sauvegarde Drive : version de l'historique téléchargée", async () => {
+  const { drive, calls } = driveWithStateFile([]);
+  const bg = loadBackground(undefined, { drive });
+  const res = await bg.send({ type: "DRIVE_DOWNLOAD", payload: { fileId: "snap7" } });
+  assert.deepEqual(res.doc, DOC);
+  assert.ok(calls.some((u) => u.includes("/files/snap7?alt=media")));
+});
+
+test("sauvegarde Drive : rien sur Drive, refus expliqué", async () => {
+  const { drive } = driveWithStateFile([]);
+  const bg = loadBackground(undefined, { drive });
+  assert.deepEqual(await bg.send({ type: "DRIVE_DOWNLOAD" }), { ok: false, error: "Aucune sauvegarde sur Drive pour le moment." });
+});

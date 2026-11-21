@@ -398,6 +398,12 @@ en cas de conflit : rien ne s'y perd).
   doivent avoir une version de l'extension qui la gère** : une ancienne
   version ne sait pas lire un fichier compressé (erreur de synchro, sans
   perte de données — mets-la à jour).
+- **Retrouver la sauvegarde** : ce dossier caché n'apparaît pas dans tes
+  fichiers Drive. Google le signale seulement dans **Drive → Paramètres →
+  Gérer les applications** (lien « Ouvrir les paramètres de Drive » dans le
+  popup), sans permettre de l'ouvrir. Pour en voir le contenu, clique sur
+  **« Télécharger la sauvegarde »** : un fichier JSON lisible (stock, decks
+  montés, historique) arrive dans tes téléchargements.
 - **Premier PC connecté** : son stock est envoyé sur Drive. **PC suivants** :
   si ce PC n'a pas encore de stock, celui de Drive est récupéré ; s'il en a
   déjà un, le popup te demande lequel garder.
@@ -407,6 +413,7 @@ en cas de conflit : rien ne s'y perd).
 - **Historique des versions** : un instantané par jour (et par PC) plus les
   versions écartées lors d'un conflit, les 10 plus récents conservés. Chacun
   peut être restauré ; la version restaurée est aussi appliquée aux autres PC.
+  Chacun peut aussi être téléchargé (bouton **« Télécharger »**).
 - Le bouton **Réinitialiser** de la zone de danger vide aussi le stock des
   autres PC quand la synchro est active.
 - Google Drive momentanément indisponible (erreur 503, trop de requêtes) :
@@ -654,7 +661,9 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   affichage du stock (tableau limité, filtre, total possédé d'une carte),
   changement de version d'une carte (badge « Modifié », historique),
   proxies des decks montés (nombre, impression, remplacement proposé ou
-  refusé, jamais comptés dans les decks), erreurs rapportées.
+  refusé, jamais comptés dans les decks), sauvegarde Drive (lien vers les
+  paramètres de Drive, téléchargement de la sauvegarde et d'une version),
+  erreurs rapportées.
 - `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
   — DSN, masquage des jetons et adresses mail, limitation des envois,
   navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur

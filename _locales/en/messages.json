@@ -922,5 +922,23 @@
   },
   "buttonBuiltWithProxies_other": {
     "message": "Physically built with $1 proxies (click to unbuild)"
+  },
+  "syncBackupHint": {
+    "message": "The backup is in a hidden folder of your Drive, reserved for the extension: it doesn't show up in your files, only in Drive → Settings → Manage apps."
+  },
+  "syncDriveLink": {
+    "message": "Open Drive settings"
+  },
+  "syncDownload": {
+    "message": "Download the backup"
+  },
+  "syncDownloading": {
+    "message": "Downloading…"
+  },
+  "snapshotDownload": {
+    "message": "Download"
+  },
+  "driveNoBackup": {
+    "message": "No backup on Drive yet."
   }
 }

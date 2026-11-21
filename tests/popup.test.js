@@ -585,3 +585,82 @@ test("proxies : jamais comptés dans les exemplaires des decks montés", async (
   assert.equal(p.$("stock-in-decks").textContent, "2");
   assert.equal(p.$("stock-owned").textContent, "4");
 });
+
+// --- Sauvegarde Drive ---
+// Le dossier de l'extension sur Drive est invisible : lien vers les
+// paramètres de Drive et téléchargement de la sauvegarde.
+
+const SYNC_ON = { enabled: true, authMethod: "chrome", accountEmail: "moi@gmail.com", lastSyncAt: 1 };
+const BACKUP = { app: "moxfield-stock-manager", version: 1, updatedAt: new Date(2026, 10, 21, 15, 0).getTime(), state: { stock: {}, builtDecks: {}, history: [] } };
+
+// Fichiers enregistrés par le popup : { name, text }.
+function captureDownloads(win) {
+  const saved = [];
+  const blobs = new Map();
+  win.URL.createObjectURL = (blob) => {
+    const url = `blob:test/${blobs.size}`;
+    blobs.set(url, blob);
+    return url;
+  };
+  win.URL.revokeObjectURL = () => {};
+  win.HTMLAnchorElement.prototype.click = function () {
+    saved.push(blobs.get(this.href).text().then((text) => ({ name: this.download, text })));
+  };
+  return () => Promise.all(saved);
+}
+
+test("sauvegarde Drive : lien vers les paramètres de Drive, sauvegarde téléchargée en JSON", async (t) => {
+  const p = openPopup({
+    GET_SYNC_STATUS: { ok: true, meta: SYNC_ON },
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    DRIVE_DOWNLOAD: { ok: true, doc: BACKUP },
+  });
+  t.after(p.close);
+  const downloads = captureDownloads(p.win);
+  await settle();
+  const link = p.$("sync-on").querySelector('a[href^="https://drive.google.com/drive/settings"]');
+  assert.ok(link, "lien vers les paramètres de Drive");
+  assert.equal(link.target, "_blank");
+  p.$("sync-download-btn").click();
+  await settle();
+  assert.deepEqual(p.sent.find((m) => m.type === "DRIVE_DOWNLOAD").payload, undefined, "fichier d'état");
+  const [file] = await downloads();
+  assert.equal(file.name, `moxfield-stock-manager-${new Date(BACKUP.updatedAt).toISOString().slice(0, 10)}.json`);
+  assert.deepEqual(JSON.parse(file.text), BACKUP);
+});
+
+test("sauvegarde Drive : une version de l'historique se télécharge aussi", async (t) => {
+  const created = "2026-11-20T08:00:00.000Z";
+  const p = openPopup({
+    GET_SYNC_STATUS: { ok: true, meta: SYNC_ON },
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    DRIVE_LIST_SNAPSHOTS: { ok: true, snapshots: [{ id: "snap7", createdTime: created, size: 10, reason: "daily" }] },
+    DRIVE_DOWNLOAD: { ok: true, doc: BACKUP },
+  });
+  t.after(p.close);
+  const downloads = captureDownloads(p.win);
+  await settle();
+  const details = p.$("sync-history");
+  details.open = true;
+  details.dispatchEvent(new p.win.Event("toggle"));
+  await settle();
+  const button = [...p.$("sync-snapshots").querySelectorAll("button")].find((b) => b.textContent === "Télécharger");
+  button.click();
+  await settle();
+  assert.deepEqual(p.sent.find((m) => m.type === "DRIVE_DOWNLOAD").payload, { fileId: "snap7" });
+  const [file] = await downloads();
+  assert.equal(file.name, "moxfield-stock-manager-2026-11-20.json");
+});
+
+test("sauvegarde Drive : rien sur Drive, message affiché", async (t) => {
+  const p = openPopup({
+    GET_SYNC_STATUS: { ok: true, meta: SYNC_ON },
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    DRIVE_DOWNLOAD: { ok: false, error: "Aucune sauvegarde sur Drive pour le moment." },
+  });
+  t.after(p.close);
+  await settle();
+  p.$("sync-download-btn").click();
+  await settle();
+  assert.equal(p.$("sync-status").textContent, "Erreur : Aucune sauvegarde sur Drive pour le moment.");
+});

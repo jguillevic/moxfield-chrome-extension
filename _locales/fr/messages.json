@@ -922,5 +922,23 @@
   },
   "buttonBuiltWithProxies_other": {
     "message": "Monté physiquement avec $1 proxies (cliquer pour démonter)"
+  },
+  "syncBackupHint": {
+    "message": "La sauvegarde est dans un dossier caché de ton Drive, réservé à l'extension : il n'apparaît pas dans tes fichiers, seulement dans Drive → Paramètres → Gérer les applications."
+  },
+  "syncDriveLink": {
+    "message": "Ouvrir les paramètres de Drive"
+  },
+  "syncDownload": {
+    "message": "Télécharger la sauvegarde"
+  },
+  "syncDownloading": {
+    "message": "Téléchargement…"
+  },
+  "snapshotDownload": {
+    "message": "Télécharger"
+  },
+  "driveNoBackup": {
+    "message": "Aucune sauvegarde sur Drive pour le moment."
   }
 }

@@ -50,6 +50,9 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- Sauvegarde Google Drive retrouvable : lien vers les paramètres de Drive
+  (le dossier de l'extension y est invisible) et téléchargement en JSON de
+  la sauvegarde et de chaque version de l'historique — novembre 2026.
 - Montage avec des proxies depuis le bouton principal : « Confirmer le
   montage avec N proxies » (et « Mettre à jour avec N proxies ») quand
   seul le stock manque, à la place d'un bouton à part dans l'encadré des
