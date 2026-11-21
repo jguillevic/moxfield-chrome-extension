@@ -94,6 +94,12 @@
   opacity: 0.8;
 }
 
+/* Deck monté : icône (rond coché) en vert, pour ne pas le confondre avec un
+   deck seulement montable (pastille « OK » sur la boîte ouverte). */
+.msm-bar-btn.msm-btn-built {
+  color: #4cc27f !important;
+}
+
 /* Deck monté dont la liste a changé depuis le montage. */
 .msm-bar-btn.msm-btn-outdated::after {
   content: "";
@@ -107,7 +113,7 @@
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
-/* Deck pas encore monté : faisabilité avec le stock libre (✓ si montable,
+/* Deck pas encore monté : faisabilité avec le stock libre (« OK » si montable,
    sinon nombre de cartes bloquantes). Pas de pointer-events, pour que
    l'infobulle du bouton s'affiche aussi au survol de la pastille. */
 .msm-avail-badge {

@@ -1217,10 +1217,12 @@
       btn.appendChild(badge);
     }
     if (availability) {
-      // Pastille : ✓ si montable, sinon nombre d'exemplaires bloquants.
+      // Pastille : « OK » si montable, sinon nombre d'exemplaires bloquants.
+      // Pas de coche : sur l'icône, elle se lisait « déjà monté » (retour
+      // utilisateur, novembre 2026) ; la coche est réservée au deck monté.
       const badge = document.createElement("span");
       badge.className = "msm-avail-badge" + (availability.blocking === 0 ? " msm-avail-ok" : "");
-      badge.textContent = availability.blocking === 0 ? "✓" : String(availability.blocking);
+      badge.textContent = availability.blocking === 0 ? "OK" : String(availability.blocking);
       badge.setAttribute("aria-hidden", "true");
       btn.appendChild(badge);
     }

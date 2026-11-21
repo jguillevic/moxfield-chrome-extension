@@ -127,7 +127,7 @@ contenu du CSV. Même effet qu'une récupération automatique.
     du stock comme celles du deck. Une carte présente à la fois dans le
     deck et dans la réserve apparaît sur une seule ligne, quantités
     additionnées.
-- Le bouton est une icône **boîte ouverte** (**cercle coché** quand le deck est monté) ajoutée à la
+- Le bouton est une icône **boîte ouverte** (**cercle coché vert** quand le deck est monté) ajoutée à la
   barre d'actions flottante de Moxfield, en bas à droite, juste après le
   bouton like (cœur). Quand Moxfield n'affiche pas cette barre (elle a
   disparu de la page d'un deck en novembre 2026), les boutons « Monter » et
@@ -135,7 +135,7 @@ contenu du CSV. Même effet qu'une récupération automatique.
   gauche de la page ; ils retournent dans la barre si elle réapparaît.
 - **Faisabilité visible sans ouvrir la fenêtre** : sur un deck pas encore
   monté, une pastille sur le bouton indique si le deck est montable avec le
-  stock libre — **✓ verte** s'il l'est, **rouge avec un nombre** sinon (nombre
+  stock libre — **« OK » vert** s'il l'est, **rouge avec un nombre** sinon (nombre
   d'exemplaires qui bloqueraient le montage : stock insuffisant ou version
   différente, mêmes règles que ci-dessous). Le détail apparaît au survol
   (« 3 cartes bloquent le montage : 2 manquantes en stock, 1 dans une autre

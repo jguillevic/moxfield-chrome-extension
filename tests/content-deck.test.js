@@ -1209,3 +1209,23 @@ test("deck démonté ailleurs (popup, autre PC) pendant que sa page est ouverte 
   page.setStock(FULL_STOCK); // signale le changement de l'état, comme chrome.storage
   await waitFor(() => buttonText(page).startsWith("Marquer comme monté physiquement"), 2000, "deck affiché comme pas monté");
 });
+
+// Retour utilisateur (novembre 2026) : la coche verte de « montable » sur
+// la boîte ouverte se lisait « déjà monté ».
+test("pastille « montable » sans coche ; deck monté signalé à part, sans pastille", async (t) => {
+  const buildable = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(buildable.close);
+  // Birds of Paradise dans la bonne version : plus rien ne bloque.
+  const marker = buildable.win.document.querySelector('[id^="collection_pt_"]');
+  marker.id = marker.id.replace("collection_pt_", "collection_full_");
+  await waitFor(() => buildable.button().querySelector(".msm-avail-ok"), 2000, "deck montable");
+  assert.equal(buildable.button().querySelector(".msm-avail-ok").textContent, "OK");
+  assert.ok(!buildable.button().classList.contains("msm-btn-built"));
+
+  const deck = { name: "Deck", url: "", cards: [{ name: "Birds of Paradise", qty: 1 }], builtAt: 1 };
+  const built = openDeckPage({ stock: FULL_STOCK, builtDecks: { abc123: deck } });
+  t.after(built.close);
+  await waitFor(() => built.button() && built.button().classList.contains("msm-btn-built"), 2000, "deck monté");
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(built.button().querySelector(".msm-avail-badge:not(.msm-proxy-badge)"), null, "aucune pastille de faisabilité");
+});
