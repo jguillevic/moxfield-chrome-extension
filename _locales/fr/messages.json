@@ -1042,5 +1042,53 @@
   },
   "onboardingMoreReplay": {
     "message": "Ce guide reste disponible en bas du popup."
+  },
+  "decksTitle": {
+    "message": "Mes decks"
+  },
+  "decksHint": {
+    "message": "Chaque deck que tu ouvres sur Moxfield s'ajoute ici, avec les decks montés : vois d'un coup d'œil ce que tu peux monter avec ton stock libre. Tu peux aussi coller l'adresse d'un deck."
+  },
+  "decksAddPlaceholder": {
+    "message": "Adresse d'un deck Moxfield"
+  },
+  "decksAdd": {
+    "message": "Ajouter"
+  },
+  "decksRefresh": {
+    "message": "Actualiser"
+  },
+  "decksRefreshing": {
+    "message": "Lecture des decks sur Moxfield…"
+  },
+  "decksNone": {
+    "message": "Aucun deck pour le moment : ouvre un de tes decks sur Moxfield, ou colle son adresse ci-dessus."
+  },
+  "decksStatusBuilt": {
+    "message": "Monté"
+  },
+  "decksStatusBuildable": {
+    "message": "Montable"
+  },
+  "decksStatusBlocked_one": {
+    "message": "$1 carte bloque"
+  },
+  "decksStatusBlocked_other": {
+    "message": "$1 cartes bloquent"
+  },
+  "decksStatusUnknown": {
+    "message": "À vérifier"
+  },
+  "decksStatusUnavailable": {
+    "message": "Introuvable ou privé"
+  },
+  "decksCheckedAt": {
+    "message": "Lu sur Moxfield le $1"
+  },
+  "decksRemove": {
+    "message": "Retirer de Mes decks"
+  },
+  "decksInvalidUrl": {
+    "message": "Adresse de deck Moxfield non reconnue (ex. https://moxfield.com/decks/…)."
   }
 }

@@ -822,3 +822,97 @@ test("guide de démarrage : en anglais", async (t) => {
   assert.equal(p.$("onboarding-progress").textContent, "Getting started — step 1 of 4");
   assert.equal(guideTitle(p), "Fetch your Moxfield collection");
 });
+
+// --- Mes decks ---
+
+const DECKS = [
+  { deckId: "b1", name: "Zethi", url: "https://moxfield.com/decks/b1", followed: false, fetchedAt: null, status: "built" },
+  { deckId: "k1", name: "Teval", url: "https://moxfield.com/decks/k1", followed: true, fetchedAt: 1, status: "blocked", blocking: 3, label: "3 cartes bloquent le montage : …" },
+  { deckId: "o1", name: "Saheeli", url: "https://moxfield.com/decks/o1", followed: true, fetchedAt: 1, status: "buildable", blocking: 0, label: "montable : …" },
+  { deckId: "u1", name: "Inconnu", url: "https://moxfield.com/decks/u1", followed: true, fetchedAt: null, status: "unknown" },
+];
+
+async function openDecksSection(p) {
+  const details = p.$("decks-details");
+  details.open = true;
+  details.dispatchEvent(new p.win.Event("toggle"));
+  await settle();
+}
+const deckRows = (p) => [...p.$("decks-list").querySelectorAll(".deck-row")].map((r) => [r.querySelector("a").textContent, r.querySelector(".deck-status").textContent]);
+
+test("Mes decks : rien demandé section repliée ; montables d'abord, puis bloqués, à vérifier, montés", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_DECKS: { ok: true, decks: DECKS, staleIds: [] } });
+  t.after(p.close);
+  await settle();
+  assert.ok(!p.sent.some((m) => m.type === "GET_DECKS"), "section repliée : rien demandé");
+  await openDecksSection(p);
+  assert.deepEqual(deckRows(p), [
+    ["Saheeli", "Montable"],
+    ["Teval", "3 cartes bloquent"],
+    ["Inconnu", "À vérifier"],
+    ["Zethi", "Monté"],
+  ]);
+  assert.equal(p.$("decks-list").querySelector(".deck-status.blocked").title, "3 cartes bloquent le montage : …");
+  assert.equal(p.$("decks-list").querySelectorAll(".deck-remove").length, 3, "pas de « retirer » pour un deck monté");
+  assert.ok(!p.sent.some((m) => m.type === "REFRESH_DECKS"), "rien à relire");
+});
+
+test("Mes decks : decks à relire relus à l'ouverture, puis liste redessinée ; erreur affichée", async (t) => {
+  let decks = [{ ...DECKS[3] }];
+  const p = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_DECKS: () => ({ ok: true, decks, staleIds: decks[0].status === "unknown" ? ["u1"] : [] }),
+    REFRESH_DECKS: () => {
+      decks = [{ ...DECKS[2], deckId: "u1", name: "Inconnu" }];
+      return { ok: true, refreshed: 1 };
+    },
+  });
+  t.after(p.close);
+  await openDecksSection(p);
+  await settle();
+  assert.deepEqual(p.sent.find((m) => m.type === "REFRESH_DECKS").payload, { deckIds: ["u1"] });
+  assert.deepEqual(deckRows(p), [["Inconnu", "Montable"]]);
+
+  const failing = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_DECKS: { ok: true, decks: [DECKS[3]], staleIds: ["u1"] },
+    REFRESH_DECKS: { ok: false, code: "not-logged-in", error: "Pas de session Moxfield : connecte-toi sur moxfield.com dans ce navigateur." },
+  });
+  t.after(failing.close);
+  await openDecksSection(failing);
+  await settle();
+  assert.match(failing.$("decks-status").textContent, /^Erreur : Pas de session Moxfield/);
+});
+
+test("Mes decks : ajouter une adresse, retirer un deck", async (t) => {
+  let decks = [];
+  const p = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_DECKS: () => ({ ok: true, decks, staleIds: [] }),
+    ADD_DECK: (msg) => {
+      if (!msg.payload.input.includes("moxfield.com/decks/")) return { ok: false, code: "invalid-deck", error: "Adresse de deck Moxfield non reconnue (ex. https://moxfield.com/decks/…)." };
+      decks = [DECKS[2]];
+      return { ok: true, refreshed: 1 };
+    },
+    UNFOLLOW_DECK: () => ((decks = []), { ok: true }),
+  });
+  t.after(p.close);
+  await openDecksSection(p);
+  assert.match(p.$("decks-list").textContent, /Aucun deck pour le moment/);
+
+  p.$("deck-add-input").value = "n'importe quoi";
+  p.$("deck-add-btn").click();
+  await settle();
+  assert.match(p.$("decks-status").textContent, /non reconnue/);
+
+  p.$("deck-add-input").value = "https://moxfield.com/decks/o1";
+  p.$("deck-add-btn").click();
+  await settle();
+  assert.deepEqual(deckRows(p), [["Saheeli", "Montable"]]);
+  assert.equal(p.$("deck-add-input").value, "");
+
+  p.$("decks-list").querySelector(".deck-remove").click();
+  await settle();
+  assert.deepEqual(p.sent.find((m) => m.type === "UNFOLLOW_DECK").payload, { deckId: "o1" });
+  assert.match(p.$("decks-list").textContent, /Aucun deck pour le moment/);
+});

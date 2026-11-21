@@ -1592,6 +1592,17 @@
     }
   }
 
+  // Deck ouvert : ajouté à « Mes decks » du popup (cf. handleFollowDeck dans
+  // background.js). En fond, silencieux après un rechargement de
+  // l'extension.
+  function followDeck(deckId) {
+    try {
+      chrome.runtime.sendMessage({ type: "FOLLOW_DECK", payload: { deckId, name: getDeckName() } }).catch(() => {});
+    } catch (e) {
+      // contexte d'extension invalidé
+    }
+  }
+
   async function syncButtonToLocation() {
     // Rappelée à chaque tick du polling (voir plus bas) : la liste du deck
     // est affichée par React après le changement d'URL, et contrôlée tant
@@ -1601,6 +1612,7 @@
       ensureButton();
       if (deckId !== currentDeckId) {
         currentDeckId = deckId;
+        followDeck(deckId);
         btnEditionNames = [];
         renderEditionsButton();
         btnOutdated = false;

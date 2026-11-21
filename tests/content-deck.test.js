@@ -1229,3 +1229,14 @@ test("pastille « montable » sans coche ; deck monté signalé à part, sans pa
   await new Promise((resolve) => setTimeout(resolve, 600));
   assert.equal(built.button().querySelector(".msm-avail-badge:not(.msm-proxy-badge)"), null, "aucune pastille de faisabilité");
 });
+
+// Vue « Mes decks » du popup : chaque deck ouvert y est ajouté.
+test("deck ouvert : ajouté à « Mes decks », une fois par deck", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const follows = page.sent.filter((m) => m.type === "FOLLOW_DECK");
+  assert.equal(follows.length, 1);
+  assert.equal(follows[0].payload.deckId, "abc123");
+  assert.equal(typeof follows[0].payload.name, "string");
+});

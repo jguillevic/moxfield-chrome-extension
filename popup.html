@@ -59,6 +59,24 @@
     <div id="built-list" class="list"></div>
     <p id="built-status" class="hint" role="status"></p>
   </section>
+  <!-- Mes decks : faisabilité de plusieurs decks sans les ouvrir (cf. handleGetDecks dans background.js). -->
+  <section class="card">
+    <details id="decks-details">
+      <summary><h2 data-i18n="decksTitle"></h2></summary>
+      <div class="card-body">
+        <p class="hint" data-i18n="decksHint"></p>
+        <div class="deck-add-row">
+          <input id="deck-add-input" type="text" data-i18n-placeholder="decksAddPlaceholder" />
+          <button id="deck-add-btn" data-i18n="decksAdd"></button>
+        </div>
+        <div class="actions">
+          <button id="decks-refresh-btn" data-i18n="decksRefresh"></button>
+          <span id="decks-status" class="status"></span>
+        </div>
+        <div id="decks-list" class="list"></div>
+      </div>
+    </details>
+  </section>
   <section class="card">
     <details id="stock-details">
       <summary><h2 data-i18n="stockTitle"></h2></summary>

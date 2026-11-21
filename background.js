@@ -18,6 +18,11 @@
 //     rapport au montage (absent = aucune, ou jamais constaté).
 //   history     : [entrée] — historique des changements, le plus récent en
 //                 premier (cf. history.js). Synchronisé avec le reste.
+//   followedDecks : { [deckId]: { name, url, addedAt } } — decks de la vue
+//                 « Mes decks » du popup (ouverts sur Moxfield ou ajoutés à
+//                 la main), en plus des decks montés. Synchronisé ; une
+//                 ancienne version de l'extension l'ignore et le perd en
+//                 écrivant l'état (rien d'autre n'est touché).
 
 // Modules partagés (chargés tels quels, cf. leur en-tête) :
 // createDeckChecks, createMoxfieldCollection, computeCollectionDiff,
@@ -36,7 +41,18 @@ function normalizeName(name) {
 }
 
 // Règles partagées avec la page d'un deck et le popup (cf. deck-checks.js).
-const { isBasicLand, stockQtyOf, proxyCountOf, proxyTotal, replaceableProxies, chooseOwnedEdition, buildVersionUsage } = createDeckChecks(
+const {
+  isBasicLand,
+  stockQtyOf,
+  proxyCountOf,
+  proxyTotal,
+  replaceableProxies,
+  chooseOwnedEdition,
+  buildVersionUsage,
+  computeDeckAvailability,
+  availabilityLabel,
+  cardsFromDeckApi,
+} = createDeckChecks(
   normalizeName,
   i18n
 );
@@ -52,6 +68,7 @@ async function getState() {
     stock: state.stock || {},
     builtDecks: state.builtDecks || {},
     history: Array.isArray(state.history) ? state.history : [],
+    followedDecks: isPlainObject(state.followedDecks) ? state.followedDecks : {},
   };
 }
 
@@ -627,7 +644,13 @@ function parseDoc(doc) {
   // invalides écartées plutôt que de refuser toute la sauvegarde.
   const rawHistory = Array.isArray(doc.state.history) ? doc.state.history : [];
   const history = rawHistory.filter((e) => isPlainObject(e) && typeof e.id === "string" && Number.isFinite(e.at));
-  return { state: { stock, builtDecks, history }, updatedAt: doc.updatedAt || Date.parse(doc.exportedAt) || 0 };
+  // Decks suivis : absents des sauvegardes d'avant « Mes decks » ; entrées
+  // invalides écartées.
+  const followedDecks = {};
+  for (const [id, d] of Object.entries(isPlainObject(doc.state.followedDecks) ? doc.state.followedDecks : {})) {
+    if (isDeckId(id) && isPlainObject(d) && typeof d.name === "string") followedDecks[id] = d;
+  }
+  return { state: { stock, builtDecks, history, followedDecks }, updatedAt: doc.updatedAt || Date.parse(doc.exportedAt) || 0 };
 }
 
 // Identifiant OAuth « Application Web » de la fenêtre de connexion (cf.
@@ -1031,15 +1054,19 @@ async function handleDriveDownload({ fileId } = {}) {
 async function handleDriveRestoreSnapshot({ fileId }) {
   const { state } = await downloadDoc(fileId);
   // L'historique récent est gardé : la version restaurée ne le remplace pas.
-  state.history = historyLog.mergeHistories(state.history, (await getState()).history);
+  const current = await getState();
+  state.history = historyLog.mergeHistories(state.history, current.history);
+  // Decks suivis d'ici gardés : la liste ne fait que s'allonger.
+  state.followedDecks = { ...current.followedDecks, ...state.followedDecks };
   await recordHistory(state, { type: "drive-restore" });
   await setState(state);
   return { ok: true, cardCount: Object.keys(state.stock).length, deckCount: Object.keys(state.builtDecks).length };
 }
 
 async function handleResetStock() {
-  const { builtDecks, history } = await getState();
-  const state = { stock: {}, builtDecks: {}, history };
+  const { builtDecks, history, followedDecks } = await getState();
+  // Les decks suivis restent dans « Mes decks » (rien de physique).
+  const state = { stock: {}, builtDecks: {}, history, followedDecks };
   await recordHistory(state, { type: "reset", builtDecks });
   await setState(state);
   return { ok: true };
@@ -1554,6 +1581,166 @@ async function handleGetUpdateStatus() {
   return { ok: true, update };
 }
 
+// --- Mes decks (popup) ---
+// Faisabilité de plusieurs decks sans les ouvrir : decks suivis (ouverts
+// sur Moxfield, ou adresse collée dans le popup) et decks montés. Moxfield
+// n'a pas d'appel connu qui liste les decks d'un compte : la liste se
+// remplit au fil des visites. Chaque deck est lu par l'API déjà utilisée
+// pour les éditions (cf. fetchDeck), et calculé avec computeDeckAvailability,
+// comme la pastille du bouton de la page.
+//
+// Cartes lues gardées sur ce PC (pas synchronisées, recalculables) :
+// { [deckId]: { name, fetchedAt, cards } } ou { fetchedAt, error }. La
+// faisabilité, elle, est recalculée à chaque ouverture avec le stock du
+// moment : seules les listes des decks vieillissent.
+const DECK_CACHE_KEY = "moxfieldStockManagerDeckCache";
+// Liste d'un deck relue au-delà : un deck se modifie rarement, et chaque
+// lecture est un appel à Moxfield.
+const DECK_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+// Borne de la liste : au-delà, les plus anciens decks suivis cèdent la place.
+const MAX_FOLLOWED_DECKS = 200;
+// Pause entre deux lectures de deck, pour ne pas enchaîner les appels.
+const DECK_READ_PAUSE_MS = 300;
+
+function isDeckId(id) {
+  return typeof id === "string" && /^[\w-]{1,64}$/.test(id);
+}
+
+function deckUrlOf(deckId) {
+  return `https://moxfield.com/decks/${deckId}`;
+}
+
+// Adresse d'un deck Moxfield (ou son seul identifiant) → identifiant, null
+// si ce n'en est pas une.
+// « public » : la liste des decks publics, même forme d'adresse (cf.
+// NON_DECK_SLUGS dans content-deck.js).
+function deckIdFromInput(input) {
+  const text = String(input || "").trim();
+  const m = /^(?:https?:\/\/)?(?:www\.)?moxfield\.com\/decks\/([\w-]{1,64})(?:[/?#].*)?$/i.exec(text);
+  const id = m ? m[1] : text;
+  return isDeckId(id) && id.toLowerCase() !== "public" ? id : null;
+}
+
+async function getDeckCache() {
+  const data = await chrome.storage.local.get(DECK_CACHE_KEY);
+  return data[DECK_CACHE_KEY] || {};
+}
+
+// Ajoute un deck à « Mes decks » ; n'écrit (et n'envoie sur Drive) que si
+// quelque chose change : la page d'un deck l'appelle à chaque visite.
+async function followDeck(deckId, name) {
+  const state = await getState();
+  const current = state.followedDecks[deckId];
+  if (current && (!name || current.name === name)) return false;
+  const followedDecks = { ...state.followedDecks, [deckId]: { name: name || deckId, url: deckUrlOf(deckId), addedAt: current ? current.addedAt : Date.now() } };
+  const ids = Object.keys(followedDecks);
+  if (ids.length > MAX_FOLLOWED_DECKS) {
+    ids.sort((a, b) => (followedDecks[a].addedAt || 0) - (followedDecks[b].addedAt || 0));
+    for (const id of ids.slice(0, ids.length - MAX_FOLLOWED_DECKS)) delete followedDecks[id];
+  }
+  await setState({ ...state, followedDecks });
+  return true;
+}
+
+// Visite de la page d'un deck : ajouté s'il n'est pas déjà suivi, jamais
+// renommé — le nom lu sur la page (cf. getDeckName dans content-deck.js)
+// n'est pas toujours celui du deck, et le corriger à chaque visite
+// écrirait l'état (donc Drive) en boucle avec le nom lu par l'API.
+async function handleFollowDeck({ deckId, name }) {
+  if (!isDeckId(deckId)) return { ok: false, code: "invalid-deck" };
+  const state = await getState();
+  if (state.followedDecks[deckId] || state.builtDecks[deckId]) return { ok: true, changed: false };
+  return { ok: true, changed: await followDeck(deckId, typeof name === "string" ? name.trim().slice(0, 200) : "") };
+}
+
+async function handleUnfollowDeck({ deckId }) {
+  const state = await getState();
+  if (!state.followedDecks[deckId]) return { ok: true };
+  const followedDecks = { ...state.followedDecks };
+  delete followedDecks[deckId];
+  await setState({ ...state, followedDecks });
+  return { ok: true };
+}
+
+// Adresse collée dans le popup : deck suivi, puis lu tout de suite.
+async function handleAddDeck({ input }) {
+  const deckId = deckIdFromInput(input);
+  if (!deckId) return { ok: false, code: "invalid-deck", error: i18n.t("decksInvalidUrl") };
+  const state = await getState();
+  if (!state.followedDecks[deckId] && !state.builtDecks[deckId]) await followDeck(deckId, "");
+  return handleRefreshDecks({ deckIds: [deckId] });
+}
+
+// Lit les decks demandés, l'un après l'autre, dans la file des appels à
+// Moxfield. S'arrête au premier problème général (pas connecté, réseau,
+// refus) ; un deck introuvable ou privé est noté et la suite continue.
+async function handleRefreshDecks({ deckIds } = {}) {
+  const ids = (Array.isArray(deckIds) ? deckIds : []).filter(isDeckId);
+  let refreshed = 0;
+  for (const deckId of ids) {
+    if (refreshed > 0) await new Promise((resolve) => setTimeout(resolve, DECK_READ_PAUSE_MS));
+    const run = collectionQueue.then(() => moxfieldCollection.fetchDeck(deckId));
+    collectionQueue = run.catch(() => {});
+    let entry;
+    try {
+      const deck = await run;
+      entry = { name: typeof deck.name === "string" ? deck.name : "", fetchedAt: Date.now(), cards: deckCardList(deck) };
+    } catch (e) {
+      const code = e.code || "unknown";
+      if (code !== "deck-unavailable") {
+        if (!EXPECTED_EDITION_ERRORS.includes(code)) reportError("moxfield-deck-overview", e, { code });
+        return { ok: false, code, error: e.message || String(e), refreshed };
+      }
+      entry = { fetchedAt: Date.now(), error: code };
+    }
+    const cache = await getDeckCache();
+    await chrome.storage.local.set({ [DECK_CACHE_KEY]: { ...cache, [deckId]: entry } });
+    // Nom lu sur Moxfield : plus sûr que celui de la page (cf. getDeckName).
+    if (entry.name && (await getState()).followedDecks[deckId]) await followDeck(deckId, entry.name);
+    refreshed++;
+  }
+  return { ok: true, refreshed };
+}
+
+// Vue « Mes decks » : faisabilité recalculée avec le stock du moment.
+// status : "built" (monté), "buildable", "blocked", "unknown" (jamais lu),
+// "unavailable" (introuvable ou privé). staleIds : decks à relire.
+async function handleGetDecks() {
+  const state = await getState();
+  const cache = await getDeckCache();
+  const versionUsage = buildVersionUsage(state.builtDecks);
+  const now = Date.now();
+  const ids = [...new Set([...Object.keys(state.followedDecks), ...Object.keys(state.builtDecks)])];
+  const decks = ids.map((deckId) => {
+    const built = state.builtDecks[deckId];
+    const followed = state.followedDecks[deckId];
+    const cached = cache[deckId];
+    const deck = {
+      deckId,
+      name: (built && built.name) || (cached && cached.name) || (followed && followed.name) || deckId,
+      url: (built && built.url) || (followed && followed.url) || deckUrlOf(deckId),
+      followed: Boolean(followed),
+      fetchedAt: (cached && cached.fetchedAt) || null,
+    };
+    if (built) return { ...deck, status: "built" };
+    if (!cached) return { ...deck, status: "unknown" };
+    if (cached.error) return { ...deck, status: "unavailable" };
+    const availability = computeDeckAvailability(cardsFromDeckApi(cached.cards, state.stock), state.stock, undefined, versionUsage);
+    return {
+      ...deck,
+      status: availability.blocking === 0 ? "buildable" : "blocked",
+      blocking: availability.blocking,
+      available: availability.available,
+      total: availability.total,
+      label: availabilityLabel(availability),
+    };
+  });
+  const staleIds = decks
+    .filter((d) => d.status !== "built" && (!d.fetchedAt || now - d.fetchedAt > DECK_CACHE_MAX_AGE_MS))
+    .map((d) => d.deckId);
+  return { ok: true, decks, staleIds };
+}
+
 // --- Guide de démarrage (popup) ---
 // { done, step } : guide terminé ou passé, et étape où l'utilisateur s'est
 // arrêté (le popup se ferme dès qu'on va sur Moxfield : le guide reprend là
@@ -1636,6 +1823,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: true, state: { stock, builtDecks } });
           break;
         }
+        case "GET_DECKS":
+          sendResponse(await handleGetDecks());
+          break;
+        case "REFRESH_DECKS":
+          sendResponse(await handleRefreshDecks(msg.payload || {}));
+          break;
+        case "ADD_DECK":
+          sendResponse(await handleAddDeck(msg.payload || {}));
+          break;
+        case "FOLLOW_DECK":
+          sendResponse(await handleFollowDeck(msg.payload || {}));
+          break;
+        case "UNFOLLOW_DECK":
+          sendResponse(await handleUnfollowDeck(msg.payload || {}));
+          break;
         case "GET_ONBOARDING":
           sendResponse(await handleGetOnboarding());
           break;

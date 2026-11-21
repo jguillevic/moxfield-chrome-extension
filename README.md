@@ -356,6 +356,24 @@ contenu du CSV. Même effet qu'une récupération automatique.
 - Montage, mise à jour, démontage et remplacement notent les proxies dans
   l'historique.
 
+### Mes decks : que puis-je monter ?
+
+- Dans le popup, section **« Mes decks »** (repliée par défaut) : tes decks
+  avec, pour chacun, **Montable** (vert), **N cartes bloquent** (rouge,
+  détail au survol, comme sur le bouton de la page du deck), **Monté**, ou
+  **À vérifier** (pas encore lu). Les montables d'abord, puis les moins
+  bloqués ; les montés à la fin.
+- La liste se remplit toute seule : **chaque deck que tu ouvres sur
+  Moxfield y est ajouté**, et les decks montés y sont d'office. Tu peux
+  aussi **coller l'adresse d'un deck** (`https://moxfield.com/decks/…`) et
+  cliquer sur **« Ajouter »**. Le **×** retire un deck de la liste.
+- Chaque deck est lu sur Moxfield à l'ouverture de la section s'il ne l'a
+  pas été depuis 6 heures (bouton **« Actualiser »** pour tout relire). La
+  faisabilité est recalculée avec ton stock du moment, sans relire
+  Moxfield.
+- La liste est synchronisée entre tes PC avec le reste (Google Drive), et
+  gardée par « Réinitialiser tout le stock ».
+
 ### 3. Consulter le stock
 
 - Ouvre le popup de l'extension (icône dans la barre d'outils).
@@ -523,6 +541,16 @@ en cas de conflit : rien ne s'y perd).
   ses propres fichiers.
 
 ## Limites connues
+
+- **Mes decks** : Moxfield n'a pas d'appel connu qui liste les decks d'un
+  compte, donc un deck jamais ouvert (ni collé) n'y figure pas. Les decks
+  des autres que tu ouvres y sont aussi ajoutés (retire-les avec ×). Il faut
+  être connecté à Moxfield pour lire les decks. La « version différente »
+  y est déduite de l'édition du deck et de celle de ta collection, et non
+  du repère de Moxfield sur la page : dans de rares cas, le chiffre peut
+  différer de celui de la pastille du bouton. Une ancienne version de
+  l'extension sur un autre PC ignore la liste et la perd en écrivant
+  l'état : mets tous tes PC à jour.
 
 - La détection d'une nouvelle version demande un clone git du dépôt (pas
   une simple copie du dossier) et un accès à l'API de GitHub (sans compte,
@@ -698,6 +726,13 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   introuvable), changement d'édition d'une carte d'un deck (cartes du deck,
   éditions d'une carte réduites dans `tests/fixtures/api/card-editions.json`,
   corps et en-têtes de l'appel, finition, résultat vérifié, refus).
+- « Mes decks » : `tests/background.test.js` (deck suivi une fois, jamais
+  renommé par la page, lecture sur Moxfield, faisabilité recalculée avec le
+  stock, deck introuvable, pas connecté, adresse collée, retrait,
+  synchronisation), `tests/popup.test.js` (tri, relecture à l'ouverture,
+  ajout, retrait), `tests/deck-checks.test.js` (`cardsFromDeckApi`),
+  `tests/moxfield-collection.test.js` (`deckCardList`) et
+  `tests/content-deck.test.js` (deck ouvert ajouté).
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page
   de test avec un faux `chrome`) — sections « Collection Moxfield » et
   « Historique » et « Rapports d'erreurs » (lien de connexion à Moxfield

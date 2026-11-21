@@ -22,7 +22,8 @@ const BRAVE = { userAgent: UA, userAgentData: { brands: [{ brand: "Brave", versi
 
 // options.moxfieldCSV : collection renvoyée par le faux Moxfield (CSV), ou
 // une Error à lever ; sans elle, tout appel réseau fait échouer le test.
-// options.moxfieldDeck : réponse (texte JSON) de l'API d'un deck.
+// options.moxfieldDeck : réponse (texte JSON) de l'API d'un deck, ou
+// fonction (url) => texte JSON ou { status } (erreur HTTP).
 // options.cookies : cookies de moxfield.com (session ouverte par défaut).
 // options.drive : fausse API Google Drive, (url, options) => réponse.
 // options.sentryDsn : DSN des rapports d'erreurs (aucun envoi sinon) ; les
@@ -172,10 +173,14 @@ function loadBackground(initialState, options = {}) {
     }
     if (url.includes("/decks/all/")) moxfieldCalls.push({ url, method: "GET" });
     if (options.moxfieldCSV instanceof Error) throw options.moxfieldCSV;
+    const deckAnswer = url.includes("/decks/all/") && typeof options.moxfieldDeck === "function" ? options.moxfieldDeck(url) : options.moxfieldDeck;
+    if (url.includes("/decks/all/") && deckAnswer && typeof deckAnswer === "object") {
+      return { ok: false, status: deckAnswer.status, json: async () => ({}), text: async () => "" };
+    }
     const body = url.includes("/token/")
       ? JSON.stringify({ access_token: "jeton" })
       : url.includes("/decks/all/")
-        ? options.moxfieldDeck
+        ? deckAnswer
         : options.moxfieldCSV;
     return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
   }
@@ -1967,7 +1972,8 @@ test("sauvegarde Drive : fichier d'état téléchargé et décompressé", async 
   const bg = loadBackground(undefined, { drive });
   const res = await bg.send({ type: "DRIVE_DOWNLOAD" });
   assert.equal(res.ok, true);
-  assert.deepEqual(res.doc, DOC);
+  // Liste « Mes decks » ajoutée, vide pour une sauvegarde d'avant.
+  assert.deepEqual(res.doc, { ...DOC, state: { ...DOC.state, followedDecks: {} } });
   assert.ok(calls.some((u) => u.includes("/files/etat1?alt=media")), "fichier d'état lu");
 });
 
@@ -1975,7 +1981,7 @@ test("sauvegarde Drive : version de l'historique téléchargée", async () => {
   const { drive, calls } = driveWithStateFile([]);
   const bg = loadBackground(undefined, { drive });
   const res = await bg.send({ type: "DRIVE_DOWNLOAD", payload: { fileId: "snap7" } });
-  assert.deepEqual(res.doc, DOC);
+  assert.deepEqual(res.doc, { ...DOC, state: { ...DOC.state, followedDecks: {} } });
   assert.ok(calls.some((u) => u.includes("/files/snap7?alt=media")));
 });
 
@@ -2073,4 +2079,98 @@ test("guide de démarrage : étape et fin retenues, rejouable, sans écrire l'é
   await bg.send({ type: "SET_ONBOARDING", payload: { done: false, step: 0 } }); // rejoué
   assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, step: 0 });
   assert.equal(bg.counts.stateWrites, 0, "propre à ce PC : rien n'est envoyé sur Drive");
+});
+
+// --- Mes decks (vue d'ensemble dans le popup) ---
+
+const SOL_DECK = (name, cards) => JSON.stringify({
+  id: "x", name, publicId: "p", boards: { mainboard: { cards: Object.fromEntries(cards.map(([n, id], i) => [`u${i}`, { quantity: 1, card: { id, name: n, set: "c21", cn: String(i) } }])) } },
+});
+const decksOf = async (bg) => (await bg.send({ type: "GET_DECKS" })).decks;
+
+test("Mes decks : deck ouvert suivi une fois, jamais renommé par la page, gardé après une réinitialisation", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  assert.deepEqual(await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "deck1", name: "Nom lu sur la page" } }), { ok: true, changed: true });
+  const writes = bg.counts.stateWrites;
+  assert.equal((await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "deck1", name: "Autre nom" } })).changed, false);
+  assert.equal(bg.counts.stateWrites, writes, "déjà suivi : rien n'est écrit (ni envoyé sur Drive)");
+  assert.equal(bg.raw().followedDecks.deck1.name, "Nom lu sur la page");
+  await bg.send({ type: "RESET_STOCK" });
+  assert.ok(bg.raw().followedDecks.deck1, "réinitialisation : les decks suivis restent");
+  assert.equal((await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "../x" } })).ok, false, "identifiant invalide");
+});
+
+test("Mes decks : deck suivi jamais lu à relire, deck monté affiché sans appel à Moxfield", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "deck1", name: "Deck 1" } });
+  const res = await bg.send({ type: "GET_DECKS" });
+  assert.deepEqual(res.decks.map((d) => [d.deckId, d.status]), [["deck1", "unknown"], ["a", "built"]]);
+  assert.deepEqual(res.staleIds, ["deck1"]);
+});
+
+test("Mes decks : decks relus sur Moxfield, faisabilité avec le stock du moment, nom de Moxfield retenu", async () => {
+  const bg = loadBackground(SOL_RING_STOCK(), {
+    moxfieldCSV: "",
+    moxfieldDeck: (url) => (url.includes("/ok1") ? SOL_DECK("Deck montable", [["Sol Ring", "S1"]]) : SOL_DECK("Deck incomplet", [["Sol Ring", "S1"], ["Rhystic Study", "R1"]])),
+  });
+  await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "ok1", name: "Titre de page" } });
+  await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "ko2", name: "ko2" } });
+  assert.deepEqual(await bg.send({ type: "REFRESH_DECKS", payload: { deckIds: ["ok1", "ko2"] } }), { ok: true, refreshed: 2 });
+  const decks = await decksOf(bg);
+  const ok = decks.find((d) => d.deckId === "ok1");
+  const ko = decks.find((d) => d.deckId === "ko2");
+  assert.deepEqual([ok.name, ok.status, ok.blocking], ["Deck montable", "buildable", 0]);
+  assert.deepEqual([ko.status, ko.blocking], ["blocked", 1]);
+  assert.match(ko.label, /manque Rhystic Study \(1\)/);
+  assert.equal(bg.raw().followedDecks.ok1.name, "Deck montable", "nom lu par l'API");
+  assert.deepEqual((await bg.send({ type: "GET_DECKS" })).staleIds, [], "lus à l'instant");
+
+  // Le stock change : faisabilité recalculée sans relire Moxfield.
+  const calls = bg.moxfieldCalls.length;
+  await build(bg, "b", [{ name: "Sol Ring", qty: 2 }]);
+  assert.equal((await decksOf(bg)).find((d) => d.deckId === "ok1").status, "blocked");
+  assert.equal(bg.moxfieldCalls.length, calls);
+});
+
+test("Mes decks : deck introuvable ou privé noté sans rapport d'erreur ; pas connecté, lecture arrêtée", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN, moxfieldCSV: "", moxfieldDeck: () => ({ status: 404 }) });
+  await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "gone", name: "Supprimé" } });
+  assert.deepEqual(await bg.send({ type: "REFRESH_DECKS", payload: { deckIds: ["gone"] } }), { ok: true, refreshed: 1 });
+  assert.equal((await decksOf(bg))[0].status, "unavailable");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(bg.sentry.length, 0);
+
+  const loggedOut = loadBackground(undefined, { moxfieldCSV: "", cookies: [], moxfieldDeck: "{}" });
+  await loggedOut.send({ type: "FOLLOW_DECK", payload: { deckId: "d1", name: "D1" } });
+  const res = await loggedOut.send({ type: "REFRESH_DECKS", payload: { deckIds: ["d1", "d2"] } });
+  assert.deepEqual([res.ok, res.code, res.refreshed], [false, "not-logged-in", 0]);
+  assert.equal((await decksOf(loggedOut))[0].status, "unknown");
+});
+
+test("Mes decks : adresse collée ajoutée et lue tout de suite ; adresse non reconnue refusée", async () => {
+  const bg = loadBackground(SOL_RING_STOCK(), { moxfieldCSV: "", moxfieldDeck: SOL_DECK("Collé", [["Sol Ring", "S1"]]) });
+  const res = await bg.send({ type: "ADD_DECK", payload: { input: " https://www.moxfield.com/decks/Z9iP5lF4OEusUjMQXrpbgg/primer " } });
+  assert.deepEqual(res, { ok: true, refreshed: 1 });
+  assert.deepEqual((await decksOf(bg)).map((d) => [d.deckId, d.name, d.status]), [["Z9iP5lF4OEusUjMQXrpbgg", "Collé", "buildable"]]);
+  for (const input of ["https://example.com/decks/abc", "https://moxfield.com/decks/public", "pas une adresse !"]) {
+    const refused = await bg.send({ type: "ADD_DECK", payload: { input } });
+    assert.equal(refused.code, "invalid-deck", input);
+    assert.match(refused.error, /non reconnue/);
+  }
+});
+
+test("Mes decks : retirer un deck suivi ; liste synchronisée via Drive et gardée à la restauration", async () => {
+  const bg = loadBackground();
+  await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "d1", name: "D1" } });
+  await bg.send({ type: "UNFOLLOW_DECK", payload: { deckId: "d1" } });
+  assert.deepEqual(await decksOf(bg), []);
+
+  // Sauvegarde Drive : la liste fait partie de l'état envoyé.
+  await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "d2", name: "D2" } });
+  const doc = bg.context.makeDoc(await bg.context.getState(), 1);
+  assert.deepEqual(Object.keys(plain(doc.state.followedDecks)), ["d2"]);
+  // Relue, avec une entrée invalide écartée.
+  doc.state.followedDecks["../x"] = { name: "invalide" };
+  assert.deepEqual(Object.keys(plain(bg.context.parseDoc(doc).state.followedDecks)), ["d2"]);
 });

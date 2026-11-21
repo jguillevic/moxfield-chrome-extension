@@ -1042,5 +1042,53 @@
   },
   "onboardingMoreReplay": {
     "message": "This guide stays available at the bottom of the popup."
+  },
+  "decksTitle": {
+    "message": "My decks"
+  },
+  "decksHint": {
+    "message": "Every deck you open on Moxfield is added here, along with built decks: see at a glance what you can build with your free stock. You can also paste a deck's address."
+  },
+  "decksAddPlaceholder": {
+    "message": "Moxfield deck address"
+  },
+  "decksAdd": {
+    "message": "Add"
+  },
+  "decksRefresh": {
+    "message": "Refresh"
+  },
+  "decksRefreshing": {
+    "message": "Reading decks on Moxfield…"
+  },
+  "decksNone": {
+    "message": "No decks yet: open one of your decks on Moxfield, or paste its address above."
+  },
+  "decksStatusBuilt": {
+    "message": "Built"
+  },
+  "decksStatusBuildable": {
+    "message": "Buildable"
+  },
+  "decksStatusBlocked_one": {
+    "message": "$1 card blocks"
+  },
+  "decksStatusBlocked_other": {
+    "message": "$1 cards block"
+  },
+  "decksStatusUnknown": {
+    "message": "To check"
+  },
+  "decksStatusUnavailable": {
+    "message": "Not found or private"
+  },
+  "decksCheckedAt": {
+    "message": "Read on Moxfield on $1"
+  },
+  "decksRemove": {
+    "message": "Remove from My decks"
+  },
+  "decksInvalidUrl": {
+    "message": "Moxfield deck address not recognized (e.g. https://moxfield.com/decks/…)."
   }
 }

@@ -706,3 +706,29 @@ test("version déjà utilisée : une seule édition possédée, jamais de confli
   const card = { name: "Steam Vents", qty: 1, versions: [{ code: "NONFOIL", qty: 1 }] };
   assert.deepEqual(computeVersionConflicts([card], steamVentsStock(1, [{ set: "grn", cn: "257", qty: 2 }]), usage), []);
 });
+
+// --- Vue « Mes decks » : cartes lues par l'API d'un deck ---
+
+test("cardsFromDeckApi : version possédée gardée, autre édition signalée, rien supposé sans détail par édition", () => {
+  const { cardsFromDeckApi } = checks;
+  const stock = {
+    "sol ring": { name: "Sol Ring", qty: 1, printings: [{ set: "c21", cn: "263", qty: 1 }] },
+    "arcane signet": { name: "Arcane Signet", qty: 1, printings: [{ set: "eld", cn: "331", qty: 1 }] },
+    "command tower": { name: "Command Tower", qty: 1 },
+  };
+  const api = [
+    { name: "Sol Ring", qty: 1, printings: [{ code: "AAA", set: "c21", cn: "263", qty: 1 }] },
+    { name: "Arcane Signet", qty: 1, printings: [{ code: "BBB", set: "m3c", cn: "12", qty: 1 }] },
+    { name: "Command Tower", qty: 1, printings: [{ code: "CCC", set: "cmm", cn: "1", qty: 1 }] },
+    { name: "Rhystic Study", qty: 1, printings: [{ code: "DDD", set: "pcy", cn: "45", qty: 1 }] },
+  ];
+  assert.deepEqual(cardsFromDeckApi(api, stock), [
+    { name: "Sol Ring", qty: 1, versions: [{ code: "AAA", qty: 1, set: "c21", cn: "263" }] },
+    { name: "Arcane Signet", qty: 1, printingStatus: "partial" },
+    { name: "Command Tower", qty: 1 },
+    { name: "Rhystic Study", qty: 1 },
+  ]);
+  // Même calcul que la pastille du bouton : 1 en autre édition, 1 manquante.
+  const a = computeDeckAvailability(cardsFromDeckApi(api, stock), stock);
+  assert.deepEqual([a.blocking, a.wrongEditionCount, a.missingCount], [2, 1, 1]);
+});

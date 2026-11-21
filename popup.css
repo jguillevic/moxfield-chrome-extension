@@ -424,6 +424,45 @@ button:focus-visible,
   cursor: help;
 }
 
+/* Mes decks. */
+.deck-add-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.deck-add-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.deck-status {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+}
+
+.deck-status.built,
+.deck-status.buildable {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.deck-status.blocked {
+  color: var(--danger);
+  background: var(--danger-soft);
+  cursor: help;
+}
+
+.deck-remove {
+  padding: 0 6px;
+}
+
 /* Guide de démarrage. */
 .onboarding-card {
   border-color: var(--accent);

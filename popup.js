@@ -319,6 +319,123 @@ document.getElementById("import-paste-btn").addEventListener("click", async () =
 
 document.getElementById("stock-filter").addEventListener("input", refresh);
 document.getElementById("stock-details").addEventListener("toggle", refresh);
+
+// --- Mes decks (cf. handleGetDecks dans background.js) ---
+// Construit seulement section dépliée. À l'ouverture, les decks jamais lus
+// ou lus depuis longtemps sont relus sur Moxfield, puis la liste est
+// redessinée.
+const DECK_STATUS_ORDER = { buildable: 0, blocked: 1, unknown: 2, unavailable: 3, built: 4 };
+
+function deckStatusText(d) {
+  switch (d.status) {
+    case "built":
+      return t("decksStatusBuilt");
+    case "buildable":
+      return t("decksStatusBuildable");
+    case "blocked":
+      return tn("decksStatusBlocked", d.blocking);
+    case "unavailable":
+      return t("decksStatusUnavailable");
+    default:
+      return t("decksStatusUnknown");
+  }
+}
+
+function sortDecks(decks) {
+  return [...decks].sort(
+    (a, b) =>
+      DECK_STATUS_ORDER[a.status] - DECK_STATUS_ORDER[b.status] ||
+      (a.blocking || 0) - (b.blocking || 0) ||
+      a.name.localeCompare(b.name)
+  );
+}
+
+async function renderDecks() {
+  if (!document.getElementById("decks-details").open) return null;
+  const res = await send("GET_DECKS");
+  const list = document.getElementById("decks-list");
+  if (!res || !res.ok) return null;
+  if (res.decks.length === 0) {
+    list.innerHTML = `<p class="hint">${escapeHtml(t("decksNone"))}</p>`;
+    return res;
+  }
+  list.replaceChildren(
+    ...sortDecks(res.decks).map((d) => {
+      const row = document.createElement("div");
+      row.className = "deck-row";
+      const nameCell = document.createElement("div");
+      nameCell.className = "deck-name";
+      const link = document.createElement("a");
+      link.href = d.url;
+      link.target = "_blank";
+      link.textContent = d.name;
+      nameCell.appendChild(link);
+      const actions = document.createElement("div");
+      actions.className = "deck-actions";
+      const status = document.createElement("span");
+      status.className = `deck-status ${d.status}`;
+      status.textContent = deckStatusText(d);
+      if (d.label) status.title = d.label;
+      else if (d.fetchedAt) status.title = t("decksCheckedAt", formatDateTime(d.fetchedAt));
+      actions.appendChild(status);
+      if (d.followed && d.status !== "built") {
+        const remove = actionButton("×", t("decksRemove"), async () => {
+          await send("UNFOLLOW_DECK", { deckId: d.deckId });
+          renderDecks();
+        });
+        remove.classList.add("deck-remove");
+        actions.appendChild(remove);
+      }
+      row.append(nameCell, actions);
+      return row;
+    })
+  );
+  return res;
+}
+
+// Relit des decks sur Moxfield (tous si deckIds est absent), puis redessine.
+async function refreshDecks(deckIds) {
+  const status = document.getElementById("decks-status");
+  const btn = document.getElementById("decks-refresh-btn");
+  btn.disabled = true;
+  status.textContent = t("decksRefreshing");
+  try {
+    const res = await send("REFRESH_DECKS", { deckIds });
+    status.textContent = res && res.ok ? "" : t("errorPrefix", (res && res.error) || t("unknownError"));
+  } finally {
+    btn.disabled = false;
+    await renderDecks();
+  }
+}
+
+async function openDecks() {
+  const res = await renderDecks();
+  if (res && res.staleIds.length > 0) await refreshDecks(res.staleIds);
+}
+
+document.getElementById("decks-details").addEventListener("toggle", (e) => {
+  if (e.target.open) openDecks();
+});
+
+document.getElementById("decks-refresh-btn").addEventListener("click", async () => {
+  const res = await send("GET_DECKS");
+  if (res && res.ok) await refreshDecks(res.decks.filter((d) => d.status !== "built").map((d) => d.deckId));
+});
+
+document.getElementById("deck-add-btn").addEventListener("click", async () => {
+  const input = document.getElementById("deck-add-input");
+  const status = document.getElementById("decks-status");
+  if (!input.value.trim()) return;
+  status.textContent = t("decksRefreshing");
+  const res = await send("ADD_DECK", { input: input.value });
+  if (res && res.ok) {
+    input.value = "";
+    status.textContent = "";
+  } else {
+    status.textContent = t("errorPrefix", (res && res.error) || t("unknownError"));
+  }
+  renderDecks();
+});
 document.getElementById("stock-only-in-decks").addEventListener("change", refresh);
 
 // --- Historique ---
@@ -621,6 +738,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.moxfieldStockManagerState) {
     refresh();
+    renderDecks(); // stock changé : faisabilité recalculée (sans appel à Moxfield)
     renderCollection(); // cartes non couvertes
     renderHistory();
   }

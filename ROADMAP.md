@@ -14,7 +14,7 @@ par attrait × simplicité, dont des idées absentes de cette liste) :
 | Rang | Fonctionnalité | Effort | Pourquoi |
 |---|---|---|---|
 | 1 | **Proxy pour une carte d'une autre édition** — la proposer en proxy quand « Utiliser mes éditions » ne peut rien (exemplaires déjà dans d'autres decks montés, pas assez dans une même édition) ; son remplacement ne doit alors être proposé que quand la bonne édition arrive dans la collection, pas avec l'exemplaire de l'autre édition déjà en stock. | Moyen | Reste de la demande « Monter avec N proxies » (bouton principal livré). Cas devenu rare depuis « Utiliser mes éditions ». |
-| 2 | **Faisabilité de tous mes decks** — lister ses decks Moxfield dans le popup avec, pour chacun, monté / montable / nombre de cartes bloquantes, via l'API (session déjà réutilisée pour la collection). Remplace l'idée « faisabilité mémorisée des decks consultés » et la pastille sur les listes de decks. | Moyen | Répond à « que puis-je monter ? » sans ouvrir chaque deck ; réutilise `computeDeckAvailability`. Appels de l'API des decks à capturer d'abord. |
+| 2 | **Liste de tous ses decks Moxfield dans « Mes decks »** — capturer l'appel de l'API qui liste les decks d'un compte (onglet Network, page « Your decks »), pour ne plus attendre qu'un deck soit ouvert. | Faible | « Mes decks » est livré sans cet appel : un deck n'y entre qu'une fois ouvert ou collé. |
 | 3 | **Annuler depuis l'historique** — « Remonter » un deck démonté, « Démonter » un deck monté, « Revenir à la liste précédente » après une mise à jour, « Remonter les decks » après une réinitialisation ; mêmes contrôles de stock qu'au montage, une seule fois, et seulement si le deck est resté dans l'état produit. Les actions sur la collection restent non annulables (Moxfield fait référence). | Moyen | Rattraper une erreur sur les decks montés. Les entrées enregistrent déjà les données nécessaires. Écarté de la première version de l'historique. |
 | 4 | **Liste de cartes à sortir / ranger** — cases à cocher triées par couleur, type ou édition, au montage et au démontage. | Moyen | Sert à chaque montage physique. |
 | 5 | **Transfert entre decks** — prendre les cartes manquantes dans un deck monté et marquer celui-ci comme incomplet. | Moyen | Évite d'acheter une carte qui dort dans un autre deck ; la fenêtre indique déjà où elle est. |
@@ -54,6 +54,10 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- « Mes decks » dans le popup : faisabilité de tous les decks ouverts (ou
+  collés) et montés, sans les ouvrir, avec le même calcul que la pastille du
+  bouton ; liste synchronisée — rang 3 de l'étude de marché — novembre
+  2026.
 - Guide de démarrage dans le popup (4 étapes, état réel de l'utilisateur,
   rejouable) — rang 1 de l'étude de marché — novembre 2026.
 - Notification d'une nouvelle version sur GitHub : pastille sur l'icône et

@@ -7,7 +7,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, readCardEditions, editionChangeBody } = require("../moxfield-collection.js");
+const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, readCardEditions, editionChangeBody } = require("../moxfield-collection.js");
 const { loadI18n, FIXTURES_DIR } = require("./helpers");
 
 // Réponse de l'API d'un deck : structure observée (novembre 2026), réduite
@@ -364,4 +364,28 @@ test("changement d'édition : appel du site, version du deck en en-tête, résul
   await rejectsWith(refused.client.setDeckCardEdition(deck, entry, { cardId: "GtDds", finishes: [] }), "blocked");
   const conflict = fakeMoxfield({ overrides: { "edition-change": jsonResponse(409, {}) } });
   await rejectsWith(conflict.client.setDeckCardEdition(deck, entry, { cardId: "GtDds", finishes: [] }), "api-changed");
+});
+
+// Vue « Mes decks » du popup : cartes d'un deck lues par son API.
+test("deckCardList : une entrée par carte, Considering écartée, impressions détaillées (code sans finition)", () => {
+  const cards = deckCardList(DECK);
+  assert.deepEqual(cards.map((c) => [c.name, c.qty]), [
+    ["Golgari Thug", 1],
+    ["Sidisi, Brood Tyrant", 1],
+    ["Revitalizing Repast // Old-Growth Grove", 1],
+    ["Swamp", 3],
+    ["Birds of Paradise", 1],
+  ]);
+  assert.deepEqual(cards.find((c) => c.name === "Swamp").printings, [
+    { code: "SWAMP1", set: "war", cn: "256", qty: 2 },
+    { code: "SWAMP2", set: "pwar", cn: "war-115", qty: 1 },
+  ]);
+  assert.deepEqual(cards[0].printings, [{ code: "ZOwRD", set: "rav", cn: "87", qty: 1 }]);
+  assert.deepEqual(deckCardList({ cards: [] }), [], "pas un deck");
+});
+
+test("deckCardList : même carte dans deux zones, quantités additionnées", () => {
+  const entry = (quantity) => ({ quantity, card: { id: "AAA", name: "Sol Ring", set: "c21", cn: "263" } });
+  const deck = { boards: { mainboard: { cards: { a: entry(1) } }, sideboard: { cards: { b: entry(2) } } } };
+  assert.deepEqual(deckCardList(deck), [{ name: "Sol Ring", qty: 3, printings: [{ code: "AAA", set: "c21", cn: "263", qty: 1 }, { code: "AAA", set: "c21", cn: "263", qty: 2 }] }]);
 });

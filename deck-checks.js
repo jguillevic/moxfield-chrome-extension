@@ -465,6 +465,31 @@ function createDeckChecks(normalizeName, { t, tn }) {
     };
   }
 
+  // Cartes d'un deck lues par son API (cf. deckCardList dans
+  // moxfield-collection.js), mises sous la forme de celles lues sur la page
+  // pour computeDeckAvailability (vue « Mes decks » du popup, même calcul que
+  // la pastille du bouton) :
+  // - versions : impressions du deck dont l'édition et le numéro sont dans
+  //   la collection, comme les versions possédées lues sur la page ;
+  // - printingStatus "partial" : carte possédée, mais dans aucune des
+  //   éditions du deck — ce que la page lit dans le marqueur « Partially in
+  //   collection » de Moxfield. Sans détail par édition dans le stock
+  //   (collection importée sans colonne d'édition), rien n'est supposé et
+  //   le doute profite au montage.
+  function cardsFromDeckApi(deckCards, stockMap) {
+    return deckCards.map((c) => {
+      const entry = stockMap[normalizeName(c.name)];
+      const owned = entry && Array.isArray(entry.printings) ? entry.printings : [];
+      const versions = c.printings
+        .filter((p) => owned.some((o) => o.set === p.set && o.cn === p.cn))
+        .map(({ code, qty, set, cn }) => ({ code, qty, set, cn }));
+      const card = { name: c.name, qty: c.qty };
+      if (versions.length > 0) card.versions = versions;
+      else if (owned.length > 0 && c.printings.length > 0) card.printingStatus = "partial";
+      return card;
+    });
+  }
+
   // Nombre affiché sur la pastille du bouton, avec sa décomposition — repris
   // tel quel dans la fenêtre de montage pour que les deux concordent.
   // null si rien ne bloque.
@@ -511,6 +536,7 @@ function createDeckChecks(normalizeName, { t, tn }) {
     parseCardsText,
     evaluateDeckUpdate,
     computeDeckAvailability,
+    cardsFromDeckApi,
     blockingSummary,
     availabilityLabel,
   };

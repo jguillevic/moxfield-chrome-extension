@@ -271,6 +271,40 @@ function deckEntries(deck) {
   return entries;
 }
 
+// Cartes d'un deck pour la vue « Mes decks » du popup (réponse de son
+// API) : [{ name, qty, printings: [{ code, set, cn, qty }] }], une entrée
+// par carte (zones additionnées, Considering écartée comme sur la page).
+// code : id de l'impression, sans la finition, comme le marqueur de
+// collection de la page (cf. ownedVersionOf dans deck-scraper.js), pour que
+// les versions venues de l'API et de la page se comparent.
+function deckCardList(deck) {
+  const byName = new Map();
+  if (!deck || !deck.boards || typeof deck.boards !== "object") return [];
+  const printing = (p, card, qty) => ({
+    code: String(card.id || ""),
+    set: String(card.set || p.set || "").trim().toLowerCase(),
+    cn: String(card.cn || p.cn || "").trim().toLowerCase(),
+    qty,
+  });
+  for (const [board, content] of Object.entries(deck.boards)) {
+    if (IGNORED_BOARDS.has(board) || !content || !content.cards) continue;
+    for (const entry of Object.values(content.cards)) {
+      const card = entry && entry.card;
+      if (!card || typeof card.name !== "string") continue;
+      const qty = Number.isInteger(entry.quantity) && entry.quantity > 0 ? entry.quantity : 1;
+      const detailed = Array.isArray(entry.printingData) && entry.printingData.length > 0;
+      const printings = detailed
+        ? entry.printingData.filter((p) => p && p.card).map((p) => printing(p, p.card, Number.isInteger(p.quantity) ? p.quantity : 1))
+        : [printing({}, card, qty)];
+      if (!byName.has(card.name)) byName.set(card.name, { name: card.name, qty: 0, printings: [] });
+      const item = byName.get(card.name);
+      item.qty += qty;
+      item.printings.push(...printings.filter((p) => p.set));
+    }
+  }
+  return [...byName.values()];
+}
+
 // Réponse des éditions d'une carte → [{ cardId, set, cn, setName, finishes }]
 // (édition et numéro en minuscules, comme la collection) ; null si ce n'en
 // est pas une.
@@ -356,5 +390,5 @@ function computeCollectionDiff(before, after) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, readCardEditions, editionChangeBody, MoxfieldError };
+  module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, readCardEditions, editionChangeBody, MoxfieldError };
 }
