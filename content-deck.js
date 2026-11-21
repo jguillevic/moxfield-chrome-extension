@@ -1162,7 +1162,7 @@
     },
   };
 
-  // Cœur (à gauche des autres boutons, cf. ensureButton) : garder ce deck
+  // Cœur (dernier bouton, à droite de « Monter », cf. ensureButton) : garder ce deck
   // dans « Mes decks » du popup, pour le monter plus tard. Propre à
   // l'extension : rien n'est envoyé à Moxfield, ce n'est pas son « j'aime »
   // (public). Remplace l'ajout automatique de chaque deck ouvert, qui
@@ -1571,15 +1571,16 @@
   }
 
   // « Utiliser mes éditions » juste à gauche de notre bouton.
-  // Ordre : cœur, « Utiliser mes éditions », « Monter ».
+  // Ordre : « Utiliser mes éditions », « Monter », cœur (choix de
+  // l'utilisateur : le cœur en dernier).
   function isInOrder() {
-    return Boolean(editionsBtn && likeBtn && btn.previousElementSibling === editionsBtn && editionsBtn.previousElementSibling === likeBtn);
+    return Boolean(editionsBtn && likeBtn && btn.previousElementSibling === editionsBtn && likeBtn.previousElementSibling === btn);
   }
 
   function isButtonWellPlaced(bar) {
     if (btn.parentElement !== bar || !isInOrder()) return false;
     const anchor = findBarAnchor(bar);
-    return anchor ? likeBtn.previousElementSibling === anchor : true;
+    return anchor ? editionsBtn.previousElementSibling === anchor : true;
   }
 
   function isFloatingBarUpToDate() {
@@ -1639,7 +1640,7 @@
         toggleLike();
       }
     });
-    editionsBtn.before(likeBtn);
+    btn.after(likeBtn);
     renderLikeButton();
     btn.addEventListener("click", () => openOverlay());
     renderButton();

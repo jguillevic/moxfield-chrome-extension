@@ -897,9 +897,9 @@ test("éditions de la collection : bouton du ruban juste à gauche de « Monter 
   const button = await waitEditionsButton(page);
   const buildButton = page.win.document.querySelector(".msm-bar-btn:not(.msm-editions-bar-btn):not(.msm-like-bar-btn)");
   assert.equal(button.nextElementSibling, buildButton, "à gauche du bouton de montage");
-  // Ordre : « j'aime » de Moxfield, notre cœur, nos éditions, « Monter ».
-  assert.ok(button.previousElementSibling.classList.contains("msm-like-bar-btn"), "notre cœur à gauche");
-  assert.equal(button.previousElementSibling.previousElementSibling.querySelector("svg").getAttribute("data-icon"), "heart");
+  // Ordre : « j'aime » de Moxfield, nos éditions, « Monter », notre cœur.
+  assert.equal(button.previousElementSibling.querySelector("svg").getAttribute("data-icon"), "heart");
+  assert.ok(buildButton.nextElementSibling.classList.contains("msm-like-bar-btn"), "notre cœur en dernier");
   assert.equal(button.querySelector(".msm-editions-badge").textContent, "1");
   assert.match(button.title, /^Utiliser mes éditions — 1 carte possédée dans une autre édition\n.*Le deck n'est pas monté/);
 });
@@ -1264,6 +1264,15 @@ test("cœur : ajoute le deck à « Mes decks », puis l'en retire", async (t) =>
   likeButton(page).click();
   await waitFor(() => !likeButton(page).classList.contains("msm-liked"), 2000, "cœur vide");
   assert.equal(page.sent.find((m) => m.type === "UNFOLLOW_DECK").payload.deckId, "abc123");
+});
+
+test("cœur : dernier bouton du bandeau flottant, à droite de « Monter »", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", null, "Commander", null, null);
+  t.after(page.close);
+  await waitFor(() => likeButton(page), 2000, "cœur affiché");
+  const band = page.win.document.querySelector(".msm-floating-bar");
+  assert.equal(band.lastElementChild, likeButton(page));
+  assert.equal(likeButton(page).previousElementSibling, page.button());
 });
 
 test("cœur : plein à l'ouverture d'un deck déjà gardé, et suit un retrait fait dans le popup", async (t) => {

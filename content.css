@@ -153,7 +153,7 @@
 /* Cœur : deck gardé dans « Mes decks » (couleur de l'extension, pour ne pas
    le confondre avec le « j'aime » blanc de Moxfield). */
 .msm-like-bar-btn {
-  margin-right: 10px;
+  margin-left: 10px;
 }
 
 .msm-bar-btn.msm-liked {

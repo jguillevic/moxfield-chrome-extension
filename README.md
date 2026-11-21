@@ -364,8 +364,8 @@ contenu du CSV. Même effet qu'une récupération automatique.
   **À vérifier** (pas encore lu). Les montables d'abord, puis les moins
   bloqués ; les montés à la fin.
 - Pour y mettre un deck : sur sa page Moxfield, clique sur le **cœur ♥**
-  de l'extension (le premier des boutons, en bas à gauche ou dans la barre
-  d'actions de Moxfield). Cœur **plein violet** = deck gardé ; un second
+  de l'extension (le dernier des boutons, à droite de « Monter », en bas à
+  gauche ou dans la barre d'actions de Moxfield). Cœur **plein violet** = deck gardé ; un second
   clic le retire. Ce n'est pas le « j'aime » de Moxfield : rien n'est
   envoyé à Moxfield, personne d'autre ne le voit. Les decks montés y sont
   d'office. Tu peux aussi **coller l'adresse d'un deck**
