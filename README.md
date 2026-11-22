@@ -246,6 +246,12 @@ contenu du CSV. Même effet qu'une récupération automatique.
     jour d'un deck monté (**« Mettre à jour avec N proxies »**) ; les
     proxies déjà en place sont gardés.
     Voir « Proxies » ci-dessous pour les imprimer et les remplacer.
+  - **Proxies déclarés sur Moxfield** : une carte que tu as marquée
+    « proxy » dans ton deck sur Moxfield est montée d'office en proxy, même
+    si tu la possèdes (ta vraie carte reste libre) ou si tu l'as dans une
+    autre édition. La fenêtre l'annonce (« 🃏 2 proxies déclarés sur
+    Moxfield… »), la pastille du bouton et « Mes decks » ne la comptent pas
+    comme bloquante, et le détail au survol l'indique.
 - **Version différente de ta collection** (encadré rouge, bloquant) : parmi
   les cartes dont le stock est déjà suffisant, si Moxfield indique que tu la
   possèdes, mais pas dans l'édition/finition précise utilisée par ce deck
@@ -633,8 +639,12 @@ en cas de conflit : rien ne s'y perd).
   environ. Comme le bouton de montage, il n'est affiché qu'avec la barre
   d'actions de Moxfield. Il se fie à l'indicateur
   « Partially in collection » de Moxfield, donc pas à une liste collée.
-- **Proxies** : suivis dans l'extension seulement, pas sur Moxfield (le
-  drapeau proxy de Moxfield n'est ni lu ni écrit). Le remplacement par la
+- **Proxies** : suivis dans l'extension seulement, rien n'est écrit sur
+  Moxfield. La marque proxy de Moxfield est lue au premier contrôle de la
+  page d'un deck : si tu la changes ensuite sans recharger la page (F5),
+  elle n'est prise en compte qu'au rechargement. Elle n'est pas appliquée
+  à la mise à jour d'un deck déjà monté (seulement au montage) : passe par
+  « Mettre à jour avec N proxies ». Le remplacement par la
   vraie carte ne vérifie pas son édition (le doute profite au montage). Les
   images viennent de Scryfall : sans réseau, la planche ne porte que les
   noms des cartes ; une version que Scryfall ne connaît pas sous le même

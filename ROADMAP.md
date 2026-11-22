@@ -21,7 +21,6 @@ par attrait × simplicité, dont des idées absentes de cette liste) :
 | 6 | **Détection des decks montés modifiés sans les ouvrir** — via l'API des decks, à chaque récupération. | Moyen | Désormais faisable (la session Moxfield est réutilisable en tâche de fond) ; se combine avec le n°2. |
 | 7 | **Stock par finition et langue, quantités libres par édition dans le popup.** | Moyen | Le contrôle « version déjà utilisée » compte maintenant chaque édition à part (API du deck). Restent la finition (l'API du deck la donne, mais le foil d'un deck est rarement tenu à jour : risque de refus à tort), la langue (absente de l'API du deck) et l'affichage par édition. Rendrait le n°1 inutile. |
 | 8 | **Liste d'achats cumulée** — les manques de plusieurs decks en une seule liste Cardmarket, sans doublons, avec le coût total. | Faible | Une seule commande pour plusieurs decks ; plus utile avec le n°2. |
-| 9 | **Proxies déclarés sur Moxfield** — lire le drapeau proxy que Moxfield permet de poser sur une carte d'un deck (`isProxy` dans l'API du deck) et la monter d'office en proxy. | Faible | Évite de déclarer deux fois la même chose ; l'API du deck est déjà lue. |
 | 10 | **Emplacement physique** — classeur, boîte ou page de chaque carte, repris dans la liste à sortir (n°4). | Moyen | Gain de temps réel, mais saisie initiale. |
 | 11 | **Différences avant import CSV manuel** — montrer ce qui change avant d'écraser le stock. | Faible | Moins utile depuis la récupération automatique (qui montre déjà les changements et les cartes non couvertes) : l'import manuel n'est plus qu'un secours. |
 | 12 | **Cartes les plus partagées** — présentes dans plusieurs decks montés ou envisagés. | Faible | Savoir quoi acheter en double ; usage occasionnel. |
@@ -54,6 +53,10 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- Proxies déclarés sur Moxfield : une carte marquée proxy dans le deck est
+  montée d'office en proxy, même possédée ou d'une autre édition, et ne
+  bloque ni la pastille ni « Mes decks » — rang 6 de l'étude de marché —
+  novembre 2026.
 - Cœur sur la page d'un deck pour le garder dans « Mes decks » (à monter
   plus tard), à la place de l'ajout automatique de chaque deck ouvert —
   novembre 2026.

@@ -1216,10 +1216,12 @@ const EXPECTED_DECK_PRINTINGS_ERRORS = ["not-logged-in", "network", "deck-unavai
 
 async function handleGetDeckPrintings({ deckId }) {
   if (typeof deckId !== "string" || !/^[\w-]{1,64}$/.test(deckId)) return { ok: false, code: "deck-unavailable" };
-  const run = collectionQueue.then(() => moxfieldCollection.fetchDeckPrintings(deckId));
+  const run = collectionQueue.then(() => moxfieldCollection.fetchDeck(deckId));
   collectionQueue = run.catch(() => {});
   try {
-    return { ok: true, printings: await run };
+    const deck = await run;
+    // declaredProxies : cartes marquées « proxy » dans le deck sur Moxfield.
+    return { ok: true, printings: extractDeckPrintings(deck), declaredProxies: declaredProxies(deck) };
   } catch (e) {
     const code = e.code || "unknown";
     if (!EXPECTED_DECK_PRINTINGS_ERRORS.includes(code)) reportError("moxfield-deck", e, { code });

@@ -7,7 +7,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, readCardEditions, editionChangeBody } = require("../moxfield-collection.js");
+const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, declaredProxies, readCardEditions, editionChangeBody } = require("../moxfield-collection.js");
 const { loadI18n, FIXTURES_DIR } = require("./helpers");
 
 // Réponse de l'API d'un deck : structure observée (novembre 2026), réduite
@@ -388,4 +388,23 @@ test("deckCardList : même carte dans deux zones, quantités additionnées", () 
   const entry = (quantity) => ({ quantity, card: { id: "AAA", name: "Sol Ring", set: "c21", cn: "263" } });
   const deck = { boards: { mainboard: { cards: { a: entry(1) } }, sideboard: { cards: { b: entry(2) } } } };
   assert.deepEqual(deckCardList(deck), [{ name: "Sol Ring", qty: 3, printings: [{ code: "AAA", set: "c21", cn: "263", qty: 1 }, { code: "AAA", set: "c21", cn: "263", qty: 2 }] }]);
+});
+
+test("declaredProxies : marque proxy de l'entrée ou de chaque impression, Considering écartée", () => {
+  const entry = (quantity, extra = {}) => ({ quantity, card: { id: "A", name: extra.name || "Sol Ring", set: "c21", cn: "1" }, ...extra });
+  const deck = {
+    boards: {
+      mainboard: {
+        cards: {
+          a: entry(2, { isProxy: true }),
+          b: entry(3, { name: "Swamp", printingData: [{ quantity: 2, isProxy: false, card: { id: "S1", name: "Swamp", set: "war", cn: "256" } }, { quantity: 1, isProxy: true, card: { id: "S2", name: "Swamp", set: "pwar", cn: "1" } }] }),
+          c: entry(1, { name: "Arcane Signet" }),
+        },
+      },
+      maybeboard: { cards: { d: entry(1, { name: "Rhystic Study", isProxy: true }) } },
+    },
+  };
+  assert.deepEqual(declaredProxies(deck), { "Sol Ring": 2, Swamp: 1 });
+  assert.deepEqual(deckCardList(deck).map((c) => [c.name, c.proxyQty]), [["Sol Ring", 2], ["Swamp", 1], ["Arcane Signet", undefined]]);
+  assert.deepEqual(declaredProxies(DECK), {}, "aucune marque proxy dans la page de test");
 });

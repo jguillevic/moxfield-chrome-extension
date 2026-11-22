@@ -79,10 +79,13 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 - Proxies (`proxyQty` d'une carte d'un deck monté) : ne font pas partie du
   stock (la collection Moxfield reste la seule source de vérité), donc
   jamais décomptés ni rendus, ni comptés « dans des decks ». Toujours
-  passer par `stockQtyOf` / `proxyCountOf` (`deck-checks.js`). Un proxy ne
-  remplace qu'un stock insuffisant, jamais une version différente ou déjà
-  utilisée. Suivis dans l'extension seulement, rien n'est écrit sur
-  Moxfield.
+  passer par `stockQtyOf` / `proxyCountOf` (`deck-checks.js`). Un proxy
+  ajouté par l'extension (« avec N proxies ») ne remplace qu'un stock
+  insuffisant, jamais une version différente ou déjà utilisée. Exception :
+  une carte marquée proxy dans le deck sur Moxfield (`declaredProxies`) est
+  un proxy d'office, même possédée ou d'une autre édition (choix de
+  l'utilisateur) ; les contrôles ne portent que sur la part prise au stock
+  (`stockPartOf`). Rien n'est écrit sur Moxfield.
 - Seule écriture sur Moxfield : passer, dans un deck, des cartes possédées
   dans une autre édition sur l'édition de la collection
   (`PLAN_OWNED_EDITIONS` puis `APPLY_OWNED_EDITIONS`), en un seul clic sur

@@ -164,6 +164,7 @@ test("computeDeckAvailability : deck montable", () => {
     wrongEdition: [],
     versionTaken: [],
     basicShortages: [],
+    proxyCount: 0,
   });
 });
 
@@ -731,4 +732,26 @@ test("cardsFromDeckApi : version possédée gardée, autre édition signalée, r
   // Même calcul que la pastille du bouton : 1 en autre édition, 1 manquante.
   const a = computeDeckAvailability(cardsFromDeckApi(api, stock), stock);
   assert.deepEqual([a.blocking, a.wrongEditionCount, a.missingCount], [2, 1, 1]);
+});
+
+// --- Proxies déclarés sur Moxfield ---
+
+test("applyDeclaredProxies et stockPartOf : proxies d'office, contrôles sur la seule part prise au stock", () => {
+  const { applyDeclaredProxies, stockPartOf } = checks;
+  const cards = [
+    { name: "Sol Ring", qty: 3, versions: [{ code: "A", qty: 2 }, { code: "B", qty: 1 }] },
+    { name: "Rhystic Study", qty: 1 },
+    { name: "Arcane Signet", qty: 2, proxyQty: 2 },
+  ];
+  const withDeclared = applyDeclaredProxies(cards, { "sol ring": 1, "Rhystic Study": 1, "Arcane Signet": 1 }, () => ({ set: "c21", cn: "263" }));
+  assert.deepEqual(withDeclared.map((c) => [c.name, c.proxyQty]), [["Sol Ring", 1], ["Rhystic Study", 1], ["Arcane Signet", 2]], "jamais moins de proxies qu'avant");
+  assert.deepEqual(withDeclared[0].proxyPrinting, { set: "c21", cn: "263" });
+  assert.deepEqual(stockPartOf(withDeclared), [{ name: "Sol Ring", qty: 2, versions: [{ code: "A", qty: 2 }] }], "carte entièrement en proxy écartée");
+  assert.equal(applyDeclaredProxies(cards, {}), cards, "rien de déclaré : liste inchangée");
+});
+
+test("computeDeckAvailability : proxy déclaré ni bloquant, ni compté, mais annoncé", () => {
+  const a = computeDeckAvailability([{ name: "Rhystic Study", qty: 1, proxyQty: 1 }, { name: "Sol Ring", qty: 1 }], stockOf({ "Sol Ring": 1 }));
+  assert.deepEqual([a.blocking, a.total, a.proxyCount], [0, 1, 1]);
+  assert.match(availabilityLabel(a), /1 proxy déclaré sur Moxfield/);
 });

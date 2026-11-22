@@ -112,6 +112,56 @@ function createDeckChecks(normalizeName, { t, tn }) {
     return card.excludedFromStock ? 0 : card.qty - proxyCountOf(card);
   }
 
+  // Proxies déclarés sur Moxfield (cf. declaredProxies dans
+  // moxfield-collection.js : { nom: quantité }) appliqués à une liste du
+  // deck : ces exemplaires sont des proxies d'office, en plus de ceux que la
+  // carte a déjà. printingOf : comme pour addProxies.
+  function applyDeclaredProxies(cards, declared, printingOf = () => null) {
+    const byName = new Map(Object.entries(declared || {}).map(([name, qty]) => [normalizeName(name), qty]));
+    if (byName.size === 0) return cards;
+    return cards.map((c) => {
+      const declaredQty = byName.get(normalizeName(c.name));
+      if (!declaredQty || proxyCountOf(c) >= declaredQty) return c;
+      const card = { ...c, proxyQty: Math.min(c.qty, declaredQty) };
+      const printing = c.proxyPrinting || printingOf(c.name);
+      if (printing) card.proxyPrinting = printing;
+      return card;
+    });
+  }
+
+  // Part d'une liste prise au stock (proxies retirés), sur laquelle portent
+  // les contrôles : un proxy n'a besoin ni de stock, ni de la bonne édition
+  // (cf. CLAUDE.md, Proxies). Versions gardées dans la limite de ce qui
+  // reste ; carte entièrement en proxy écartée.
+  function stockPartOf(cards) {
+    const part = [];
+    for (const c of cards) {
+      const proxies = proxyCountOf(c);
+      if (proxies === 0) {
+        part.push(c);
+        continue;
+      }
+      const qty = c.qty - proxies;
+      if (qty <= 0) continue;
+      const card = { ...c, qty };
+      delete card.proxyQty;
+      delete card.proxyPrinting;
+      if (Array.isArray(c.versions)) {
+        let left = qty;
+        card.versions = c.versions
+          .map((v) => {
+            const take = Math.min(v.qty, left);
+            left -= take;
+            return { ...v, qty: take };
+          })
+          .filter((v) => v.qty > 0);
+        if (card.versions.length === 0) delete card.versions;
+      }
+      part.push(card);
+    }
+    return part;
+  }
+
   // Nombre total de proxies d'une liste de cartes.
   function proxyTotal(cards) {
     return cards.reduce((n, c) => n + proxyCountOf(c), 0);
@@ -436,7 +486,11 @@ function createDeckChecks(normalizeName, { t, tn }) {
   // wrongEditionNames : à donner quand la liste ne porte pas elle-même
   // l'information de version (liste modifiée à la main dans la fenêtre).
   // versionUsage : versions prises par les decks montés (cf. buildVersionUsage).
-  function computeDeckAvailability(cards, stockMap, wrongEditionNames = buildWrongEditionSet(cards), versionUsage = new Map()) {
+  // Exemplaires déjà en proxy (déclarés sur Moxfield) : ni contrôlés, ni
+  // comptés dans le total (cf. stockPartOf), seulement annoncés.
+  function computeDeckAvailability(allCards, stockMap, wrongEditionNames = buildWrongEditionSet(allCards), versionUsage = new Map()) {
+    const cards = stockPartOf(allCards);
+    const proxyCount = proxyTotal(allCards.filter((c) => !isBasicLand(c.name)));
     const basic = cards.filter((c) => isBasicLand(c.name));
     const nonBasic = cards.filter((c) => !isBasicLand(c.name));
     const shortages = computeShortages(nonBasic, stockMap);
@@ -462,6 +516,7 @@ function createDeckChecks(normalizeName, { t, tn }) {
       wrongEdition: wrongEdition.map((c) => c.name),
       versionTaken: versionTaken.map((c) => c.name),
       basicShortages: basicShortages.map(({ name, missing }) => ({ name, missing })),
+      proxyCount,
     };
   }
 
@@ -484,6 +539,7 @@ function createDeckChecks(normalizeName, { t, tn }) {
         .filter((p) => owned.some((o) => o.set === p.set && o.cn === p.cn))
         .map(({ code, qty, set, cn }) => ({ code, qty, set, cn }));
       const card = { name: c.name, qty: c.qty };
+      if (c.proxyQty) card.proxyQty = c.proxyQty;
       if (versions.length > 0) card.versions = versions;
       else if (owned.length > 0 && c.printings.length > 0) card.printingStatus = "partial";
       return card;
@@ -515,6 +571,7 @@ function createDeckChecks(normalizeName, { t, tn }) {
     if (a.basicShortages.length > 0) {
       parts.push(t("availabilityBasicMissing", list(a.basicShortages.map((s) => `${s.name} (${s.missing})`))));
     }
+    if (a.proxyCount > 0) parts.push(tn("availabilityDeclaredProxies", a.proxyCount));
     return parts.join(" — ");
   }
 
@@ -528,6 +585,8 @@ function createDeckChecks(normalizeName, { t, tn }) {
     stockQtyOf,
     proxyTotal,
     addProxies,
+    applyDeclaredProxies,
+    stockPartOf,
     carryProxies,
     replaceableProxies,
     chooseOwnedEdition,

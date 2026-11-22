@@ -61,6 +61,9 @@
     computeShortagePrices,
     proxyTotal,
     addProxies,
+    applyDeclaredProxies,
+    stockPartOf,
+    proxyCountOf,
     carryProxies,
     buildVersionUsage,
     computeVersionConflicts,
@@ -348,6 +351,11 @@
   // tout juste ajoutée au deck peut ne pas encore être enregistrée chez
   // Moxfield, d'où le même délai qu'après un échec.
   const printingsMissing = new Map();
+  // Cartes marquées « proxy » dans le deck sur Moxfield ({ nom: quantité },
+  // cf. declaredProxies dans moxfield-collection.js), données par la même
+  // réponse, et deck auquel elles appartiennent : propres à chaque deck,
+  // contrairement aux éditions (un code désigne la même impression partout).
+  let declared = { deckId: null, proxies: {} };
 
   // Demande les éditions (et prix) des impressions pas encore connues ;
   // résout à true si de nouvelles éditions ont été apprises. Ne lève jamais :
@@ -365,7 +373,9 @@
       for (const v of c.versions || []) ask(v.code);
       for (const code of c.printingCodes || []) ask(code);
     }
-    if (unknown.size === 0) return Promise.resolve(false);
+    // Codes tous connus : le deck est quand même lu une fois, pour ses
+    // proxies déclarés.
+    if (unknown.size === 0 && declared.deckId === deckId) return Promise.resolve(false);
     if (printingsRequest) return printingsRequest;
     const key = deckId + ":" + [...unknown].sort().join(",");
     if (key === printingsAsked.key && Date.now() - printingsAsked.at < PRINTINGS_RETRY_MS) return Promise.resolve(false);
@@ -375,6 +385,9 @@
         const res = await chrome.runtime.sendMessage({ type: "GET_DECK_PRINTINGS", payload: { deckId } });
         if (!res || !res.ok || !res.printings) return false;
         let added = false;
+        const proxies = res.declaredProxies && typeof res.declaredProxies === "object" ? res.declaredProxies : {};
+        if (JSON.stringify(proxies) !== JSON.stringify(declared.deckId === deckId ? declared.proxies : {})) added = true;
+        declared = { deckId, proxies };
         for (const [code, printing] of Object.entries(res.printings)) {
           if (printing && typeof printing.eur === "number" && printing.eur > 0) pricesByCode.set(code, printing.eur);
           if (printingsByCode.has(code) || !printing || typeof printing.set !== "string" || !printing.set) continue;
@@ -390,6 +403,14 @@
       }
     })();
     return printingsRequest;
+  }
+
+  // Liste dont les exemplaires marqués « proxy » sur Moxfield sont des
+  // proxies d'office (cf. applyDeclaredProxies dans deck-checks.js) : jamais
+  // pris au stock, ni contrôlés. Rien tant que le deck n'a pas été lu.
+  function withDeclaredProxies(cards, deckId = currentDeckId) {
+    if (declared.deckId !== deckId) return cards;
+    return applyDeclaredProxies(cards, declared.proxies, proxyPrintingFinder(lastPrintingCodes));
   }
 
   // Liste dont les versions portent leur édition, quand elle est connue.
@@ -608,6 +629,17 @@
   // actuellement dans la zone de texte, recalculé à chaque modification —
   // sert de repère rapide (ex. "99 cartes" pour un deck Commander) pour
   // vérifier que le scraping n'a rien manqué ni dupliqué.
+  // Proxies déclarés sur Moxfield de la liste : annoncés, puisqu'ils ne sont
+  // ni pris au stock ni contrôlés.
+  function renderDeclaredProxies(el, cards) {
+    if (!el) return;
+    const proxied = cards.filter((c) => proxyCountOf(c) > 0);
+    el.hidden = proxied.length === 0;
+    el.textContent = proxied.length === 0
+      ? ""
+      : `🃏 ${tn("declaredProxiesNotice", proxyTotal(proxied), proxied.map((c) => `${c.name} ×${proxyCountOf(c)}`).join(", "))}`;
+  }
+
   function renderCardCount(el, cards, siteTotal) {
     if (!el) return;
     if (cards.length === 0) {
@@ -807,6 +839,7 @@
                <button id="msm-paste-clipboard" class="msm-secondary">📋 ${escapeHtml(t("pasteFromClipboard"))}</button>
                <div id="msm-card-count" class="msm-card-count"></div>
                <div id="msm-blocking-summary" class="msm-card-count msm-card-count-mismatch" hidden></div>
+               <div id="msm-declared-proxies" class="msm-card-count" hidden></div>
                <textarea id="msm-cards-textarea" rows="12" placeholder="1 Sol Ring&#10;1 Sidisi, Brood Tyrant&#10;..."></textarea>
                <div id="msm-printing-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-version-warning" class="msm-shortage-warning" style="display:none"></div>
@@ -1061,7 +1094,7 @@
           renderButton();
         }
       } else {
-        const cards = withPrintings(completeCardNames(detection.cards, Object.values(stockMap)));
+        const cards = withDeclaredProxies(withPrintings(completeCardNames(detection.cards, Object.values(stockMap))), deckId);
         setEditionNames(ownedEditionNames(cards, deckId));
         const availability = computeDeckAvailability(
           cards,
@@ -1348,12 +1381,14 @@
       const basicLandWarningEl = overlay.querySelector("#msm-basic-land-warning");
       const cardCountEl = overlay.querySelector("#msm-card-count");
       const blockingSummaryEl = overlay.querySelector("#msm-blocking-summary");
+      const declaredProxiesEl = overlay.querySelector("#msm-declared-proxies");
       const siteDeclaredTotal = getSiteDeclaredTotal();
       const confirmBtn = overlay.querySelector("#msm-confirm");
 
       const updateWarnings = async () => {
-        const cards = withVersions(parseCardsText(textarea.value));
+        const cards = withDeclaredProxies(withVersions(parseCardsText(textarea.value)), deckId);
         renderCardCount(cardCountEl, cards, siteDeclaredTotal);
+        renderDeclaredProxies(declaredProxiesEl, cards);
         if (cards.length === 0) {
           blockingSummaryEl.hidden = true;
           setProxyAction(confirmBtn, 0, "confirmBuild", "confirmBuildWithProxies");
@@ -1364,8 +1399,9 @@
           return;
         }
         // Terrains de base traités à part (jamais bloquants) — cf. isBasicLand.
-        const basicCards = cards.filter((c) => isBasicLand(c.name));
-        const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
+        // Proxies déclarés sur Moxfield écartés des contrôles (cf. stockPartOf).
+        const basicCards = stockPartOf(cards).filter((c) => isBasicLand(c.name));
+        const nonBasicCards = stockPartOf(cards).filter((c) => !isBasicLand(c.name));
         // Une seule lecture de l'état, réutilisée pour toutes les zones.
         const { stockMap, deckUsage, versionUsage } = await getStockAndDeckUsage(cards);
         // Même total que la pastille du bouton (cf. computeDeckAvailability).
@@ -1456,7 +1492,7 @@
     async function submitBuild(withProxies) {
       try {
         const textarea = overlay.querySelector("#msm-cards-textarea");
-        const cards = withVersions(parseCardsText(textarea.value));
+        const cards = withDeclaredProxies(withVersions(parseCardsText(textarea.value)), deckId);
         if (cards.length === 0) {
           toast(t("noCardsRecognized"), true);
           return;
@@ -1468,7 +1504,7 @@
         // bloquants (cf. isBasicLand). Recalculées ici au cas où le texte a
         // été modifié depuis le dernier passage de updateWarnings.
         const { stockMap, versionUsage } = await getStockAndDeckUsage(cards);
-        const nonBasicCards = cards.filter((c) => !isBasicLand(c.name));
+        const nonBasicCards = stockPartOf(cards).filter((c) => !isBasicLand(c.name));
         const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
         if (wrongEdition.length > 0) {
           toast(t("buildBlockedWrongEdition", wrongEdition.join(", ")), true);

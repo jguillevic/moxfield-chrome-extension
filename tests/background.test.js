@@ -2184,3 +2184,16 @@ test("Mes decks : cœur sur un deck monté, il reste dans la liste une fois dém
   await unbuild(bg, "a");
   assert.deepEqual((await decksOf(bg)).map((d) => [d.deckId, d.status]), [["a", "unknown"]]);
 });
+
+test("proxies déclarés sur Moxfield : transmis à la page, et pris en compte dans « Mes decks »", async () => {
+  const deck = JSON.parse(SOL_DECK("Avec proxy", [["Sol Ring", "S1"], ["Rhystic Study", "R1"]]));
+  deck.boards.mainboard.cards.u1.isProxy = true;
+  const bg = loadBackground(SOL_RING_STOCK(), { moxfieldCSV: "", moxfieldDeck: JSON.stringify(deck) });
+  const res = await bg.send({ type: "GET_DECK_PRINTINGS", payload: { deckId: "d1" } });
+  assert.deepEqual(res.declaredProxies, { "Rhystic Study": 1 });
+  await bg.send({ type: "FOLLOW_DECK", payload: { deckId: "d1", name: "d1" } });
+  await bg.send({ type: "REFRESH_DECKS", payload: { deckIds: ["d1"] } });
+  const [listed] = await decksOf(bg);
+  assert.deepEqual([listed.status, listed.blocking], ["buildable", 0], "Rhystic Study manque, mais déclaré proxy");
+  assert.match(listed.label, /1 proxy déclaré/);
+});

@@ -1283,3 +1283,54 @@ test("cœur : plein à l'ouverture d'un deck déjà gardé, et suit un retrait f
   page.setStock(FULL_STOCK); // changement de l'état signalé, comme chrome.storage
   await waitFor(() => !likeButton(page).classList.contains("msm-liked"), 2000, "cœur vidé");
 });
+
+// --- Proxies déclarés sur Moxfield (drapeau « proxy » d'une carte du deck) ---
+
+test("proxies déclarés sur Moxfield : montés d'office en proxy, sans stock ni « avec proxies »", async (t) => {
+  // Birds of Paradise est en stock : la marque proxy de Moxfield prime, la
+  // vraie carte reste libre. Golgari Thug, Sidisi et Revitalizing Repast
+  // manquent : seul Sidisi est déclaré proxy.
+  const declaredProxies = { "Birds of Paradise": 1, "Sidisi, Brood Tyrant": 1 };
+  const page = openDeckPage({ stock: NO_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES, declaredProxies }));
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const notice = doc.querySelector("#msm-declared-proxies");
+  await waitFor(() => !notice.hidden, 2000, "proxies déclarés annoncés");
+  assert.equal(notice.textContent, "🃏 2 proxies déclarés sur Moxfield, montés sans prendre de carte du stock : Sidisi, Brood Tyrant ×1, Birds of Paradise ×1");
+  const confirm = doc.querySelector("#msm-confirm");
+  await waitFor(() => confirm.textContent === "Confirmer le montage avec 2 proxies", 2000, "proxies seulement pour les vrais manques");
+  assert.doesNotMatch(doc.querySelector("#msm-printing-warning").textContent, /Birds of Paradise/, "un proxy n'a pas d'édition à respecter");
+  confirm.click();
+  await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
+  const byName = (name) => builds(page)[0].payload.cards.find((c) => c.name === name);
+  assert.equal(byName("Birds of Paradise").proxyQty, 1, "proxy déclaré, même en stock");
+  assert.equal(byName("Sidisi, Brood Tyrant").proxyQty, 1);
+  assert.equal(byName("Golgari Thug").proxyQty, 1, "manque ordinaire, en proxy par « avec proxies »");
+});
+
+test("proxies déclarés sur Moxfield : pas bloquants sur la pastille, annoncés au survol", async (t) => {
+  const declaredProxies = { "Birds of Paradise": 1 };
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES, declaredProxies }));
+  t.after(page.close);
+  // Sans la marque proxy, Birds of Paradise (autre version) bloque.
+  await waitFor(() => /proxy déclaré/.test(buttonTitle(page)), 3000, "proxy déclaré pris en compte");
+  assert.match(buttonText(page), /^Marquer comme monté physiquement — montable : 3\/3 cartes disponibles/);
+  assert.match(buttonTitle(page), /1 proxy déclaré sur Moxfield/);
+});
+
+test("proxies déclarés sur Moxfield : une carte d'une autre version déclarée proxy ne bloque pas le montage", async (t) => {
+  // Birds of Paradise possédée dans une autre version (page de test telle
+  // quelle) : déclarée proxy sur Moxfield, elle n'a pas d'édition à respecter.
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", printingsAnswer({ ok: true, printings: PAGE_PRICES, declaredProxies: { "Birds of Paradise": 1 } }));
+  t.after(page.close);
+  await waitFor(() => /proxy déclaré/.test(buttonTitle(page)), 3000, "proxy déclaré pris en compte");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-declared-proxies") && !doc.querySelector("#msm-declared-proxies").hidden, 2000, "fenêtre ouverte");
+  const confirm = doc.querySelector("#msm-confirm");
+  assert.equal(confirm.textContent, "Confirmer le montage");
+  confirm.click();
+  await waitFor(() => builds(page).length > 0 || toasts(page).length > 0, 2000, "montage envoyé ou refusé");
+  assert.deepEqual(builds(page).length, 1, toasts(page).join(" | "));
+  assert.equal(builds(page)[0].payload.cards.find((c) => c.name === "Birds of Paradise").proxyQty, 1);
+});

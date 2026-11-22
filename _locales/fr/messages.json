@@ -1102,5 +1102,17 @@
   },
   "likeRemoved": {
     "message": "Deck retiré de « Mes decks »."
+  },
+  "availabilityDeclaredProxies_one": {
+    "message": "$1 proxy déclaré sur Moxfield"
+  },
+  "availabilityDeclaredProxies_other": {
+    "message": "$1 proxies déclarés sur Moxfield"
+  },
+  "declaredProxiesNotice_one": {
+    "message": "$1 proxy déclaré sur Moxfield, monté sans prendre de carte du stock : $2"
+  },
+  "declaredProxiesNotice_other": {
+    "message": "$1 proxies déclarés sur Moxfield, montés sans prendre de carte du stock : $2"
   }
 }

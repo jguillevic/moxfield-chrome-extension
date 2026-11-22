@@ -271,8 +271,31 @@ function deckEntries(deck) {
   return entries;
 }
 
+// Exemplaires marqués « proxy » dans un deck sur Moxfield (drapeau isProxy
+// de l'entrée, ou de chaque impression quand l'entrée en regroupe
+// plusieurs) : { [nom de la carte]: quantité }. Considering écartée. Ce
+// choix de l'utilisateur sur Moxfield vaut pour l'extension : ces
+// exemplaires sont montés en proxy, jamais pris au stock.
+function declaredProxies(deck) {
+  const proxies = {};
+  if (!deck || !deck.boards || typeof deck.boards !== "object") return proxies;
+  for (const [board, content] of Object.entries(deck.boards)) {
+    if (IGNORED_BOARDS.has(board) || !content || !content.cards) continue;
+    for (const entry of Object.values(content.cards)) {
+      const card = entry && entry.card;
+      if (!card || typeof card.name !== "string") continue;
+      const detailed = Array.isArray(entry.printingData) && entry.printingData.length > 0;
+      const qty = detailed
+        ? entry.printingData.filter((p) => p && p.isProxy === true).reduce((n, p) => n + (Number.isInteger(p.quantity) ? p.quantity : 1), 0)
+        : entry.isProxy === true ? (Number.isInteger(entry.quantity) && entry.quantity > 0 ? entry.quantity : 1) : 0;
+      if (qty > 0) proxies[card.name] = (proxies[card.name] || 0) + qty;
+    }
+  }
+  return proxies;
+}
+
 // Cartes d'un deck pour la vue « Mes decks » du popup (réponse de son
-// API) : [{ name, qty, printings: [{ code, set, cn, qty }] }], une entrée
+// API) : [{ name, qty, proxyQty?, printings: [{ code, set, cn, qty }] }], une entrée
 // par carte (zones additionnées, Considering écartée comme sur la page).
 // code : id de l'impression, sans la finition, comme le marqueur de
 // collection de la page (cf. ownedVersionOf dans deck-scraper.js), pour que
@@ -302,7 +325,8 @@ function deckCardList(deck) {
       item.printings.push(...printings.filter((p) => p.set));
     }
   }
-  return [...byName.values()];
+  const proxies = declaredProxies(deck);
+  return [...byName.values()].map((c) => (proxies[c.name] ? { ...c, proxyQty: proxies[c.name] } : c));
 }
 
 // Réponse des éditions d'une carte → [{ cardId, set, cn, setName, finishes }]
@@ -390,5 +414,5 @@ function computeCollectionDiff(before, after) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, readCardEditions, editionChangeBody, MoxfieldError };
+  module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, declaredProxies, readCardEditions, editionChangeBody, MoxfieldError };
 }
