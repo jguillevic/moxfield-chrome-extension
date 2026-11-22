@@ -383,6 +383,19 @@ contenu du CSV. Même effet qu'une récupération automatique.
   Moxfield.
 - La liste est synchronisée entre tes PC avec le reste (Google Drive), et
   gardée par « Réinitialiser tout le stock ».
+- **Liste d'achats cumulée** : coche des decks (case à gauche du nom ;
+  seulement ceux lus et pas montés) pour réunir leurs cartes manquantes en
+  **une seule liste**, sans doublons. Les besoins des decks cochés sont
+  additionnés, puis comparés une seule fois à ton stock libre (un Sol Ring
+  libre ne sert qu'à un des decks) : chaque ligne dit combien en acheter,
+  combien tu en as de libre, et pour quels decks. Avec le **coût total**
+  (prix Cardmarket de la version du deck, la moins chère si plusieurs) et
+  le bouton **« Copier les cartes manquantes pour Cardmarket »** (même
+  format que sur la page d'un deck : colle-la dans une liste de wants).
+  Comme sur la page d'un deck, n'y figurent ni les terrains de base, ni
+  les cartes que tu as dans une autre édition, ni les proxies déclarés sur
+  Moxfield. Pour un seul deck coché, la liste reprend les manques de sa
+  pastille.
 
 ### 3. Consulter le stock
 
@@ -560,6 +573,13 @@ en cas de conflit : rien ne s'y perd).
   différer de celui de la pastille du bouton. Une ancienne version de
   l'extension sur un autre PC ignore la liste et la perd en écrivant
   l'état : mets tous tes PC à jour.
+- **Liste d'achats** : elle part des listes de decks déjà lues (rien
+  n'est relu sur Moxfield en cochant) ; un deck lu avant la version 0.8.0
+  n'a pas encore de prix, jusqu'à sa relecture (6 heures, ou
+  « Actualiser »). Les cartes en « version différente » ou « version déjà
+  prise » n'y sont pas (tu les as : c'est une question d'édition, réglée
+  par « Utiliser mes éditions »). Les cases cochées sont oubliées à la
+  fermeture du popup.
 
 - La détection d'une nouvelle version demande un clone git du dépôt (pas
   une simple copie du dossier) et un accès à l'API de GitHub (sans compte,
@@ -742,9 +762,12 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
 - « Mes decks » : `tests/background.test.js` (deck suivi une fois, jamais
   renommé par la page, lecture sur Moxfield, faisabilité recalculée avec le
   stock, deck introuvable, pas connecté, adresse collée, retrait,
-  synchronisation), `tests/popup.test.js` (tri, relecture à l'ouverture,
-  ajout, retrait), `tests/deck-checks.test.js` (`cardsFromDeckApi`),
-  `tests/moxfield-collection.test.js` (`deckCardList`) et
+  synchronisation, liste d'achats : besoins cumulés, deck monté ou jamais
+  lu écarté, prix), `tests/popup.test.js` (tri, relecture à l'ouverture,
+  ajout, retrait, cases de la liste d'achats, copie pour Cardmarket),
+  `tests/deck-checks.test.js` (`cardsFromDeckApi`, `computeShoppingList`,
+  `cardmarketWantsText`), `tests/moxfield-collection.test.js`
+  (`deckCardList`, avec les prix) et
   `tests/content-deck.test.js` (cœur : ajout, retrait, état suivi depuis
   le popup, pas d'ajout sans clic).
 - `tests/popup.test.js` : popup (`popup.html` + `popup.js`, dans une page

@@ -93,7 +93,7 @@ issue de cette étude.
 | 4 | **Liste de cartes à sortir / ranger** avec cases à cocher, triée, au montage et au démontage | 4 | 3 | **12** | ROADMAP n°4 | Le geste physique que ManaBox et Grimoria accompagnent ; sert à chaque montage |
 | 5 | **Transfert entre decks** : prendre une carte manquante dans un deck monté | 4 | 3 | **12** | ROADMAP n°5 | « Chercher dans les autres decks » existe chez ManaBox ; nous savons déjà où est la carte |
 | 6 | **Proxies déclarés sur Moxfield** (livré en 0.7.0) (`isProxy`) montés d'office en proxy | 3 | 4 | **12** | ROADMAP n°9 | Collection Lens gère un marqueur proxy ; l'API du deck est déjà lue |
-| 7 | **Liste d'achats cumulée** de plusieurs decks, sans doublons, avec le coût total | 3 | 4 | **12** | ROADMAP n°8 | Une seule commande ; plus utile une fois le rang 3 livré |
+| 7 | **Liste d'achats cumulée** de plusieurs decks, sans doublons, avec le coût total (livré en 0.8.0) | 3 | 4 | **12** | ROADMAP n°8 | Une seule commande ; plus utile une fois le rang 3 livré |
 | 8 | **Disponibilité pendant la construction du deck** sur Moxfield : « 1 sur 3 libre, 2 dans des decks montés » dans la recherche de cartes | 5 | 2 | **10** | nouveau | Exactement la demande 2554 de Moxfield ; lecture d'une nouvelle partie de la page, fragile |
 | 9 | **Export du stock libre** (CSV ou format d'import Moxfield) | 2 | 5 | **10** | ROADMAP n°14 | Usage occasionnel, mais très simple |
 | 10 | **Bouton « Proposer une idée »** (formulaire d'issue GitHub pré-rempli) | 2 | 5 | **10** | nouveau | Canal de retour dès les premiers utilisateurs ; un lien et un formulaire |

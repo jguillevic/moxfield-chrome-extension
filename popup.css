@@ -463,6 +463,43 @@ button:focus-visible,
   padding: 0 6px;
 }
 
+/* Liste d'achats cumulée des decks cochés. */
+.deck-shop {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.shopping-list:not(:empty) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.shopping-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.shopping-total {
+  margin: 0 0 6px;
+  cursor: help;
+}
+
+.shopping-list ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.shopping-list li {
+  margin-bottom: 4px;
+}
+
+.shopping-price {
+  color: var(--text-muted);
+}
+
 /* Guide de démarrage. */
 .onboarding-card {
   border-color: var(--accent);

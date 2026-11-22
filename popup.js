@@ -1,11 +1,11 @@
 // Textes traduits (cf. i18n.js), posés avant tout affichage.
 const i18n = createChromeI18n();
-const { t, tn, formatDateTime, translateDocument } = i18n;
+const { t, tn, formatDateTime, formatPrice, translateDocument } = i18n;
 translateDocument(document);
 
 // Règles partagées avec le service worker (cf. deck-checks.js) : mêmes
 // chiffres pour les proxies et le stock partout.
-const { stockQtyOf, proxyCountOf, proxyTotal, replaceableProxies } = createDeckChecks(normalizeName, i18n);
+const { stockQtyOf, proxyCountOf, proxyTotal, replaceableProxies, cardmarketWantsText } = createDeckChecks(normalizeName, i18n);
 
 function send(type, payload) {
   return chrome.runtime.sendMessage({ type, payload });
@@ -350,11 +350,90 @@ function sortDecks(decks) {
   );
 }
 
+// Liste d'achats cumulée (cf. handleGetShoppingList dans background.js) :
+// decks cochés, gardés le temps du popup. Seuls les decks lus et non
+// montés peuvent l'être.
+const SHOPPABLE_STATUSES = new Set(["buildable", "blocked"]);
+const shoppingSelection = new Set();
+// Numéro de la dernière demande : une réponse arrivée après un autre clic
+// est ignorée.
+let shoppingRequest = 0;
+let shoppableCount = 0;
+
+async function renderShoppingList() {
+  const el = document.getElementById("shopping-list");
+  const request = ++shoppingRequest;
+  if (shoppingSelection.size === 0) {
+    el.innerHTML = shoppableCount > 0 ? `<p class="hint">${escapeHtml(t("shoppingHint"))}</p>` : "";
+    return;
+  }
+  const res = await send("GET_SHOPPING_LIST", { deckIds: [...shoppingSelection] });
+  if (request !== shoppingRequest) return;
+  if (!res || !res.ok) {
+    el.innerHTML = `<p class="status">${escapeHtml(t("errorPrefix", (res && res.error) || t("unknownError")))}</p>`;
+    return;
+  }
+  const skipped = res.skipped.length > 0 ? `<p class="hint">${escapeHtml(t("shoppingSkipped", res.skipped.join(", ")))}</p>` : "";
+  if (res.items.length === 0) {
+    el.innerHTML = `<p class="shopping-title">${escapeHtml(tn("shoppingNothing", res.deckCount))}</p>${skipped}`;
+    return;
+  }
+  const missing = res.items.reduce((n, i) => n + i.missing, 0);
+  // Aucun prix connu : pas de total plutôt qu'un « au moins 0 € » (comme
+  // la fenêtre de montage).
+  let totalLine = "";
+  if (res.unpriced < res.items.length) {
+    const total = formatPrice(res.total);
+    const text = res.unpriced > 0 ? tn("shortagePricePartial", res.unpriced, total) : t("shortagePriceTotal", total);
+    totalLine = `<p class="shopping-total" title="${escapeHtml(t("shortagePriceSource"))}">💶 ${escapeHtml(text)}</p>`;
+  }
+  const priceText = (i) => {
+    if (i.total === undefined) return "";
+    const text = i.missing > 1 ? t("shortagePriceEach", formatPrice(i.total), formatPrice(i.unit)) : formatPrice(i.total);
+    return ` · <span class="shopping-price">${escapeHtml(text)}</span>`;
+  };
+  el.innerHTML =
+    `<p class="shopping-title">🛒 ${escapeHtml(tn("shoppingTitle", missing, res.deckCount))}</p>` +
+    totalLine +
+    `<div class="actions"><button type="button" id="shopping-copy-btn">${escapeHtml(t("cardmarketCopyButton"))}</button></div>` +
+    `<p id="shopping-status" class="hint" role="status"></p>` +
+    "<ul>" +
+    res.items
+      .map(
+        (i) =>
+          `<li>${escapeHtml(t("shoppingItem", i.missing, i.name))}${priceText(i)}` +
+          `<br><span class="hint">${escapeHtml(t("shoppingItemDetail", i.have, i.need, i.decks.join(", ")))}</span></li>`
+      )
+      .join("") +
+    "</ul>" +
+    skipped;
+  document.getElementById("shopping-copy-btn").addEventListener("click", () => copyShoppingList(res.items));
+}
+
+// Même export que la page d'un deck (cf. exportShortagesToCardmarket dans
+// content-deck.js) : liste copiée, puis page des wants ouverte.
+async function copyShoppingList(items) {
+  const status = document.getElementById("shopping-status");
+  try {
+    await navigator.clipboard.writeText(cardmarketWantsText(items));
+  } catch (e) {
+    status.textContent = t("clipboardCopyFailed");
+    return;
+  }
+  status.textContent = tn("cardmarketCopied", items.length);
+  chrome.tabs.create({ url: t("cardmarketWantsUrl") });
+}
+
 async function renderDecks() {
   if (!document.getElementById("decks-details").open) return null;
   const res = await send("GET_DECKS");
   const list = document.getElementById("decks-list");
   if (!res || !res.ok) return null;
+  // Decks cochés qui ne peuvent plus l'être (montés, retirés) : décochés.
+  const shoppable = new Set(res.decks.filter((d) => SHOPPABLE_STATUSES.has(d.status)).map((d) => d.deckId));
+  for (const id of [...shoppingSelection]) if (!shoppable.has(id)) shoppingSelection.delete(id);
+  shoppableCount = shoppable.size;
+  renderShoppingList();
   if (res.decks.length === 0) {
     list.innerHTML = `<p class="hint">${escapeHtml(t("decksNone"))}</p>`;
     return res;
@@ -365,6 +444,19 @@ async function renderDecks() {
       row.className = "deck-row";
       const nameCell = document.createElement("div");
       nameCell.className = "deck-name";
+      if (SHOPPABLE_STATUSES.has(d.status)) {
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.className = "deck-shop";
+        box.title = t("shoppingSelect");
+        box.checked = shoppingSelection.has(d.deckId);
+        box.addEventListener("change", () => {
+          if (box.checked) shoppingSelection.add(d.deckId);
+          else shoppingSelection.delete(d.deckId);
+          renderShoppingList();
+        });
+        nameCell.appendChild(box);
+      }
       const link = document.createElement("a");
       link.href = d.url;
       link.target = "_blank";

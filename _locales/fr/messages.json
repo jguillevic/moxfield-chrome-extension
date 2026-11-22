@@ -1114,5 +1114,32 @@
   },
   "declaredProxiesNotice_other": {
     "message": "$1 proxies déclarés sur Moxfield, montés sans prendre de carte du stock : $2"
+  },
+  "shoppingSelect": {
+    "message": "Ajouter ce deck à la liste d'achats"
+  },
+  "shoppingHint": {
+    "message": "Coche des decks pour cumuler leurs cartes manquantes en une seule liste d'achats."
+  },
+  "shoppingTitle_one": {
+    "message": "$1 carte à acheter (decks cochés : $2)"
+  },
+  "shoppingTitle_other": {
+    "message": "$1 cartes à acheter (decks cochés : $2)"
+  },
+  "shoppingNothing_one": {
+    "message": "Rien à acheter : ton stock libre suffit pour le deck coché."
+  },
+  "shoppingNothing_other": {
+    "message": "Rien à acheter : ton stock libre suffit pour les $1 decks cochés."
+  },
+  "shoppingItem": {
+    "message": "$1 × $2"
+  },
+  "shoppingItemDetail": {
+    "message": "as $1 de libre, besoin $2 — $3"
+  },
+  "shoppingSkipped": {
+    "message": "Pas encore lus sur Moxfield, non comptés : $1"
   }
 }

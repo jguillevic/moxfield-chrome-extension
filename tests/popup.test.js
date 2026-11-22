@@ -916,3 +916,79 @@ test("Mes decks : ajouter une adresse, retirer un deck", async (t) => {
   assert.deepEqual(p.sent.find((m) => m.type === "UNFOLLOW_DECK").payload, { deckId: "o1" });
   assert.match(p.$("decks-list").textContent, /Aucun deck pour le moment/);
 });
+
+test("liste d'achats : decks lus et non montés cochables, liste cumulée, copie pour Cardmarket", async (t) => {
+  const p = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_DECKS: { ok: true, decks: DECKS, staleIds: [] },
+    GET_SHOPPING_LIST: (msg) =>
+      msg.payload.deckIds.length === 1
+        ? { ok: true, deckCount: 1, skipped: [], items: [], total: 0, unpriced: 0 }
+        : {
+            ok: true,
+            deckCount: 2,
+            skipped: [],
+            items: [
+              { name: "Rhystic Study", have: 0, need: 2, missing: 2, decks: ["Teval", "Saheeli"], unit: 30, total: 60 },
+              { name: "Arcane Signet", have: 0, need: 1, missing: 1, decks: ["Teval"] },
+            ],
+            total: 60,
+            unpriced: 1,
+          },
+  });
+  t.after(p.close);
+  const copied = [];
+  Object.defineProperty(p.win.navigator, "clipboard", { value: { writeText: async (text) => copied.push(text) } });
+  const opened = [];
+  p.win.chrome.tabs = { create: (o) => opened.push(o.url) };
+  await openDecksSection(p);
+  const boxes = () => [...p.$("decks-list").querySelectorAll(".deck-shop")];
+  assert.deepEqual(boxes().map((b) => b.closest(".deck-row").querySelector("a").textContent), ["Saheeli", "Teval"], "ni monté, ni jamais lu");
+  assert.match(p.$("shopping-list").textContent, /Coche des decks/);
+
+  boxes()[0].click();
+  await settle();
+  assert.deepEqual(p.sent.filter((m) => m.type === "GET_SHOPPING_LIST").pop().payload, { deckIds: ["o1"] });
+  assert.match(p.$("shopping-list").textContent, /Rien à acheter : ton stock libre suffit pour le deck coché/);
+
+  boxes()[1].click();
+  await settle();
+  const text = p.$("shopping-list").textContent;
+  assert.match(text, /3 cartes à acheter \(decks cochés : 2\)/);
+  assert.match(text, /au moins 60,00\s€ \(1 carte sans prix\)/);
+  assert.match(text, /2 × Rhystic Study · 60,00\s€ \(30,00\s€ l'unité\)/);
+  assert.match(text, /as 0 de libre, besoin 2 — Teval, Saheeli/);
+
+  p.$("shopping-copy-btn").click();
+  await settle();
+  assert.deepEqual(copied, ["2 Rhystic Study\n1 Arcane Signet"]);
+  assert.deepEqual(opened, ["https://www.cardmarket.com/fr/Magic/Wants"]);
+  assert.match(p.$("shopping-status").textContent, /2 cartes copiées/);
+
+  // Tout décocher : retour à l'invitation (la réponse au premier décochage,
+  // arrivée après, est ignorée).
+  boxes().forEach((b) => b.checked && b.click());
+  await settle();
+  assert.match(p.$("shopping-list").textContent, /Coche des decks/);
+});
+
+test("liste d'achats : deck coché puis monté, décoché à l'affichage suivant", async (t) => {
+  let decks = [DECKS[1], DECKS[2]];
+  const p = openPopup({
+    GET_COLLECTION_STATUS: collectionStatus({}),
+    GET_DECKS: () => ({ ok: true, decks, staleIds: [] }),
+    GET_SHOPPING_LIST: { ok: true, deckCount: 1, skipped: [], items: [], total: 0, unpriced: 0 },
+  });
+  t.after(p.close);
+  await openDecksSection(p);
+  p.$("decks-list").querySelector(".deck-shop").click();
+  await settle();
+  decks = [DECKS[1], { ...DECKS[2], status: "built" }];
+  p.$("decks-refresh-btn").click();
+  await settle();
+  await settle();
+  assert.match(p.$("shopping-list").textContent, /Coche des decks/, "Saheeli monté : plus coché");
+  p.$("decks-list").querySelector(".deck-shop").click();
+  await settle();
+  assert.deepEqual(p.sent.filter((m) => m.type === "GET_SHOPPING_LIST").pop().payload, { deckIds: ["k1"] });
+});

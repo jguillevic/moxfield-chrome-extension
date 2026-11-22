@@ -19,6 +19,8 @@ const {
   computeDeckAvailability,
   blockingSummary,
   availabilityLabel,
+  computeShoppingList,
+  cardmarketWantsText,
 } = checks;
 
 // Stock au format de background.js : { [nom normalisé]: { name, qty } }.
@@ -754,4 +756,24 @@ test("computeDeckAvailability : proxy déclaré ni bloquant, ni compté, mais an
   const a = computeDeckAvailability([{ name: "Rhystic Study", qty: 1, proxyQty: 1 }, { name: "Sol Ring", qty: 1 }], stockOf({ "Sol Ring": 1 }));
   assert.deepEqual([a.blocking, a.total, a.proxyCount], [0, 1, 1]);
   assert.match(availabilityLabel(a), /1 proxy déclaré sur Moxfield/);
+});
+
+test("computeShoppingList : besoins additionnés par nom, comparés une fois au stock libre", () => {
+  const stock = stockOf({ "Sol Ring": 2, "Arcane Signet": 1, Forest: 0 });
+  const list = computeShoppingList(
+    [
+      { name: "A", cards: [{ name: "Sol Ring", qty: 1 }, { name: "Forest", qty: 10 }, { name: "Mana Crypt", qty: 1, proxyQty: 1 }] },
+      { name: "B", cards: [{ name: "sol ring", qty: 2 }, { name: "Arcane Signet", qty: 1 }, { name: "Rhystic Study", qty: 2, proxyQty: 1 }] },
+    ],
+    stock
+  );
+  assert.deepEqual(list, [
+    { name: "Rhystic Study", have: 0, need: 1, missing: 1, decks: ["B"] },
+    { name: "Sol Ring", have: 2, need: 3, missing: 1, decks: ["A", "B"] },
+  ], "terrains de base et proxies déclarés exclus ; Arcane Signet couvert");
+  assert.deepEqual(computeShoppingList([], stock), []);
+});
+
+test("cardmarketWantsText : « N Nom », quantité manquante, une carte par ligne", () => {
+  assert.equal(cardmarketWantsText([{ name: "Sol Ring", missing: 2 }, { name: "Fire // Ice", missing: 1 }]), "2 Sol Ring\n1 Fire // Ice");
 });

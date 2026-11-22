@@ -295,7 +295,7 @@ function declaredProxies(deck) {
 }
 
 // Cartes d'un deck pour la vue « Mes decks » du popup (réponse de son
-// API) : [{ name, qty, proxyQty?, printings: [{ code, set, cn, qty }] }], une entrée
+// API) : [{ name, qty, proxyQty?, printings: [{ code, set, cn, qty, eur? }] }], une entrée
 // par carte (zones additionnées, Considering écartée comme sur la page).
 // code : id de l'impression, sans la finition, comme le marqueur de
 // collection de la page (cf. ownedVersionOf dans deck-scraper.js), pour que
@@ -303,12 +303,19 @@ function declaredProxies(deck) {
 function deckCardList(deck) {
   const byName = new Map();
   if (!deck || !deck.boards || typeof deck.boards !== "object") return [];
-  const printing = (p, card, qty) => ({
-    code: String(card.id || ""),
-    set: String(card.set || p.set || "").trim().toLowerCase(),
-    cn: String(card.cn || p.cn || "").trim().toLowerCase(),
-    qty,
-  });
+  // eur : prix de l'impression (cf. priceOf), pour le coût de la liste
+  // d'achats du popup.
+  const printing = (p, card, qty) => {
+    const result = {
+      code: String(card.id || ""),
+      set: String(card.set || p.set || "").trim().toLowerCase(),
+      cn: String(card.cn || p.cn || "").trim().toLowerCase(),
+      qty,
+    };
+    const eur = priceOf(card.prices);
+    if (eur !== undefined) result.eur = eur;
+    return result;
+  };
   for (const [board, content] of Object.entries(deck.boards)) {
     if (IGNORED_BOARDS.has(board) || !content || !content.cards) continue;
     for (const entry of Object.values(content.cards)) {

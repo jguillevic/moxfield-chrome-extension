@@ -546,6 +546,41 @@ function createDeckChecks(normalizeName, { t, tn }) {
     });
   }
 
+  // Liste d'achats cumulée de plusieurs decks non montés (vue « Mes decks »
+  // du popup) : besoins additionnés par nom (les decks seraient montés en
+  // même temps, une carte ne sert qu'à un deck), comparés une seule fois au
+  // stock libre, d'où une ligne par carte. Même part du deck que la
+  // pastille (stockPartOf : proxies déclarés exclus) et mêmes exclusions
+  // que le bouton Cardmarket de la page : terrains de base, et cartes
+  // possédées dans une autre édition ou version déjà prise (rien à acheter,
+  // c'est une question d'édition). Pour un seul deck, les manques sont donc
+  // ceux de sa pastille.
+  // decks : [{ name, cards }] → [{ name, have, need, missing, decks }] trié
+  // par nom (decks : noms des decks qui l'utilisent).
+  function computeShoppingList(decks, stockMap) {
+    const needs = new Map();
+    for (const deck of decks) {
+      for (const c of stockPartOf(deck.cards)) {
+        if (isBasicLand(c.name)) continue;
+        const key = normalizeName(c.name);
+        if (!needs.has(key)) needs.set(key, { name: c.name, qty: 0, decks: [] });
+        const need = needs.get(key);
+        need.qty += c.qty;
+        if (!need.decks.includes(deck.name)) need.decks.push(deck.name);
+      }
+    }
+    return computeShortages([...needs.values()], stockMap)
+      .map((s) => ({ ...s, decks: needs.get(normalizeName(s.name)).decks }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Texte collé dans l'import d'une liste de wants Cardmarket : « N Nom »,
+  // une carte par ligne, quantité manquante seulement. Même format depuis
+  // la page d'un deck et depuis la liste d'achats.
+  function cardmarketWantsText(shortages) {
+    return shortages.map((s) => `${s.missing} ${s.name}`).join("\n");
+  }
+
   // Nombre affiché sur la pastille du bouton, avec sa décomposition — repris
   // tel quel dans la fenêtre de montage pour que les deux concordent.
   // null si rien ne bloque.
@@ -581,6 +616,8 @@ function createDeckChecks(normalizeName, { t, tn }) {
     computeWrongEditionCards,
     computeShortages,
     computeShortagePrices,
+    computeShoppingList,
+    cardmarketWantsText,
     proxyCountOf,
     stockQtyOf,
     proxyTotal,

@@ -367,7 +367,7 @@ test("changement d'édition : appel du site, version du deck en en-tête, résul
 });
 
 // Vue « Mes decks » du popup : cartes d'un deck lues par son API.
-test("deckCardList : une entrée par carte, Considering écartée, impressions détaillées (code sans finition)", () => {
+test("deckCardList : une entrée par carte, Considering écartée, impressions détaillées (code sans finition, prix)", () => {
   const cards = deckCardList(DECK);
   assert.deepEqual(cards.map((c) => [c.name, c.qty]), [
     ["Golgari Thug", 1],
@@ -377,10 +377,10 @@ test("deckCardList : une entrée par carte, Considering écartée, impressions d
     ["Birds of Paradise", 1],
   ]);
   assert.deepEqual(cards.find((c) => c.name === "Swamp").printings, [
-    { code: "SWAMP1", set: "war", cn: "256", qty: 2 },
-    { code: "SWAMP2", set: "pwar", cn: "war-115", qty: 1 },
+    { code: "SWAMP1", set: "war", cn: "256", qty: 2, eur: 0.11 },
+    { code: "SWAMP2", set: "pwar", cn: "war-115", qty: 1, eur: 0.8 },
   ]);
-  assert.deepEqual(cards[0].printings, [{ code: "ZOwRD", set: "rav", cn: "87", qty: 1 }]);
+  assert.deepEqual(cards[0].printings, [{ code: "ZOwRD", set: "rav", cn: "87", qty: 1, eur: 0.15 }]);
   assert.deepEqual(deckCardList({ cards: [] }), [], "pas un deck");
 });
 

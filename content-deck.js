@@ -72,6 +72,7 @@
     computeDeckAvailability,
     blockingSummary,
     availabilityLabel,
+    cardmarketWantsText,
   } = createDeckChecks(normalizeName, i18n);
 
   // Cartes possédées dans une autre version que celle du deck (cf.
@@ -595,8 +596,7 @@
   }
 
   async function exportShortagesToCardmarket(shortages) {
-    const text = shortages.map((s) => `${s.missing} ${s.name}`).join("\n");
-    const ok = await copyText(text);
+    const ok = await copyText(cardmarketWantsText(shortages));
     if (!ok) {
       toast(t("clipboardCopyFailed"), true);
       return;

@@ -52,6 +52,8 @@ const {
   computeDeckAvailability,
   availabilityLabel,
   cardsFromDeckApi,
+  computeShoppingList,
+  computeShortagePrices,
 } = createDeckChecks(
   normalizeName,
   i18n
@@ -1745,6 +1747,50 @@ async function handleGetDecks() {
   return { ok: true, decks, staleIds };
 }
 
+// Liste d'achats cumulée des decks cochés dans « Mes decks » (cf.
+// computeShoppingList), avec les listes déjà lues : pas d'appel à
+// Moxfield ici (la vue relit à l'ouverture les decks trop anciens). Un
+// deck monté n'y entre pas (ses cartes sont déjà sorties du stock) ; un
+// deck jamais lu, introuvable ou privé est écarté et nommé dans skipped.
+// Prix : celui de la version du deck, la moins chère si plusieurs decks ou
+// versions (cf. computeShortagePrices, même calcul que la fenêtre de
+// montage). Les listes lues avant les prix n'en ont pas : unpriced le dit.
+async function handleGetShoppingList({ deckIds } = {}) {
+  const state = await getState();
+  const cache = await getDeckCache();
+  const decks = [];
+  const skipped = [];
+  const codesByName = new Map();
+  const eurByCode = new Map();
+  for (const deckId of new Set((Array.isArray(deckIds) ? deckIds : []).filter(isDeckId))) {
+    if (state.builtDecks[deckId]) continue;
+    const cached = cache[deckId];
+    const followed = state.followedDecks[deckId];
+    const name = (cached && cached.name) || (followed && followed.name) || deckId;
+    if (!cached || cached.error || !Array.isArray(cached.cards)) {
+      skipped.push(name);
+      continue;
+    }
+    decks.push({ name, cards: cardsFromDeckApi(cached.cards, state.stock) });
+    for (const card of cached.cards) {
+      const key = normalizeName(card.name);
+      for (const p of card.printings || []) {
+        if (!p.code) continue;
+        if (!codesByName.has(key)) codesByName.set(key, []);
+        codesByName.get(key).push(p.code);
+        if (Number.isFinite(p.eur)) eurByCode.set(p.code, p.eur);
+      }
+    }
+  }
+  const shortages = computeShoppingList(decks, state.stock);
+  const prices = computeShortagePrices(shortages, codesByName, (code) => eurByCode.get(code));
+  const items = shortages.map((s) => {
+    const price = prices.byName.get(normalizeName(s.name));
+    return price ? { ...s, unit: price.unit, total: price.total } : s;
+  });
+  return { ok: true, deckCount: decks.length, skipped, items, total: prices.total, unpriced: prices.unpriced };
+}
+
 // --- Guide de démarrage (popup) ---
 // { done, step } : guide terminé ou passé, et étape où l'utilisateur s'est
 // arrêté (le popup se ferme dès qu'on va sur Moxfield : le guide reprend là
@@ -1832,6 +1878,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "REFRESH_DECKS":
           sendResponse(await handleRefreshDecks(msg.payload || {}));
+          break;
+        case "GET_SHOPPING_LIST":
+          sendResponse(await handleGetShoppingList(msg.payload || {}));
           break;
         case "ADD_DECK":
           sendResponse(await handleAddDeck(msg.payload || {}));

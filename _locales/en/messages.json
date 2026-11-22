@@ -1114,5 +1114,32 @@
   },
   "declaredProxiesNotice_other": {
     "message": "$1 proxies declared on Moxfield, built without taking a card from the stock: $2"
+  },
+  "shoppingSelect": {
+    "message": "Add this deck to the shopping list"
+  },
+  "shoppingHint": {
+    "message": "Tick decks to combine their missing cards into a single shopping list."
+  },
+  "shoppingTitle_one": {
+    "message": "$1 card to buy (ticked decks: $2)"
+  },
+  "shoppingTitle_other": {
+    "message": "$1 cards to buy (ticked decks: $2)"
+  },
+  "shoppingNothing_one": {
+    "message": "Nothing to buy: your free stock covers the ticked deck."
+  },
+  "shoppingNothing_other": {
+    "message": "Nothing to buy: your free stock covers the $1 ticked decks."
+  },
+  "shoppingItem": {
+    "message": "$1 × $2"
+  },
+  "shoppingItemDetail": {
+    "message": "$1 free, $2 needed — $3"
+  },
+  "shoppingSkipped": {
+    "message": "Not read from Moxfield yet, not counted: $1"
   }
 }

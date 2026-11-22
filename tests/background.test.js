@@ -2197,3 +2197,40 @@ test("proxies déclarés sur Moxfield : transmis à la page, et pris en compte d
   assert.deepEqual([listed.status, listed.blocking], ["buildable", 0], "Rhystic Study manque, mais déclaré proxy");
   assert.match(listed.label, /1 proxy déclaré/);
 });
+
+// Liste d'achats cumulée des decks cochés dans « Mes decks ».
+test("liste d'achats : manques de plusieurs decks additionnés sur le stock libre, prix de la version la moins chère", async () => {
+  const card = (name, id, eur, extra = {}) => ({ quantity: 1, card: { id, name, set: "c21", cn: id, prices: eur === undefined ? {} : { eur } }, ...extra });
+  const deckJson = (name, cards) => JSON.stringify({ id: "x", name, publicId: "p", boards: { mainboard: { cards: Object.fromEntries(cards.map((c, i) => [`u${i}`, c])) } } });
+  const decks = {
+    a: deckJson("Deck A", [card("Sol Ring", "S1", 1.5), card("Rhystic Study", "R1", 30), card("Swamp", "W1", 0.1)]),
+    b: deckJson("Deck B", [card("Sol Ring", "S2", 1.2), card("Rhystic Study", "R2"), card("Mana Crypt", "M1", 150, { isProxy: true }), card("Arcane Signet", "A1")]),
+    c: deckJson("Deck C", [card("Sol Ring", "S3", 1)]),
+  };
+  const bg = loadBackground(SOL_RING_STOCK(), { moxfieldCSV: "", moxfieldDeck: (url) => decks[url.split("/").pop()] });
+  for (const id of ["a", "b", "c", "never"]) await bg.send({ type: "FOLLOW_DECK", payload: { deckId: id, name: id } });
+  await bg.send({ type: "REFRESH_DECKS", payload: { deckIds: ["a", "b", "c"] } });
+
+  // Sol Ring : 3 au total dans A, B et C pour 2 libres ; C est monté
+  // (ses cartes sortent du stock libre) et n'entre plus dans la liste.
+  await build(bg, "c", [{ name: "Sol Ring", qty: 1 }]);
+  const res = await bg.send({ type: "GET_SHOPPING_LIST", payload: { deckIds: ["a", "b", "c", "never"] } });
+  assert.equal(res.deckCount, 2);
+  assert.deepEqual(res.skipped, ["never"], "deck jamais lu : écarté et nommé");
+  assert.deepEqual(
+    res.items.map((i) => [i.name, i.have, i.need, i.missing, i.decks, i.unit, i.total]),
+    [
+      ["Arcane Signet", 0, 1, 1, ["Deck B"], undefined, undefined],
+      ["Rhystic Study", 0, 2, 2, ["Deck A", "Deck B"], 30, 60],
+      ["Sol Ring", 1, 2, 1, ["Deck A", "Deck B"], 1.2, 1.2],
+    ],
+    "une ligne par carte ; terrains de base et proxy déclaré (Mana Crypt) exclus"
+  );
+  assert.deepEqual([res.total, res.unpriced], [61.2, 1]);
+
+  // Un seul deck : mêmes manques que sa pastille dans « Mes decks ».
+  const single = await bg.send({ type: "GET_SHOPPING_LIST", payload: { deckIds: ["a"] } });
+  const listed = (await decksOf(bg)).find((d) => d.deckId === "a");
+  assert.equal(single.items.reduce((n, i) => n + i.missing, 0), listed.blocking);
+  assert.deepEqual((await bg.send({ type: "GET_SHOPPING_LIST", payload: { deckIds: [] } })).items, []);
+});
