@@ -15,7 +15,7 @@
   --msm-accent-soft: #eeecfd;
   --msm-accent-fill: #5b4fd6;
   --msm-accent-fill-hover: #4c41c0;
-  --msm-ok: #1f8a4c;
+  --msm-ok: #17703d;
   --msm-warn: #9a6200;
   --msm-warn-soft: #fdf3dd;
   --msm-danger: #c0392b;
@@ -36,7 +36,7 @@
     --msm-border: #333844;
     --msm-text: #e8eaf0;
     --msm-text-muted: #9aa0ae;
-    --msm-accent: #8c82ff;
+    --msm-accent: #938aff;
     --msm-accent-soft: #2c2946;
     --msm-accent-fill: #5f54e0;
     --msm-accent-fill-hover: #6f65ec;
@@ -92,9 +92,16 @@
   height: 1em;
 }
 
-.msm-bar-btn:hover,
-.msm-bar-btn:focus-visible {
+.msm-bar-btn:hover {
   opacity: 0.8;
+}
+
+/* Focus clavier bien visible sur la barre sombre (une variation d'opacité
+   ne suffisait pas). */
+.msm-bar-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 /* Deck monté : icône (rond coché) en vert, pour ne pas le confondre avec un
@@ -139,7 +146,7 @@
 }
 
 .msm-avail-badge.msm-avail-ok {
-  background: #1f8a4c;
+  background: #17703d;
 }
 
 /* Deck monté avec des proxies : leur nombre (information, pas un blocage). */
@@ -173,6 +180,16 @@
   cursor: progress;
 }
 
+/* Deck d'un autre compte : action impossible, raison dans l'infobulle. */
+.msm-editions-bar-btn.msm-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.msm-editions-bar-btn.msm-disabled:hover {
+  opacity: 0.4;
+}
+
 /* --- Toasts --- */
 
 .msm-toast {
@@ -195,6 +212,40 @@
   border-left-color: var(--msm-danger);
   background: var(--msm-danger-soft);
   color: var(--msm-danger);
+}
+
+.msm-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.msm-toast-text {
+  flex: 1;
+}
+
+.msm-toast-close {
+  flex-shrink: 0;
+  margin: -4px -6px 0 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.msm-toast-close:hover,
+.msm-toast-close:focus-visible {
+  opacity: 1;
+}
+
+.msm-toast-close:focus-visible {
+  outline: 2px solid currentColor;
 }
 
 /* --- Fenêtre de montage / démontage --- */
@@ -342,6 +393,21 @@
   font-size: 12px;
 }
 
+/* Action destructive (Démonter) : secondaire, en rouge, à l'écart des
+   autres boutons. */
+.msm-modal button.msm-danger {
+  margin-right: auto;
+  border-color: var(--msm-danger);
+  background: var(--msm-danger-soft);
+  color: var(--msm-danger);
+}
+
+.msm-modal button.msm-danger:hover {
+  border-color: var(--msm-danger);
+  background: var(--msm-danger-fill);
+  color: #fff;
+}
+
 .msm-modal-actions {
   display: flex;
   flex-wrap: wrap;
@@ -350,6 +416,15 @@
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--msm-border);
+}
+
+/* Raison pour laquelle le bouton principal est désactivé. */
+.msm-modal .msm-action-hint {
+  margin: 14px 0 -6px;
+  color: var(--msm-danger);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
 }
 
 /* Compteur de cartes et messages d'état. */

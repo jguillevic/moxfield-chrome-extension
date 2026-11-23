@@ -83,7 +83,7 @@
         </div>
         <div class="actions">
           <button id="decks-refresh-btn" data-i18n="decksRefresh"></button>
-          <span id="decks-status" class="status"></span>
+          <span id="decks-status" class="status" role="status"></span>
         </div>
         <div id="decks-list" class="list"></div>
         <div id="shopping-list" class="shopping-list"></div>
@@ -127,7 +127,7 @@
     <div class="actions">
       <button id="collection-fetch-btn" class="primary" data-i18n="collectionFetchNow"></button>
       <a id="collection-login-link" class="button" href="https://moxfield.com/account/signin" target="_blank" hidden data-i18n="collectionSignIn"></a>
-      <span id="collection-status" class="status"></span>
+      <span id="collection-status" class="status" role="status"></span>
     </div>
   </section>
 
@@ -136,14 +136,14 @@
     <p class="hint" data-i18n="csvHint"></p>
     <div class="file-row">
       <label class="button file-button">
-        <input type="file" id="csv-file-input" accept=".csv,text/csv" hidden />
+        <input type="file" id="csv-file-input" class="visually-hidden" accept=".csv,text/csv" />
         <span data-i18n="csvChooseFile"></span>
       </label>
       <span id="csv-file-name" class="file-name" data-i18n="csvNoFile"></span>
     </div>
     <div class="actions">
       <button id="import-btn" class="primary" data-i18n="csvImport"></button>
-      <span id="import-status" class="status"></span>
+      <span id="import-status" class="status" role="status"></span>
     </div>
     <details class="sub-details">
       <summary data-i18n="csvPasteSummary"></summary>
@@ -209,7 +209,7 @@
       </details>
     </div>
 
-    <span id="sync-status" class="status"></span>
+    <span id="sync-status" class="status" role="status"></span>
   </section>
 
   <section class="card">
@@ -232,6 +232,7 @@
       <div class="card-body">
         <p class="hint" data-i18n="dangerHint"></p>
         <button id="reset-btn" class="danger" data-i18n="resetButton"></button>
+        <p id="reset-status" class="hint" role="status"></p>
       </div>
     </details>
   </section>

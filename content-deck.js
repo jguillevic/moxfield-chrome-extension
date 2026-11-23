@@ -66,6 +66,7 @@
     proxyCountOf,
     carryProxies,
     buildVersionUsage,
+    predictEditionBlock,
     computeVersionConflicts,
     parseCardsText,
     evaluateDeckUpdate,
@@ -102,7 +103,7 @@
   // --- Passer le deck Moxfield sur les éditions de ta collection ---
   // Bouton du ruban, juste à gauche de « Monter », affiché quand Moxfield
   // indique des cartes possédées dans une autre édition (cf.
-  // ownedEditionNames). Un seul clic (demande de l'utilisateur : pas de
+  // editionsOf). Un seul clic (demande de l'utilisateur : pas de
   // proposition à confirmer, et le deck n'est pas monté) : le service worker
   // choisit une édition possédée par carte (PLAN_OWNED_EDITIONS), l'écrit sur
   // Moxfield (APPLY_OWNED_EDITIONS), puis la page est rechargée — Moxfield
@@ -119,9 +120,13 @@
   // sessionStorage : survit au rechargement de l'onglet, pas au-delà.
   const OWNED_EDITIONS_KEY = "msmOwnedEditionsDone";
   // Cartes qu'un clic n'a pas pu changer (pas assez d'exemplaires dans une
-  // même édition, aucune autre édition…), par deck : plus comptées sur le
-  // bouton, sinon il resterait bloqué sur un nombre qu'aucun clic ne fait
-  // baisser (constaté en vrai avec les terrains de base, novembre 2026).
+  // même édition, aucune autre édition…), par deck, avec la raison
+  // ({ [deck]: { [nom]: raison } }) : plus comptées parmi celles que le
+  // bouton changerait, sinon il resterait bloqué sur un nombre qu'aucun clic
+  // ne fait baisser (constaté en vrai avec les terrains de base, novembre
+  // 2026). Elles restent annoncées, avec leur raison : un bouton qui
+  // disparaît alors que Moxfield montre encore des cartes d'une autre
+  // édition laisse croire à une panne (retour utilisateur, novembre 2026).
   // Oubliées à la fermeture de l'onglet : la collection a pu changer.
   // « changed » (modifiée ailleurs entre-temps) n'en fait pas partie : un
   // nouveau clic peut la changer.
@@ -139,11 +144,21 @@
     }
   }
 
+  // Raisons retenues pour un deck ({ [nom]: raison }). Ancien format (liste
+  // de noms, sans raison) encore lisible : l'onglet a pu rester ouvert
+  // pendant une mise à jour de l'extension.
+  function unfixableOf(deckId) {
+    const saved = readUnfixable()[deckId];
+    if (Array.isArray(saved)) return Object.fromEntries(saved.map((name) => [name, ""]));
+    return saved && typeof saved === "object" ? saved : {};
+  }
+
   function rememberUnfixable(deckId, skipped) {
-    const names = skipped.filter((s) => s.reason !== "changed").map((s) => frontFace(s.name));
-    if (names.length === 0) return;
+    const unfixable = skipped.filter((s) => s.reason !== "changed");
+    if (unfixable.length === 0) return;
     const saved = readUnfixable();
-    const merged = [...new Set([...(saved[deckId] || []), ...names])];
+    const merged = { ...unfixableOf(deckId) };
+    for (const s of unfixable) merged[frontFace(s.name)] = typeof s.reason === "string" ? s.reason : "";
     delete saved[deckId];
     const kept = Object.entries(saved).slice(-(MAX_UNFIXABLE_DECKS - 1));
     try {
@@ -154,7 +169,7 @@
   }
 
   function isUnfixable(deckId, name) {
-    return (readUnfixable()[deckId] || []).includes(frontFace(name));
+    return Object.prototype.hasOwnProperty.call(unfixableOf(deckId), frontFace(name));
   }
   // Au-delà, le rechargement n'est plus le nôtre (onglet rouvert plus tard).
   const OWNED_EDITIONS_RESUME_MS = 30000;
@@ -162,19 +177,54 @@
   // Cartes de la page que Moxfield indique possédées, mais pas dans
   // l'édition du deck (« Partially in collection », cf.
   // buildWrongEditionSet), terrains de base compris : changer leur édition
-  // ne dépend pas du stock libre ni du montage. Sans celles qu'un clic n'a
-  // pas pu changer sur ce deck (cf. rememberUnfixable).
-  function ownedEditionNames(cards, deckId) {
+  // ne dépend pas du stock libre ni du montage. Réparties en deux, pour le
+  // bouton (cf. setEditions) :
+  // - names : celles qu'un clic changerait ;
+  // - left ([{ name, reason }]) : celles qu'il ne pourra pas changer, parce
+  //   qu'un clic ne l'a pas pu sur ce deck (cf. rememberUnfixable) ou que
+  //   c'est prévisible (cf. predictedEditionBlock). Un bouton qui annonce
+  //   8 cartes puis n'en change aucune trompe (retour utilisateur, novembre
+  //   2026).
+  // stockMap, usage : stock des cartes et éditions prises par les autres
+  // decks montés (cf. buildVersionUsage).
+  function editionsOf(cards, deckId, stockMap = {}, usage = new Map()) {
     const wrong = buildWrongEditionSet(cards);
+    const remembered = unfixableOf(deckId);
     const names = [];
+    const left = [];
     for (const c of cards) {
-      if (wrong.has(normalizeName(c.name)) && !names.includes(c.name) && !isUnfixable(deckId, c.name)) names.push(c.name);
+      if (!wrong.has(normalizeName(c.name)) || names.includes(c.name) || left.some((l) => l.name === c.name)) continue;
+      const key = frontFace(c.name);
+      const reason = Object.prototype.hasOwnProperty.call(remembered, key) ? remembered[key] : predictedEditionBlock(c, stockMap, usage);
+      if (reason === null) names.push(c.name);
+      else left.push({ name: c.name, reason });
     }
-    return names;
+    return { names, left };
   }
 
+  // Raison pour laquelle un clic ne pourra pas changer l'édition de cette
+  // carte, ou null (possible, ou impossible à dire : dans le doute, on
+  // laisse essayer). L'édition demandée par le deck n'est connue que si la
+  // carte n'a qu'une impression sur la page et que l'API du deck a répondu
+  // (cf. loadPrintings).
+  function predictedEditionBlock(card, stockMap, usage) {
+    const codes = card.printingCodes || [];
+    const printing = codes.length === 1 ? printingsByCode.get(codes[0]) : null;
+    if (!printing) return null;
+    const key = normalizeName(card.name);
+    const entry = stockMap[key];
+    return predictEditionBlock(entry && entry.printings, { set: printing.set, cn: printing.cn, quantity: card.qty }, usage.get(key) || []);
+  }
+
+  // « A, B — raison ; C — autre raison » : cartes regroupées par raison (huit
+  // fois la même phrase rendait le message illisible, retour utilisateur).
   function skippedText(skipped) {
-    return skipped.map((s) => `${s.name} — ${t(EDITION_SKIP_REASONS[s.reason] || "unknownError")}`).join(" ; ");
+    const byReason = new Map();
+    for (const s of skipped) {
+      const reason = t(EDITION_SKIP_REASONS[s.reason] || "unknownError");
+      byReason.set(reason, [...(byReason.get(reason) || []), s.name]);
+    }
+    return [...byReason].map(([reason, names]) => `${names.join(", ")} — ${reason}`).join(" ; ");
   }
 
   // Un clic à la fois : l'écriture sur Moxfield prend jusqu'à une minute.
@@ -223,8 +273,24 @@
     // contexte d'extension invalidé : pas de jauge, le traitement reste possible
   }
 
+  // Deck d'un autre compte (cf. deckOwner).
+  function notMyDeck(deckId = currentDeckId) {
+    return deckOwner.deckId === deckId && deckOwner.mine === false;
+  }
+
   async function useOwnedEditions(deckId, names) {
-    if (ownedEditionsRunning || names.length === 0) return;
+    if (ownedEditionsRunning) return;
+    if (notMyDeck(deckId)) {
+      // La raison ne doit pas être seulement dans l'infobulle (charte).
+      toast(t("ownedEditionsNotOwner"));
+      return;
+    }
+    if (names.length === 0) {
+      // Il ne reste que des cartes qu'un clic n'a pas pu changer : bouton
+      // désactivé, qui redit pourquoi.
+      if (btnEditionLeft.length > 0) toast(leftEditionsText());
+      return;
+    }
     ownedEditionsRunning = true;
     renderEditionsButton();
     let reloading = false;
@@ -261,9 +327,13 @@
         return;
       }
       // Rien n'a changé : pas de rechargement, la raison est affichée.
-      setEditionNames(btnEditionNames.filter((n) => !isUnfixable(deckId, n)));
+      const reasons = unfixableOf(deckId);
+      const stuck = btnEditionNames.filter((n) => isUnfixable(deckId, n)).map((name) => ({ name, reason: reasons[frontFace(name)] }));
+      setEditions(btnEditionNames.filter((n) => !isUnfixable(deckId, n)), [...btnEditionLeft, ...stuck]);
+      // Rien à changer n'est pas une erreur (exemplaires déjà dans d'autres
+      // decks montés…) : message neutre. Rouge seulement pour un échec.
       const summary = res.ok ? t("ownedEditionsZero") : tn("ownedEditionsFailed", 0, res.error || t("unknownError"));
-      toast(skipped.length > 0 ? `${summary} ${skippedText(skipped)}` : summary, true);
+      toast(skipped.length > 0 ? `${summary} ${skippedText(skipped)}` : summary, !res.ok);
     } finally {
       if (!reloading) hideEditionsProgress();
       ownedEditionsRunning = false;
@@ -360,6 +430,11 @@
   // réponse, et deck auquel elles appartiennent : propres à chaque deck,
   // contrairement aux éditions (un code désigne la même impression partout).
   let declared = { deckId: null, proxies: {} };
+  // Deck à toi ou non (true, false, null si inconnu, cf. deckOwnedBy dans
+  // moxfield-collection.js), donné par la même réponse : sur le deck d'un
+  // autre, « Utiliser mes éditions » est désactivé (Moxfield refuserait
+  // l'écriture). Inconnu : on laisse faire, le service worker vérifie.
+  let deckOwner = { deckId: null, mine: null };
 
   // Demande les éditions (et prix) des impressions pas encore connues ;
   // résout à true si de nouvelles éditions ont été apprises. Ne lève jamais :
@@ -392,6 +467,11 @@
         const proxies = res.declaredProxies && typeof res.declaredProxies === "object" ? res.declaredProxies : {};
         if (JSON.stringify(proxies) !== JSON.stringify(declared.deckId === deckId ? declared.proxies : {})) added = true;
         declared = { deckId, proxies };
+        const mine = typeof res.ownedByMe === "boolean" ? res.ownedByMe : null;
+        if (deckOwner.deckId !== deckId || deckOwner.mine !== mine) {
+          deckOwner = { deckId, mine };
+          renderEditionsButton();
+        }
         for (const [code, printing] of Object.entries(res.printings)) {
           if (printing && typeof printing.eur === "number" && printing.eur > 0) pricesByCode.set(code, printing.eur);
           if (printingsByCode.has(code) || !printing || typeof printing.set !== "string" || !printing.set) continue;
@@ -798,9 +878,9 @@
     updateBtn.hidden = false;
     const proxies = proxiesNeeded(check.shortages, check.wrongEdition.length > 0 || check.versionTaken.length > 0);
     setProxyAction(updateBtn, proxies, "updateBuild", "updateBuildWithProxies");
-    updateBtn.disabled = check.blocked && proxies === 0;
-    if (updateBtn.disabled) updateBtn.title = t("deckUpdateBlocked");
-    overlay.querySelector("#msm-confirm").classList.remove("msm-primary");
+    setActionBlocked(overlay, updateBtn, check.blocked && proxies === 0 ? t("deckUpdateBlocked") : null);
+    // Un seul bouton principal : la mise à jour remplace « Fermer ».
+    overlay.querySelector("#msm-cancel").classList.remove("msm-primary");
     const cards = scraped.map(({ name, qty, versions }) => (versions && versions.length > 0 ? { name, qty, versions } : { name, qty }));
     return carryProxies(cards, deck.cards);
   }
@@ -816,6 +896,57 @@
     }
   }
 
+  // Action impossible : bouton désactivé, et la raison affichée juste
+  // au-dessus des boutons (un title ne s'affiche ni au clavier ni sur un
+  // bouton désactivé). reason null : action de nouveau possible.
+  function setActionBlocked(overlay, button, reason) {
+    const hint = overlay.querySelector("#msm-action-hint");
+    button.disabled = Boolean(reason);
+    if (reason) button.setAttribute("aria-describedby", "msm-action-hint");
+    else button.removeAttribute("aria-describedby");
+    if (hint.textContent !== (reason || "")) hint.textContent = reason || "";
+    hint.hidden = !reason;
+  }
+
+  // Éléments atteignables avec Tab dans la fenêtre (zones masquées exclues).
+  function focusableIn(container) {
+    const selector = 'button, a[href], textarea, input, select, summary, [tabindex]:not([tabindex="-1"])';
+    const shown = (el) => {
+      for (let node = el; node && node !== container; node = node.parentElement) {
+        if (node.hidden || node.style.display === "none") return false;
+      }
+      return true;
+    };
+    return [...container.querySelectorAll(selector)].filter((el) => !el.disabled && shown(el));
+  }
+
+  // Tab et Maj+Tab restent dans la fenêtre : derrière, la page de Moxfield
+  // n'est pas utilisable tant qu'elle est ouverte.
+  function trapFocus(overlay) {
+    overlay.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab") return;
+      const items = focusableIn(overlay);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const outside = !items.includes(active);
+      if (e.shiftKey && (active === first || outside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || outside)) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
+  // Fermeture de la fenêtre : le focus revient au bouton qui l'a ouverte.
+  function closeOverlay(overlay) {
+    overlay.remove();
+    if (btn && btn.isConnected) btn.focus();
+  }
+
   function buildOverlay({ isBuilt }) {
     const overlay = document.createElement("div");
     overlay.className = "msm-overlay";
@@ -826,7 +957,7 @@
           ${iconUrl ? `<img src="${iconUrl}" alt="" width="24" height="24" />` : ""}
           <div>
             <div class="msm-modal-brand">Moxfield Stock Manager</div>
-            <h3 id="msm-modal-title">${escapeHtml(t(isBuilt ? "overlayTitleUnbuild" : "overlayTitleBuild"))}</h3>
+            <h3 id="msm-modal-title" tabindex="-1">${escapeHtml(t(isBuilt ? "overlayTitleUnbuild" : "overlayTitleBuild"))}</h3>
           </div>
           <button type="button" id="msm-help-toggle" class="msm-help-toggle" aria-expanded="false" aria-controls="msm-help-legend" title="${escapeHtml(t("legendTitle"))}" aria-label="${escapeHtml(t("legendTitle"))}">?</button>
         </div>
@@ -851,11 +982,22 @@
                <div id="msm-shortage-warning" class="msm-shortage-warning" style="display:none"></div>
                <div id="msm-basic-land-warning" class="msm-info-warning" style="display:none"></div>`
         }
-        <div class="msm-modal-actions">
-          <button id="msm-cancel">${escapeHtml(t("cancel"))}</button>
-          <button id="msm-confirm" class="msm-primary">${escapeHtml(t(isBuilt ? "unbuild" : "confirmBuild"))}</button>
-          ${isBuilt ? `<button id="msm-update" class="msm-primary" hidden>${escapeHtml(t("updateBuild"))}</button>` : ""}
-        </div>
+        <p id="msm-action-hint" class="msm-action-hint" hidden></p>
+        ${
+          // Deck monté : « Démonter » n'est jamais l'action principale (il
+          // perd les proxies du montage) ; c'est « Fermer », ou « Mettre à
+          // jour le montage » quand la liste a changé (cf. charte ergonomique).
+          isBuilt
+            ? `<div class="msm-modal-actions">
+                 <button id="msm-confirm" class="msm-danger">${escapeHtml(t("unbuild"))}</button>
+                 <button id="msm-cancel" class="msm-primary">${escapeHtml(t("close"))}</button>
+                 <button id="msm-update" class="msm-primary" hidden>${escapeHtml(t("updateBuild"))}</button>
+               </div>`
+            : `<div class="msm-modal-actions">
+                 <button id="msm-cancel">${escapeHtml(t("cancel"))}</button>
+                 <button id="msm-confirm" class="msm-primary">${escapeHtml(t("confirmBuild"))}</button>
+               </div>`
+        }
       </div>
     `;
     // Légende des boutons, toujours à portée au moment d'agir (la bulle de
@@ -867,20 +1009,56 @@
       helpLegend.hidden = !helpLegend.hidden;
       helpToggle.setAttribute("aria-expanded", String(!helpLegend.hidden));
     });
+    trapFocus(overlay);
     document.body.appendChild(overlay);
+    // Focus dans la fenêtre dès l'ouverture : un lecteur d'écran annonce
+    // son titre, et Tab part de là.
+    overlay.querySelector("#msm-modal-title").focus();
     return overlay;
+  }
+
+  // Durée d'affichage d'un toast : de quoi le lire (un mode d'emploi de
+  // 120 caractères restait 5 s), plus longue pour une erreur, bornée.
+  function toastDuration(message, isError) {
+    const base = 4000 + 60 * String(message).length;
+    return Math.min(isError ? base * 1.5 : base, 20000);
   }
 
   function toast(message, isError) {
     const el = document.createElement("div");
     el.className = "msm-toast" + (isError ? " msm-toast-error" : "");
-    el.textContent = message;
+    // Annoncé par les lecteurs d'écran ; une erreur interrompt.
+    el.setAttribute("role", isError ? "alert" : "status");
+    const text = document.createElement("span");
+    text.className = "msm-toast-text";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "msm-toast-close";
+    close.setAttribute("aria-label", t("close"));
+    close.title = t("close");
+    close.textContent = "×";
+    close.addEventListener("click", () => el.remove());
+    el.append(text, close);
     // Placer le toast au-dessus de la barre d'actions de Moxfield plutôt que
     // de la masquer (sa hauteur varie selon la largeur de l'écran).
     const barTop = getActionBarTop();
     if (barTop !== null) el.style.bottom = `${window.innerHeight - barTop + 12}px`;
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), isError ? 8000 : 5000);
+    // Texte posé après l'insertion : une zone live déjà présente est mieux
+    // annoncée qu'une zone insérée avec son contenu.
+    text.textContent = message;
+    // Disparition suspendue tant qu'on le survole ou qu'il a le focus.
+    const duration = toastDuration(message, isError);
+    let timer = setTimeout(() => el.remove(), duration);
+    const pause = () => clearTimeout(timer);
+    const resume = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => el.remove(), duration);
+    };
+    el.addEventListener("mouseenter", pause);
+    el.addEventListener("mouseleave", resume);
+    el.addEventListener("focusin", pause);
+    el.addEventListener("focusout", resume);
   }
 
   // Recharger l'extension (chrome://extensions) sans rafraîchir cet onglet
@@ -1067,7 +1245,7 @@
           btnAvailability = null;
           renderButton();
         }
-        if (tooLong && deckId === currentDeckId) setEditionNames([]);
+        if (tooLong && deckId === currentDeckId) setEditions([], []);
         return;
       }
       unreliableSince = 0;
@@ -1092,7 +1270,8 @@
       }
       if (deck) {
         const scraped = withPrintings(completeCardNames(detection.cards, Object.values(stockMap), deck.cards));
-        setEditionNames(ownedEditionNames(scraped, deckId));
+        const editions = editionsOf(scraped, deckId, stockMap, buildVersionUsage(context.builtDecks, deckId));
+        setEditions(editions.names, editions.left);
         const changes = computeDeckDiff(deck.cards, scraped);
         reportPageChanges(deckId, changes);
         const outdated = changes.length > 0;
@@ -1109,7 +1288,8 @@
         }
       } else {
         const cards = withDeclaredProxies(withPrintings(completeCardNames(detection.cards, Object.values(stockMap))), deckId);
-        setEditionNames(ownedEditionNames(cards, deckId));
+        const editions = editionsOf(cards, deckId, stockMap, buildVersionUsage(context.builtDecks, deckId));
+        setEditions(editions.names, editions.left);
         const availability = computeDeckAvailability(
           cards,
           stockMap,
@@ -1224,33 +1404,65 @@
   }
 
   // Bouton « Utiliser mes éditions » (à côté de « Monter », cf. ensureButton)
-  // et cartes qu'il changerait (cf. ownedEditionNames).
+  // et cartes qu'il changerait (cf. editionsOf).
   let editionsBtn = null;
   // Bandeau flottant qui porte nos boutons quand la barre d'actions de
   // Moxfield est introuvable (cf. ensureButton), null sinon.
   let floatingBar = null;
   let btnEditionNames = [];
+  // Cartes d'une autre édition qu'un clic n'a pas pu changer, avec la
+  // raison (cf. editionsOf).
+  let btnEditionLeft = [];
+  // Au-delà, l'infobulle et le message ne nomment plus les cartes une à une.
+  const MAX_LEFT_EDITIONS_SHOWN = 12;
 
-  function setEditionNames(names) {
-    if (JSON.stringify(names) === JSON.stringify(btnEditionNames)) return;
+  function setEditions(names, left) {
+    if (JSON.stringify([names, left]) === JSON.stringify([btnEditionNames, btnEditionLeft])) return;
     btnEditionNames = names;
+    btnEditionLeft = left;
     renderEditionsButton();
+  }
+
+  // « 2 cartes ne peuvent pas… : A — raison ; B — raison », même texte dans
+  // l'infobulle et dans le message affiché au clic.
+  function leftEditionsText() {
+    const shown = btnEditionLeft.slice(0, MAX_LEFT_EDITIONS_SHOWN);
+    const more = btnEditionLeft.length - shown.length;
+    const detail = skippedText(shown) + (more > 0 ? ` ; ${tn("ownedEditionsLeftMore", more)}` : "");
+    return `${tn("ownedEditionsLeft", btnEditionLeft.length)} ${detail}.`;
   }
 
   function renderEditionsButton() {
     if (!editionsBtn) return;
     const count = btnEditionNames.length;
-    editionsBtn.style.display = count === 0 ? "none" : "";
+    const left = btnEditionLeft.length;
+    // Affiché tant que la page montre des cartes d'une autre édition, même
+    // si aucune ne peut changer : désactivé alors, avec la raison de chacune.
+    editionsBtn.style.display = count === 0 && left === 0 ? "none" : "";
     editionsBtn.replaceChildren(createBarIcon("editions"));
+    // Pastille : seulement les cartes qu'un clic changerait. Un nombre sur
+    // un bouton qui ne peut rien changer se lit « à faire ».
     if (count > 0) {
       editionsBtn.appendChild(deckHelp.createBadge(document, String(count), "msm-editions-badge"));
     }
     const label = ownedEditionsRunning
       ? t("ownedEditionsLoading")
-      : `${t("ownedEditionsButton")} — ${tn("ownedEditionsCount", count)}`;
-    editionsBtn.title = `${label}\n${t("ownedEditionsHint")}`;
-    editionsBtn.setAttribute("aria-label", label);
+      : count > 0
+        ? `${t("ownedEditionsButton")} — ${tn("ownedEditionsCount", count)}`
+        : t("ownedEditionsButton");
+    // Deck d'un autre : bouton laissé visible mais désactivé, avec sa
+    // raison (charte ergonomique).
+    const notMine = notMyDeck();
+    const nothingToDo = count === 0 && left > 0;
+    const blocked = notMine || nothingToDo;
+    const reason = notMine ? t("ownedEditionsNotOwner") : nothingToDo ? leftEditionsText() : "";
+    const hint = blocked ? reason : left > 0 ? `${t("ownedEditionsHint")}\n${leftEditionsText()}` : t("ownedEditionsHint");
+    editionsBtn.title = `${label}\n${hint}`;
+    editionsBtn.setAttribute("aria-label", blocked ? `${label} — ${reason}` : label);
+    if (blocked) editionsBtn.setAttribute("aria-disabled", "true");
+    else editionsBtn.removeAttribute("aria-disabled");
     editionsBtn.classList.toggle("msm-busy", ownedEditionsRunning);
+    editionsBtn.classList.toggle("msm-disabled", blocked);
   }
 
   function createBarIcon(kind) {
@@ -1423,8 +1635,14 @@
   }
 
   window.addEventListener("resize", positionHelpBubble);
+  // Échap ferme la fenêtre de montage (= Annuler / Fermer), sinon la bulle
+  // d'aide. La fenêtre de progression d'« Utiliser mes éditions » ne se
+  // ferme pas : les écritures sur Moxfield doivent aller jusqu'au bout.
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && helpBubble) dismissHelpBubble();
+    if (e.key !== "Escape") return;
+    const overlay = document.querySelector(".msm-overlay");
+    if (overlay) closeOverlay(overlay);
+    else if (helpBubble) dismissHelpBubble();
   });
 
   // Le bouton flottant reste cliquable par-dessus la modale (z-index plus
@@ -1472,6 +1690,7 @@
         if (cards.length === 0) {
           blockingSummaryEl.hidden = true;
           setProxyAction(confirmBtn, 0, "confirmBuild", "confirmBuildWithProxies");
+          setActionBlocked(overlay, confirmBtn, t("noCardsRecognized"));
           renderShortageWarning(warningEl, []);
           renderPrintingWarning(printingWarningEl, []);
           renderVersionWarning(versionWarningEl, []);
@@ -1493,7 +1712,13 @@
         const shortages = computeShortages(nonBasicCards, stockMap);
         const wrongEdition = computeWrongEditionCards(nonBasicCards, stockMap, lastWrongEditionNames);
         const versionTaken = computeVersionConflicts(nonBasicCards, stockMap, versionUsage, lastWrongEditionNames);
-        setProxyAction(confirmBtn, proxiesNeeded(shortages, wrongEdition.length > 0 || versionTaken.length > 0), "confirmBuild", "confirmBuildWithProxies");
+        const editionIssue = wrongEdition.length > 0 || versionTaken.length > 0;
+        const proxies = proxiesNeeded(shortages, editionIssue);
+        setProxyAction(confirmBtn, proxies, "confirmBuild", "confirmBuildWithProxies");
+        // Mêmes règles que submitBuild : un proxy ne remplace qu'un stock
+        // insuffisant, jamais une autre édition ni une édition déjà prise.
+        const blocked = editionIssue || (shortages.length > 0 && proxies === 0);
+        setActionBlocked(overlay, confirmBtn, blocked ? t("buildBlockedHint") : null);
         renderShortageWarning(warningEl, shortages, deckUsage, lastPrintingCodes);
         renderPrintingWarning(printingWarningEl, wrongEdition);
         renderVersionWarning(versionWarningEl, versionTaken);
@@ -1532,7 +1757,7 @@
       });
     }
 
-    overlay.querySelector("#msm-cancel").addEventListener("click", () => overlay.remove());
+    overlay.querySelector("#msm-cancel").addEventListener("click", () => closeOverlay(overlay));
 
     // Mise à jour du montage. withProxies : les cartes en stock insuffisant
     // sont complétées par des proxies au lieu de bloquer ; version
@@ -1557,7 +1782,7 @@
         const res = await safeSendMessage({ type: "UPDATE_BUILT_DECK", payload });
         if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
         if (!res.ok) throw refusal(res);
-        overlay.remove();
+        closeOverlay(overlay);
         btnOutdated = false;
         await refreshButtonState(deckId);
         const added = proxyTotal(cards) - proxyTotal(updatedCards);
@@ -1613,7 +1838,7 @@
       const res = await safeSendMessage({ type: "TOGGLE_DECK_BUILT", payload });
       if (res.error === "extension-context-invalidated") return; // toast déjà affiché par safeSendMessage
       if (!res.ok) throw refusal(res);
-      overlay.remove();
+      closeOverlay(overlay);
       await refreshButtonState(deckId);
       const proxies = proxyTotal(payload.cards);
       toast(!payload.built ? t("unbuildDone") : proxies > 0 ? tn("buildDoneWithProxies", proxies) : t("buildDone"));
@@ -1710,9 +1935,10 @@
 
     removeButton();
     // Mêmes classes utilitaires que les boutons natifs de la barre, pour en
-    // reprendre l'apparence.
+    // reprendre l'apparence, sauf no-outline : le focus doit rester visible
+    // au clavier (contour posé par content.css).
     btn = document.createElement("a");
-    btn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn";
+    btn.className = "py-1 text-white no-underline cursor-pointer msm-bar-btn";
     btn.setAttribute("role", "button");
     btn.setAttribute("tabindex", "0");
     btn.addEventListener("keydown", (e) => {
@@ -1732,7 +1958,7 @@
       document.body.appendChild(floatingBar);
     }
     editionsBtn = document.createElement("a");
-    editionsBtn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn msm-editions-bar-btn";
+    editionsBtn.className = "py-1 text-white no-underline cursor-pointer msm-bar-btn msm-editions-bar-btn";
     editionsBtn.setAttribute("role", "button");
     editionsBtn.setAttribute("tabindex", "0");
     const useEditions = () => useOwnedEditions(currentDeckId, btnEditionNames);
@@ -1746,7 +1972,7 @@
     btn.before(editionsBtn);
     renderEditionsButton();
     likeBtn = document.createElement("a");
-    likeBtn.className = "py-1 text-white no-underline cursor-pointer no-outline msm-bar-btn msm-like-bar-btn";
+    likeBtn.className = "py-1 text-white no-underline cursor-pointer msm-bar-btn msm-like-bar-btn";
     likeBtn.setAttribute("role", "button");
     likeBtn.setAttribute("tabindex", "0");
     likeBtn.addEventListener("click", toggleLike);
@@ -1794,6 +2020,7 @@
         btnLiked = false;
         renderLikeButton();
         btnEditionNames = [];
+        btnEditionLeft = [];
         renderEditionsButton();
         btnOutdated = false;
         unreliableSince = 0;

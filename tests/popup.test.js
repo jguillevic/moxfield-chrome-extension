@@ -225,7 +225,8 @@ test("filtre : cherche dans tout le stock, au-delà des 200 premières", async (
   const filter = p.$("stock-filter");
   filter.value = "Card 0450";
   filter.dispatchEvent(new filter.ownerDocument.defaultView.Event("input"));
-  await settle();
+  await new Promise((resolve) => setTimeout(resolve, 250)); // filtre temporisé
+
   const rows = p.$("stock-table").querySelectorAll("tr");
   assert.equal(rows.length, 2);
   assert.match(rows[1].textContent, /Card 0450/);
@@ -276,7 +277,7 @@ const HISTORY = [
     id: "h3",
     at: new Date(2026, 9, 7, 15, 42).getTime(),
     otherDevice: false,
-    title: "Deck « Zethi » démonté : 99 cartes rendues au stock",
+    title: "Deck « Zethi » démonté : 99 exemplaires rendus au stock",
     changes: null,
   },
   {
@@ -293,7 +294,7 @@ const HISTORY = [
     id: "h1",
     at: new Date(2026, 9, 6, 9, 0).getTime(),
     otherDevice: false,
-    title: "Deck « Sidisi » monté : 100 cartes retirées du stock libre",
+    title: "Deck « Sidisi » monté : 100 exemplaires retirés du stock libre",
     changes: null,
   },
 ];
@@ -502,7 +503,7 @@ test("changement de version seul : affiché sans quantité, dans le badge « Mod
   await openHistory(p);
   assert.deepEqual(
     [...p.$("history-list").querySelectorAll("li")].map((li) => li.textContent),
-    ["↻ Steam Vents (version changée)"]
+    ["↻ Steam Vents (édition changée)"]
   );
 });
 
@@ -917,8 +918,8 @@ test("Mes decks : rien demandé section repliée ; montables d'abord, puis bloqu
   await openDecksSection(p);
   assert.deepEqual(deckRows(p), [
     ["Saheeli", "Montable"],
-    ["Teval", "3 cartes bloquent"],
-    ["Inconnu", "À vérifier"],
+    ["Teval", "3 exemplaires bloquent"],
+    ["Inconnu", "Pas encore lu"],
     ["Zethi", "Monté"],
   ]);
   assert.equal(p.$("decks-list").querySelector(".deck-status.blocked").title, "3 cartes bloquent le montage : …");
@@ -1060,4 +1061,102 @@ test("liste d'achats : deck coché puis monté, décoché à l'affichage suivant
   p.$("decks-list").querySelector(".deck-shop").click();
   await settle();
   assert.deepEqual(p.sent.filter((m) => m.type === "GET_SHOPPING_LIST").pop().payload, { deckIds: ["k1"] });
+});
+
+// --- Ergonomie (docs/charte-ergonomique.md) ---
+
+test("démonter depuis le popup : réponse lue, résultat affiché, style destructif", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: MOUNTED_STATE }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  const unbuild = buttonsOf(deckRow(p, "Zethi")).find((b) => b.textContent === "Démonter");
+  assert.equal(unbuild.className, "danger-secondary", "pas le même style qu'Imprimer");
+  unbuild.click();
+  await settle();
+  assert.equal(p.$("built-status").textContent, "« Zethi » démonté : ses cartes sont revenues dans ton stock libre.");
+
+  p.handlers.TOGGLE_DECK_BUILT = { ok: false, error: "Deck introuvable" };
+  buttonsOf(deckRow(p, "Sidisi")).find((b) => b.textContent === "Démonter").click();
+  await settle();
+  assert.equal(p.$("built-status").textContent, "Erreur : Deck introuvable", "un échec ne passe pas inaperçu");
+});
+
+test("stock : détail des decks d'une carte ouvrable au clavier, focus gardé sur son bouton", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: MOUNTED_STATE }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  await openStock(p);
+  const button = () => p.$("stock-table").querySelector("tr.has-decks td.in-decks button");
+  assert.equal(button().getAttribute("aria-expanded"), "false");
+  assert.equal(button().getAttribute("aria-label"), "Sol Ring : 1 dans des decks montés, voir lesquels");
+  button().focus();
+  button().click();
+  await settle();
+  assert.equal(button().getAttribute("aria-expanded"), "true");
+  assert.ok(p.$("stock-table").querySelector("tr.deck-usage"), "détail affiché");
+  assert.equal(p.win.document.activeElement, button(), "focus rendu au bouton après reconstruction du tableau");
+});
+
+test("stock : filtre temporisé, sans relire l'état à chaque frappe", async (t) => {
+  const p = openPopup({ GET_STATE: { ok: true, state: bigState(500) }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  await openStock(p);
+  const reads = p.sent.filter((m) => m.type === "GET_STATE").length;
+  const filter = p.$("stock-filter");
+  for (const value of ["C", "Ca", "Card 0450"]) {
+    filter.value = value;
+    filter.dispatchEvent(new p.win.Event("input"));
+  }
+  await settle();
+  assert.equal(p.$("stock-table").querySelectorAll("tr").length, 201, "pas encore filtré : on attend la fin de la saisie");
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(p.$("stock-table").querySelectorAll("tr").length, 2);
+  assert.equal(p.sent.filter((m) => m.type === "GET_STATE").length, reads, "état déjà lu réutilisé");
+});
+
+test("clavier et lecteurs d'écran : fichier CSV atteignable, zones de statut annoncées", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  const file = p.$("csv-file-input");
+  assert.equal(file.hidden, false, "pas en hidden : atteignable au clavier");
+  assert.ok(file.classList.contains("visually-hidden"));
+  for (const id of ["built-status", "decks-status", "collection-status", "import-status", "sync-status", "reset-status"]) {
+    assert.equal(p.$(id).getAttribute("role"), "status", id);
+  }
+});
+
+test("liste d'achats : chaque case nommée d'après son deck", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_DECKS: { ok: true, decks: DECKS, staleIds: [] } });
+  t.after(p.close);
+  await settle();
+  await openDecksSection(p);
+  const labels = [...p.$("decks-list").querySelectorAll(".deck-shop")].map((box) => box.getAttribute("aria-label"));
+  assert.deepEqual(labels, ["Ajouter « Saheeli » à la liste d'achats", "Ajouter « Teval » à la liste d'achats"]);
+});
+
+test("Mes decks : « Monté » et « Montable » jamais de la même couleur", () => {
+  const css = fs.readFileSync(path.join(ROOT, "popup.css"), "utf8");
+  const rule = (selector) => {
+    const match = css.match(new RegExp(`(^|\n)${selector.replace(/\./g, "\.")} \{([^}]*)\}`));
+    assert.ok(match, `règle ${selector} isolée`);
+    return match[2].replace(/\s+/g, " ").trim();
+  };
+  assert.notEqual(rule(".deck-status.built"), rule(".deck-status.buildable"));
+});
+
+test("tout effacer : nom explicite, résultat affiché (collection récupérée de nouveau ou non)", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), RESET_STOCK: { ok: true, refetched: true } });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("reset-btn").textContent, "Démonter tous les decks et effacer le stock");
+  p.$("reset-btn").click();
+  await settle();
+  assert.equal(p.$("reset-status").textContent, "Decks démontés, stock effacé, puis collection récupérée de nouveau.");
+
+  p.handlers.RESET_STOCK = { ok: true, refetched: false };
+  p.$("reset-btn").click();
+  await settle();
+  assert.match(p.$("reset-status").textContent, /^Decks démontés et stock effacé\. Récupère ta collection/);
 });

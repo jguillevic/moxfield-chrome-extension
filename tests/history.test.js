@@ -69,11 +69,11 @@ test("describe : libellé de chaque type d'action", () => {
   const cases = [
     [{ type: "collection", source: "fetch", changes: changes2 }, "Collection Moxfield récupérée : 2 cartes modifiées"],
     [{ type: "collection", source: "csv", changes: changes1 }, "Import CSV : 1 carte modifiée"],
-    [{ type: "deck-built", deckName: "Zethi", cardCount: 99 }, "Deck « Zethi » monté : 99 cartes retirées du stock libre"],
-    [{ type: "deck-unbuilt", deckName: "Zethi", cards }, "Deck « Zethi » démonté : 3 cartes rendues au stock"],
+    [{ type: "deck-built", deckName: "Zethi", cardCount: 99 }, "Deck « Zethi » monté : 99 exemplaires retirés du stock libre"],
+    [{ type: "deck-unbuilt", deckName: "Zethi", cards }, "Deck « Zethi » démonté : 3 exemplaires rendus au stock"],
     [{ type: "deck-updated", deckName: "Zethi", changes: changes2 }, "Montage de « Zethi » mis à jour : 2 cartes modifiées"],
-    [{ type: "reset", builtDecks: { a: {}, b: {} } }, "Stock réinitialisé (2 decks démontés)"],
-    [{ type: "reset", builtDecks: {} }, "Stock réinitialisé (0 deck démonté)"],
+    [{ type: "reset", builtDecks: { a: {}, b: {} } }, "Tout remis à zéro (2 decks démontés)"],
+    [{ type: "reset", builtDecks: {} }, "Tout remis à zéro (0 deck démonté)"],
     [{ type: "drive-restore" }, "Version de l'historique Google Drive restaurée"],
   ];
   for (const [e, expected] of cases) assert.equal(h.describe(e), expected);
@@ -135,11 +135,11 @@ test("cardsDiff : même quantité, autre version enregistrée", () => {
 
 test("describe : proxies (montage, démontage, mise à jour, remplacement)", () => {
   const built = { type: "deck-built", deckName: "Zethi", cardCount: 96, proxyCount: 3 };
-  assert.equal(h.describe(built), "Deck « Zethi » monté : 96 cartes retirées du stock libre (+ 3 proxies)");
+  assert.equal(h.describe(built), "Deck « Zethi » monté : 96 exemplaires retirés du stock libre (+ 3 proxies)");
   const unbuilt = { type: "deck-unbuilt", deckName: "Zethi", cards: [{ name: "Sol Ring", qty: 2, proxyQty: 1 }], cardCount: 1, proxyCount: 1 };
-  assert.equal(h.describe(unbuilt), "Deck « Zethi » démonté : 1 carte rendue au stock (+ 1 proxy)");
+  assert.equal(h.describe(unbuilt), "Deck « Zethi » démonté : 1 exemplaire rendu au stock (+ 1 proxy)");
   // Démontage d'avant les proxies : nombre calculé sur la liste.
-  assert.equal(h.describe({ type: "deck-unbuilt", deckName: "Zethi", cards: [{ name: "Sol Ring", qty: 2 }] }), "Deck « Zethi » démonté : 2 cartes rendues au stock");
+  assert.equal(h.describe({ type: "deck-unbuilt", deckName: "Zethi", cards: [{ name: "Sol Ring", qty: 2 }] }), "Deck « Zethi » démonté : 2 exemplaires rendus au stock");
   const updated = { type: "deck-updated", deckName: "Zethi", changes: [{ name: "Sol Ring", from: 1, to: 2 }], proxiesAdded: 1 };
   assert.equal(h.describe(updated), "Montage de « Zethi » mis à jour : 1 carte modifiée (+ 1 nouveau proxy)");
   const replaced = { type: "proxies-replaced", deckName: "Zethi", cards: [{ name: "Sol Ring", qty: 2 }] };

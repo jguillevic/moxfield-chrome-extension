@@ -16,6 +16,8 @@ par attrait × simplicité, dont des idées absentes de cette liste) :
 | 1 | **Proxy pour une carte d'une autre édition** — la proposer en proxy quand « Utiliser mes éditions » ne peut rien (exemplaires déjà dans d'autres decks montés, pas assez dans une même édition) ; son remplacement ne doit alors être proposé que quand la bonne édition arrive dans la collection, pas avec l'exemplaire de l'autre édition déjà en stock. | Moyen | Reste de la demande « Monter avec N proxies » (bouton principal livré). Cas devenu rare depuis « Utiliser mes éditions ». |
 | 2 | **Liste de tous ses decks Moxfield dans « Mes decks »** — capturer l'appel de l'API qui liste les decks d'un compte (onglet Network, page « Your decks »), pour proposer ses decks sans passer par le cœur. | Faible | « Mes decks » est livré sans cet appel : un deck n'y entre que par le cœur ou une adresse collée. |
 | 3 | **Annuler depuis l'historique** — « Remonter » un deck démonté, « Démonter » un deck monté, « Revenir à la liste précédente » après une mise à jour, « Remonter les decks » après une réinitialisation ; mêmes contrôles de stock qu'au montage, une seule fois, et seulement si le deck est resté dans l'état produit. Les actions sur la collection restent non annulables (Moxfield fait référence). | Moyen | Rattraper une erreur sur les decks montés. Les entrées enregistrent déjà les données nécessaires. Écarté de la première version de l'historique. |
+| 3 bis | **Ergonomie, lot 2** (`docs/charte-ergonomique.md`) — « Annuler » quelques secondes après un démontage (proche du n°3), zone d'alertes en tête du popup (collection, choix Drive, decks modifiés) avec la pastille de synchro cliquable, fenêtre de montage réordonnée (stock puis édition, liste repliée quand le total correspond, boutons collés en bas), détails du survol accessibles au clic. | Moyen | Revue ergonomique de novembre 2026 : erreurs évitées et alertes visibles. |
+| 3 ter | **Ergonomie, lot 3** — fusionner « Decks montés » et « Mes decks » en une section « Decks » ; sortir les réglages (collection, CSV, Drive, rapports, zone de danger) du popup vers une page d'options. | Élevé | Popup centré sur l'usage quotidien. À faire avant d'y ajouter beaucoup. |
 | 4 | **Liste de cartes à sortir / ranger** — cases à cocher triées par couleur, type ou édition, au montage et au démontage. | Moyen | Sert à chaque montage physique. |
 | 5 | **Transfert entre decks** — prendre les cartes manquantes dans un deck monté et marquer celui-ci comme incomplet. | Moyen | Évite d'acheter une carte qui dort dans un autre deck ; la fenêtre indique déjà où elle est. |
 | 6 | **Détection des decks montés modifiés sans les ouvrir** — via l'API des decks, à chaque récupération. | Moyen | Désormais faisable (la session Moxfield est réutilisable en tâche de fond) ; se combine avec le n°2. |
@@ -45,6 +47,10 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 - **Synchro Drive des grosses collections** : chaque modification renvoie
   encore tout l'état (compressé : quelques centaines de Ko à 50 000 cartes).
   Si ça devient gênant : séparer l'historique dans son propre fichier.
+- **Anglais** : « build / unbuild / built decks » est ambigu pour un
+  joueur anglophone (tout deck est « built ») ; « assemble / take apart »
+  proposé par la revue ergonomique. À décider avec l'avis d'utilisateurs
+  anglophones.
 - **Tests manquants** : la synchro Google Drive, le popup (hors section
   « Collection Moxfield ») et la fenêtre de montage n'ont pas de tests
   automatisés. La barre d'actions Moxfield des tests est reconstituée à
@@ -52,6 +58,26 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- « Utiliser mes éditions » ne compte plus que les cartes qu'un clic
+  changerait (exemplaires déjà dans d'autres decks montés et quantité
+  insuffisante prévus avant le clic) ; s'il ne reste que des cartes
+  impossibles à changer, il reste affiché, désactivé et sans pastille,
+  avec les raisons (infobulle et clic). Message neutre, regroupé par
+  raison, quand un clic ne change rien.
+- « Utiliser mes éditions » désactivé sur le deck d'un autre compte
+  (propriétaire du deck donné par l'API de Moxfield, comparé au compte
+  connecté), avec sa raison ; refusé aussi par le service worker.
+
+- Ergonomie, lot 1 (charte `docs/charte-ergonomique.md`) : « Démonter »
+  jamais bouton principal (rouge, à l'écart ; « Fermer » ou « Mettre à
+  jour » à sa place), « Confirmer le montage » désactivé avec sa raison,
+  fenêtre de montage au clavier (focus, Tab, Échap), focus visible sur les
+  boutons de la page, messages annoncés et refermables, « Monté » et
+  « Montable » de couleurs différentes, vert et violet plus contrastés,
+  vocabulaire (édition, exemplaire, plus de jargon), démontage du popup
+  avec son résultat, popup utilisable au clavier, filtre du stock plus
+  léger, « Démonter tous les decks et effacer le stock » qui récupère
+  aussitôt la collection — novembre 2026.
 - Aide revue après une revue ergonomique : premiers pas cochés d'après
   l'état réel (à la place du guide pas à pas), légende des boutons avec
   leurs vraies icônes et « montable ≠ monté » en tête, bouton « Aide » dans

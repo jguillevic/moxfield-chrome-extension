@@ -284,6 +284,30 @@ function createDeckChecks(normalizeName, { t, tn }) {
     return finish ? { set: best.set, cn: best.cn, finish } : { set: best.set, cn: best.cn };
   }
 
+  // Pourquoi aucune édition ne convient (chooseOwnedEdition a rendu null),
+  // de la raison la plus précise à la plus générale : une édition
+  // conviendrait sans les autres decks montés ("taken"), ou en ne demandant
+  // qu'un exemplaire ("not-enough"), ou aucune ("no-other-edition").
+  function ownedEditionSkipReason(owned, current) {
+    if (chooseOwnedEdition(owned, current)) return "taken";
+    return chooseOwnedEdition(owned, { ...current, quantity: 1 }) ? "not-enough" : "no-other-edition";
+  }
+
+  // Prévision pour la page du deck, avant tout clic : raison pour laquelle
+  // « Utiliser mes éditions » ne pourra pas changer la carte, ou null
+  // (possible, ou impossible à dire). owned : éditions du stock
+  // ({ set, cn, qty }, sans les finitions, que l'état ne garde pas). Dans
+  // le doute, null, et le clic tranchera avec la collection fraîche :
+  // - collection sans éditions (ancien import) ;
+  // - édition du deck possédée : Moxfield signale alors une autre finition,
+  //   qu'on ne peut pas juger ici.
+  function predictEditionBlock(owned, current, others = []) {
+    if (!Array.isArray(owned) || owned.length === 0) return null;
+    if (owned.some((p) => p.set === current.set && p.cn === current.cn)) return null;
+    if (chooseOwnedEdition(owned, current, others)) return null;
+    return ownedEditionSkipReason(owned, current);
+  }
+
   // --- Version déjà utilisée par un autre deck monté ---
   // Le stock est suivi par nom, mais une carte possédée en plusieurs
   // éditions peut être demandée deux fois dans la MÊME version : Moxfield
@@ -627,6 +651,8 @@ function createDeckChecks(normalizeName, { t, tn }) {
     carryProxies,
     replaceableProxies,
     chooseOwnedEdition,
+    ownedEditionSkipReason,
+    predictEditionBlock,
     buildVersionUsage,
     computeVersionConflicts,
     parseCardsText,

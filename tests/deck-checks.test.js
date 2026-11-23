@@ -228,24 +228,24 @@ test("blockingSummary : total de la pastille décomposé comme dans la fenêtre"
   const stock = stockOf(Object.fromEntries(cards.slice(53).map((c) => [c.name, 1])));
   const a = computeDeckAvailability(cards, stock);
   assert.equal(a.blocking, 80);
-  assert.equal(blockingSummary(a), "80 cartes bloquent le montage : 53 manquantes en stock, 27 dans une autre version");
+  assert.equal(blockingSummary(a), "80 exemplaires bloquent le montage : 53 manquants en stock, 27 dans une autre édition");
 });
 
 test("blockingSummary : singulier, motif unique, rien de bloquant", () => {
   assert.equal(
     blockingSummary(computeDeckAvailability([{ name: "Sol Ring", qty: 1 }], {})),
-    "1 carte bloque le montage : 1 manquante en stock"
+    "1 exemplaire bloque le montage : 1 manquant en stock"
   );
   assert.equal(
     blockingSummary(computeDeckAvailability([{ name: "Sol Ring", qty: 1, printingStatus: "partial" }], stockOf({ "Sol Ring": 1 }))),
-    "1 carte bloque le montage : 1 dans une autre version"
+    "1 exemplaire bloque le montage : 1 dans une autre édition"
   );
   assert.equal(blockingSummary(computeDeckAvailability([{ name: "Island", qty: 3 }], {})), null);
 });
 
 test("availabilityLabel : deck montable", () => {
   const label = availabilityLabel(computeDeckAvailability([{ name: "Sol Ring", qty: 1 }], stockOf({ "Sol Ring": 1 })));
-  assert.equal(label, "montable : 1/1 cartes disponibles en stock libre, hors terrains de base");
+  assert.equal(label, "montable : 1/1 exemplaires disponibles en stock libre, hors terrains de base");
 });
 
 test("availabilityLabel : détail des problèmes", () => {
@@ -261,9 +261,9 @@ test("availabilityLabel : détail des problèmes", () => {
   );
   assert.equal(
     label,
-    "2 cartes bloquent le montage : 1 manquante en stock, 1 dans une autre version " +
-      "(0/2 cartes disponibles en stock libre, hors terrains de base) — manque Rhystic Study (1) — " +
-      "version différente : Sol Ring — terrains de base manquants (non bloquant) : Island (2)"
+    "2 exemplaires bloquent le montage : 1 manquant en stock, 1 dans une autre édition " +
+      "(0/2 exemplaires disponibles en stock libre, hors terrains de base) — manque Rhystic Study (1) — " +
+      "autre édition : Sol Ring — terrains de base manquants (non bloquant) : Island (2)"
   );
 });
 
@@ -370,8 +370,8 @@ test("computeDeckAvailability : version déjà utilisée comptée dans les carte
   assert.equal(a.blocking, 1);
   assert.equal(a.versionTakenCount, 1);
   assert.deepEqual(a.versionTaken, ["Steam Vents"]);
-  assert.equal(blockingSummary(a), "1 carte bloque le montage : 1 dont la version est déjà dans un autre deck");
-  assert.match(availabilityLabel(a), /version déjà utilisée par un autre deck monté : Steam Vents/);
+  assert.equal(blockingSummary(a), "1 exemplaire bloque le montage : 1 dont l'édition est déjà dans un autre deck");
+  assert.match(availabilityLabel(a), /édition déjà prise par un autre deck monté : Steam Vents/);
   // Sans les versions des decks montés : rien ne bloque.
   assert.equal(computeDeckAvailability(cards, stock).blocking, 0);
 });
@@ -591,6 +591,27 @@ test("evaluateDeckUpdate : les proxies du deck restent, seuls les autres exempla
 // --- Passer un deck sur les éditions de la collection ---
 
 const { chooseOwnedEdition } = checks;
+
+test("predictEditionBlock : raison prévue avant le clic, null dans le doute", () => {
+  const { predictEditionBlock, ownedEditionSkipReason } = checks;
+  const current = { set: "rav", cn: "87", quantity: 1 };
+  const dds = [{ set: "dds", cn: "50", qty: 1 }];
+  const elsewhere = [{ code: "X", qty: 1, deck: "Autre", set: "dds", cn: "50" }];
+  assert.equal(predictEditionBlock(dds, current), null, "édition libre : possible");
+  assert.equal(predictEditionBlock(dds, current, elsewhere), "taken");
+  assert.equal(predictEditionBlock(dds, { ...current, quantity: 2 }), "not-enough");
+  // Édition d'un deck monté inconnue : elle ne compte pas (dans le doute).
+  assert.equal(predictEditionBlock(dds, current, [{ code: "X", qty: 1, deck: "Autre" }]), null);
+  // Collection sans éditions, ou édition du deck possédée (affaire de
+  // finition, que le stock ne garde pas) : impossible à dire.
+  assert.equal(predictEditionBlock(undefined, current, elsewhere), null);
+  assert.equal(predictEditionBlock([], current, elsewhere), null);
+  assert.equal(predictEditionBlock([...dds, { set: "rav", cn: "87", qty: 1 }], current, elsewhere), null);
+  // Raison donnée au clic par le service worker : même fonction.
+  assert.equal(ownedEditionSkipReason(dds, current), "taken");
+  assert.equal(ownedEditionSkipReason(dds, { ...current, quantity: 2 }), "not-enough");
+  assert.equal(ownedEditionSkipReason([{ set: "rav", cn: "87", qty: 3 }], current), "no-other-edition");
+});
 
 test("chooseOwnedEdition : l'édition possédée la plus libre, jamais celle du deck", () => {
   const owned = [

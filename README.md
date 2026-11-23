@@ -1,8 +1,8 @@
 # Moxfield Stock Manager (extension Chrome)
 
-Ajoute une gestion de stock de cartes physiques par-dessus Moxfield : flag un
-deck comme « monté physiquement » et le stock est décrémenté automatiquement,
-carte par carte, selon la decklist. Démonte-le pour réincrémenter.
+Ajoute une gestion de stock de cartes physiques par-dessus Moxfield : marque
+un deck comme « monté physiquement » et ses cartes sortent de ton stock
+libre, selon la decklist. Démonte-le pour les y remettre.
 
 *English: the extension is available in English and French — it follows
 your browser's language. This README is in French.*
@@ -175,9 +175,9 @@ contenu du CSV. Même effet qu'une récupération automatique.
   stock libre — **« OK » vert** s'il l'est, **rouge avec un nombre** sinon (nombre
   d'exemplaires qui bloqueraient le montage : stock insuffisant ou version
   différente, mêmes règles que ci-dessous). Le détail apparaît au survol
-  (« 3 cartes bloquent le montage : 2 manquantes en stock, 1 dans une autre
-  version (59/62 cartes disponibles en stock libre, hors terrains de base)
-  — manque Sol Ring (1)... »), et la fenêtre de montage affiche le même
+  (« 3 exemplaires bloquent le montage : 2 manquants en stock, 1 dans une
+  autre édition (59/62 exemplaires disponibles en stock libre, hors
+  terrains de base) — manque Sol Ring (1)... »), et la fenêtre de montage affiche le même
   total au-dessus de la liste.
   Les terrains de base ne comptent ni dans la pastille ni dans ce total :
   s'ils manquent, c'est seulement signalé au survol, sans jamais rendre le
@@ -205,8 +205,20 @@ contenu du CSV. Même effet qu'une récupération automatique.
   **« Copier »** de Moxfield puis sur **« 📋 Coller depuis le
   presse-papiers »** dans la fenêtre, ou colle à la main (Ctrl+V).
 - Format attendu, une carte par ligne : `1 Sol Ring`, `2 Island`, etc.
-- Valide : le stock est décrémenté. Reclique sur le bouton (devenu cercle coché)
-  pour démonter le deck et réincrémenter le stock.
+- Valide : ses cartes sortent de ton stock libre. **« Confirmer le
+  montage » est désactivé tant que le montage est impossible** (stock
+  insuffisant sans proxy possible, autre édition, édition déjà prise, liste
+  vide) : la raison est écrite juste au-dessus des boutons.
+- Reclique sur le bouton (devenu cercle coché) pour ouvrir la fenêtre du
+  deck monté : **« Fermer »** est le bouton principal (ou **« Mettre à jour
+  le montage »** si la liste a changé), **« Démonter »** est à gauche, en
+  rouge. Démonter rend ses cartes à ton stock libre et oublie ses proxies.
+- **Au clavier** : les boutons de l'extension se parcourent avec Tab
+  (contour blanc), Entrée ou Espace les active. Dans la fenêtre, Tab reste
+  dans la fenêtre, **Échap** l'annule (ou la ferme), et le focus revient au
+  bouton. Les messages qui s'affichent en bas à droite sont lus par les
+  lecteurs d'écran, restent le temps de les lire (plus longtemps pour une
+  erreur, et tant que la souris est dessus) et se ferment avec **×**.
 - **Deck modifié après son montage** : tant que tu es sur la page d'un deck
   monté, l'extension compare la liste affichée à celle enregistrée au
   montage (seulement quand le total détecté correspond à celui annoncé par
@@ -285,8 +297,13 @@ contenu du CSV. Même effet qu'une récupération automatique.
   collage manuel depuis le presse-papiers.
   - **Utiliser mes éditions** : bouton 🔄 de la barre d'actions de
     Moxfield, juste à gauche du bouton de montage, avec une pastille bleue
-    du nombre de cartes que Moxfield indique possédées dans une autre
-    édition (masqué s'il n'y en a aucune). Un clic change, dans ton deck
+    du nombre de cartes qu'un clic changerait, parmi celles que Moxfield
+    indique possédées dans une autre édition (masqué s'il n'y en a
+    aucune). **Prévu avant le clic** : une carte dont tes exemplaires des
+    autres éditions sont déjà dans d'autres decks montés, ou dont aucune
+    édition ne couvre la quantité, n'est pas comptée dans la pastille. **Deck d'un autre** : le
+    bouton est grisé et désactivé (Moxfield ne te laisse pas modifier le
+    deck d'un autre) ; un clic dit seulement pourquoi. Un clic change, dans ton deck
     Moxfield, l'édition de ces cartes pour une édition que tu possèdes — le
     deck reflète alors ce que tu as vraiment. **Le deck n'est pas monté** :
     seules les éditions changent, que le deck soit monté ou non. Pas de
@@ -315,9 +332,15 @@ contenu du CSV. Même effet qu'une récupération automatique.
     finition dans ta collection, sans édition qui en couvre la quantité
     (cas courant des terrains de base, répartis sur plusieurs éditions),
     ou sur une ligne du deck qui mélange plusieurs éditions, restent telles
-    quelles, et le bouton ne les compte plus sur ce deck jusqu'à la
-    fermeture de l'onglet. Si aucune carte n'a pu être changée, la raison
-    est affichée, sans recharger.
+    quelles, et le bouton ne propose plus de les changer sur ce deck
+    jusqu'à la fermeture de l'onglet. **Il reste affiché** tant que la page
+    montre des cartes d'une autre édition : s'il ne reste que des cartes
+    impossibles à changer (prévues, ou laissées par un clic), il est grisé,
+    désactivé et sans pastille, et son infobulle (comme un clic) nomme les
+    cartes, regroupées par raison ; s'il en reste aussi à changer, il est
+    actif et l'infobulle annonce les deux. Si un clic n'a rien pu changer,
+    un message (pas une erreur : il n'est pas rouge) en donne les raisons,
+    sans recharger.
     Seulement sur tes propres decks (Moxfield refuse sinon), connecté à
     Moxfield dans ce navigateur. C'est la seule modification que
     l'extension fait sur Moxfield.
@@ -387,13 +410,13 @@ contenu du CSV. Même effet qu'une récupération automatique.
 ### Mes decks : que puis-je monter ?
 
 - Dans le popup, section **« Mes decks »** (repliée par défaut) : tes decks
-  avec, pour chacun, **Montable** (vert), **N cartes bloquent** (rouge,
-  détail au survol, comme sur le bouton de la page du deck), **Monté**, ou
-  **À vérifier** (pas encore lu). Les montables d'abord, puis les moins
+  avec, pour chacun, **Montable** (vert), **N exemplaires bloquent**
+  (rouge, détail au survol, comme sur le bouton de la page du deck),
+  **✓ Monté** (violet : montable ≠ monté), ou **Pas encore lu**. Les montables d'abord, puis les moins
   bloqués ; les montés à la fin.
 - Pour y mettre un deck : sur sa page Moxfield, clique sur le **cœur ♥**
-  de l'extension (le dernier des boutons, à droite de « Monter », en bas à
-  gauche ou dans la barre d'actions de Moxfield). Cœur **plein violet** = deck gardé ; un second
+  de l'extension (le dernier des boutons, à droite de « Monter », dans la
+  barre de boutons en bas de la page). Cœur **plein violet** = deck gardé ; un second
   clic le retire. Ce n'est pas le « j'aime » de Moxfield : rien n'est
   envoyé à Moxfield, personne d'autre ne le voit. Les decks montés y sont
   d'office. Tu peux aussi **coller l'adresse d'un deck**
@@ -404,14 +427,14 @@ contenu du CSV. Même effet qu'une récupération automatique.
   faisabilité est recalculée avec ton stock du moment, sans relire
   Moxfield.
 - La liste est synchronisée entre tes PC avec le reste (Google Drive), et
-  gardée par « Réinitialiser tout le stock ».
+  gardée par « Démonter tous les decks et effacer le stock ».
 - **Liste d'achats cumulée** : coche des decks (case à gauche du nom ;
   seulement ceux lus et pas montés) pour réunir leurs cartes manquantes en
   **une seule liste**, sans doublons. Les besoins des decks cochés sont
   additionnés, puis comparés une seule fois à ton stock libre (un Sol Ring
   libre ne sert qu'à un des decks) : chaque ligne dit combien en acheter,
   combien tu en as de libre, et pour quels decks. Avec le **coût total**
-  (prix Cardmarket de la version du deck, la moins chère si plusieurs) et
+  (prix Cardmarket de l'édition du deck, la moins chère si plusieurs) et
   le bouton **« Copier les cartes manquantes pour Cardmarket »** (même
   format que sur la page d'un deck : colle-la dans une liste de wants).
   Comme sur la page d'un deck, n'y figurent ni les terrains de base, ni
@@ -425,8 +448,9 @@ contenu du CSV. Même effet qu'une récupération automatique.
 - En haut, les chiffres clés : **exemplaires possédés** (libres + dans des
   decks montés), **exemplaires libres**, exemplaires **dans des decks**
   montés et nombre de **cartes différentes** en stock.
-- Tu y vois les decks actuellement montés (avec un bouton pour démonter
-  chacun) et le stock complet.
+- Tu y vois les decks actuellement montés (avec un bouton rouge
+  **« Démonter »** pour chacun, dont le résultat s'affiche sous la liste) et
+  le stock complet.
 - La section **Stock** est repliée par défaut : clique sur son titre pour
   l'afficher (200 premières cartes ; le filtre cherche dans tout le stock)
   et la filtrer par nom. Les quantités ne se modifient pas ici : elles
@@ -434,15 +458,19 @@ contenu du CSV. Même effet qu'une récupération automatique.
 - **Savoir où est une carte** : la colonne **Libre** est la quantité
   disponible hors decks montés, la colonne **Decks** le nombre
   d'exemplaires dans des decks montés. Clique sur une carte présente dans
-  des decks pour voir lesquels (avec un lien vers chacun) et le total
-  possédé. La case **« Seulement les cartes dans des decks montés »** filtre
+  des decks (ou, au clavier, sur le bouton de sa colonne **Decks**) pour
+  voir lesquels (avec un lien vers chacun) et le total possédé. Le filtre
+  s'applique dès que tu t'arrêtes de taper. La case **« Seulement les cartes dans des decks montés »** filtre
   la liste sur ces cartes.
 - Dans la modale de montage, une carte en stock insuffisant indique aussi
   **dans quels decks montés** se trouvent ses exemplaires — pratique pour
   savoir quel deck démonter plutôt que d'acheter.
-- **Zone de danger** : le bouton **« Réinitialiser tout le stock »** vide
-  entièrement le stock **et** démonte tous les decks marqués comme montés
-  (une confirmation est demandée).
+- **Zone de danger** : le bouton **« Démonter tous les decks et effacer le
+  stock »** démonte tous les decks montés et efface le stock de l'extension
+  (une confirmation est demandée). Ta collection Moxfield n'est pas
+  touchée : si la récupération automatique est active, elle est récupérée
+  de nouveau aussitôt, ce qui reconstruit le stock. « Mes decks » et
+  l'historique sont gardés.
 
 ### 4. Historique
 
@@ -455,7 +483,7 @@ synchronisé (Chrome ne donne pas le nom de l'ordinateur) :
   (détail carte par carte : `+1 Lotus Petal (2 → 3)`, limité aux 200
   premières cartes — au-delà, seul le nombre total est indiqué) ;
 - deck monté, démonté, montage mis à jour (détail des cartes modifiées) ;
-- stock réinitialisé, version de l'historique Google Drive restaurée.
+- tout remis à zéro (decks démontés, stock effacé), version de l'historique Google Drive restaurée.
 
 L'historique se consulte seulement : il ne permet pas (encore) d'annuler
 une action. Il garde les 200 dernières actions et est synchronisé entre tes PC avec le reste (fusionné
@@ -496,8 +524,8 @@ en cas de conflit : rien ne s'y perd).
   versions écartées lors d'un conflit, les 10 plus récents conservés. Chacun
   peut être restauré ; la version restaurée est aussi appliquée aux autres PC.
   Chacun peut aussi être téléchargé (bouton **« Télécharger »**).
-- Le bouton **Réinitialiser** de la zone de danger vide aussi le stock des
-  autres PC quand la synchro est active.
+- Le bouton **« Démonter tous les decks et effacer le stock »** de la zone
+  de danger s'applique aussi aux autres PC quand la synchro est active.
 - Google Drive momentanément indisponible (erreur 503, trop de requêtes) :
   la requête est réessayée deux fois en quelques secondes, puis la synchro
   suivante reprend. Le popup affiche « momentanément indisponible » ou
@@ -686,6 +714,19 @@ en cas de conflit : rien ne s'y perd).
   environ. Comme le bouton de montage, il n'est affiché qu'avec la barre
   d'actions de Moxfield. Il se fie à l'indicateur
   « Partially in collection » de Moxfield, donc pas à une liste collée.
+  La prévision avant le clic se fait avec le stock de l'extension
+  (dernière récupération de ta collection, sans les finitions) : dans le
+  doute — collection importée sans éditions, édition du deck pas encore
+  lue chez Moxfield, carte possédée dans l'édition du deck mais une autre
+  finition — la carte reste proposée, et c'est le clic qui tranche avec ta
+  collection du moment. Une carte laissée par un clic n'est reproposée
+  qu'après la fermeture de l'onglet.
+  Il n'est désactivé sur le deck d'un autre qu'une fois le deck lu chez
+  Moxfield (quelques secondes, avec la session Moxfield) ; un clic avant
+  est refusé avec la même explication, sans rien modifier. Sur un deck
+  dont son propriétaire autorise les co-auteurs, l'extension ne sait pas
+  si tu en fais partie : le bouton reste actif, et Moxfield refuse
+  l'écriture si ce n'est pas le cas.
 - **Proxies** : suivis dans l'extension seulement, rien n'est écrit sur
   Moxfield. La marque proxy de Moxfield est lue au premier contrôle de la
   page d'un deck : si tu la changes ensuite sans recharger la page (F5),
@@ -712,6 +753,11 @@ en cas de conflit : rien ne s'y perd).
 - Les données sont stockées localement dans le navigateur
   (`chrome.storage.local`) ; sans la synchro Google Drive, rien ne se
   partage entre appareils.
+- **Ergonomie** (cf. `docs/charte-ergonomique.md`, « Écarts connus ») :
+  certains détails ne s'affichent encore qu'au survol (badge « Modifié »,
+  détail d'un blocage, proxies), donc pas au clavier ; un démontage ne
+  s'annule pas (il faut remonter le deck) ; les alertes du popup sont dans
+  leurs sections, pas en tête.
 
 ## Développement
 
@@ -761,7 +807,7 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
 - `tests/background.test.js` : gestion du stock par le service worker
   (`background.js`, chargé tel quel avec un faux `chrome.storage`) — import
   CSV, montage/démontage, mise à jour d'un deck monté, badge « Modifié »,
-  réinitialisation, historique (y compris sa fusion lors de la synchro
+  remise à zéro (et collection récupérée de nouveau aussitôt), historique (y compris sa fusion lors de la synchro
   Drive), fichiers Drive compressés (et lecture des anciens), récupération
   de la collection (import, alarme horaire, récupération après une
   modification de la collection sur Moxfield, relance dès la connexion à
@@ -812,7 +858,11 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   proxies des decks montés (nombre, impression, remplacement proposé ou
   refusé, jamais comptés dans les decks), sauvegarde Drive (lien vers les
   paramètres de Drive, téléchargement de la sauvegarde et d'une version),
-  erreurs rapportées.
+  erreurs rapportées, ergonomie (démonter : réponse lue et style
+  destructif ; détail des decks d'une carte au clavier ; filtre temporisé
+  sans relire l'état ; champ CSV atteignable ; zones de statut annoncées ;
+  cases de la liste d'achats nommées ; « Monté » et « Montable » de
+  couleurs différentes ; « tout effacer » et son résultat).
 - `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
   — DSN, masquage des jetons et adresses mail, limitation des envois,
   navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur
@@ -847,11 +897,17 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   version différente toujours bloquante, proxies du montage gardés),
   proxies d'un deck monté (pastille du bouton) et leur impression,
   « Utiliser mes éditions » (bouton du ruban, jauge, rechargement, cartes
-  impossibles à changer, arrêt en cours, erreur), boutons dans un bandeau
+  impossibles à changer, arrêt en cours, erreur, désactivé sur le deck
+  d'un autre), boutons dans un bandeau
   flottant sans la barre d'actions (et passage de l'un à l'autre), état
   « monté » juste en passant d'un deck à l'autre et quand un deck est
   démonté ailleurs, bouton
-  et fenêtre de montage en anglais.
+  et fenêtre de montage en anglais ; ergonomie (cf.
+  `docs/charte-ergonomique.md`) : « Démonter » jamais bouton principal
+  d'un deck monté, « Confirmer » désactivé avec sa raison (montage bloqué,
+  liste vide), fenêtre au clavier (focus sur le titre, Tab retenu, Échap,
+  focus rendu au bouton), focus visible sur les boutons de la barre, toasts
+  annoncés et refermables.
 - `tests/deck-help.test.js` : aide sur les boutons de la page d'un deck
   (`deck-help.js`) — texte de la bulle pour chaque état du deck (français et
   anglais), légende (une ligne par état, mêmes icônes et pastilles que la

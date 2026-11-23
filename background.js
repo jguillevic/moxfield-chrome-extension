@@ -48,6 +48,7 @@ const {
   proxyTotal,
   replaceableProxies,
   chooseOwnedEdition,
+  ownedEditionSkipReason,
   buildVersionUsage,
   computeDeckAvailability,
   availabilityLabel,
@@ -1071,7 +1072,13 @@ async function handleResetStock() {
   const state = { stock: {}, builtDecks: {}, history, followedDecks };
   await recordHistory(state, { type: "reset", builtDecks });
   await setState(state);
-  return { ok: true };
+  // La collection Moxfield reste la référence du stock : elle est
+  // récupérée de nouveau aussitôt (si la récupération automatique est
+  // active), plutôt que de laisser un stock vide jusqu'à la prochaine heure.
+  const meta = await getCollectionMeta();
+  if (!meta.enabled) return { ok: true, refetched: false };
+  const fetched = await fetchCollectionNow();
+  return { ok: true, refetched: Boolean(fetched && fetched.ok) };
 }
 
 // Stock des seules cartes utiles à une page de deck (cartes de la page et,
@@ -1223,7 +1230,10 @@ async function handleGetDeckPrintings({ deckId }) {
   try {
     const deck = await run;
     // declaredProxies : cartes marquées « proxy » dans le deck sur Moxfield.
-    return { ok: true, printings: extractDeckPrintings(deck), declaredProxies: declaredProxies(deck) };
+    // ownedByMe : la page désactive « Utiliser mes éditions » sur le deck
+    // d'un autre (cf. deckOwnedBy).
+    const ownedByMe = deckOwnedBy(deck, await moxfieldCollection.findUserId());
+    return { ok: true, printings: extractDeckPrintings(deck), declaredProxies: declaredProxies(deck), ownedByMe };
   } catch (e) {
     const code = e.code || "unknown";
     if (!EXPECTED_DECK_PRINTINGS_ERRORS.includes(code)) reportError("moxfield-deck", e, { code });
@@ -1265,7 +1275,17 @@ async function mapLimited(items, limit, fn) {
 
 // Refus de Moxfield (deck d'un autre compte, protection anti-robot) :
 // expliqué à l'utilisateur, pas rapporté.
-const EXPECTED_EDITION_ERRORS = [...EXPECTED_DECK_PRINTINGS_ERRORS, "blocked"];
+const EXPECTED_EDITION_ERRORS = [...EXPECTED_DECK_PRINTINGS_ERRORS, "blocked", "not-owner"];
+
+// Deck d'un autre compte : Moxfield refuserait l'écriture. Refus expliqué
+// avant d'écrire quoi que ce soit, même si la page a laissé passer le clic
+// (bouton désactivé seulement une fois le deck lu).
+async function assertOwnDeck(deck) {
+  if (deckOwnedBy(deck, await moxfieldCollection.findUserId()) === false) {
+    throw new MoxfieldError("not-owner", i18n.t("ownedEditionsNotOwner"));
+  }
+  return deck;
+}
 
 // Même file que la collection : jamais deux suites d'appels à Moxfield à la
 // fois.
@@ -1309,7 +1329,7 @@ async function handlePlanOwnedEditions({ deckId, names }, progress = () => {}) {
   if (!validDeckId(deckId) || !Array.isArray(names)) return { ok: false, code: "deck-unavailable", error: i18n.t("moxfieldDeckUnavailable") };
   return inMoxfieldQueue("moxfield-editions", async () => {
     const owned = collectionEditions(await moxfieldCollection.downloadCollectionCSV());
-    const entries = deckEntries(await moxfieldCollection.fetchDeck(deckId));
+    const entries = deckEntries(await assertOwnDeck(await moxfieldCollection.fetchDeck(deckId)));
     const usage = buildVersionUsage((await getState()).builtDecks, deckId);
     // Choix faits d'abord (sans appel), éditions lues ensuite en parallèle ;
     // cartes laissées gardées dans l'ordre demandé.
@@ -1334,15 +1354,9 @@ async function handlePlanOwnedEditions({ deckId, names }, progress = () => {}) {
         steps.push({ entry, choice });
         continue;
       }
-      // Raison du refus, de la plus précise à la plus générale : une édition
-      // conviendrait sans les autres decks montés ("taken"), ou en ne
-      // demandant qu'un exemplaire ("not-enough"), ou aucune.
-      const reason = chooseOwnedEdition(ownedEditions, entry)
-        ? "taken"
-        : chooseOwnedEdition(ownedEditions, { ...entry, quantity: 1 })
-          ? "not-enough"
-          : "no-other-edition";
-      steps.push({ skip: { name: entry.name, reason } });
+      // Même raison que celle prévue sur la page du deck (cf.
+      // predictEditionBlock dans deck-checks.js).
+      steps.push({ skip: { name: entry.name, reason: ownedEditionSkipReason(ownedEditions, entry) } });
     }
     const chosen = steps.filter((step) => step.entry);
     let read = 0;
@@ -1404,7 +1418,7 @@ async function handleApplyOwnedEditions({ deckId, plan }, progress = () => {}) {
     const skipped = [];
     let deck = null;
     const read = async () => {
-      deck = await moxfieldCollection.fetchDeck(deckId);
+      deck = await assertOwnDeck(await moxfieldCollection.fetchDeck(deckId));
     };
     const entryOf = (item) => {
       const entry = deckEntries(deck).find((e) => e.board === item.board && e.uniqueCardId === item.uniqueCardId);

@@ -129,10 +129,10 @@
     "message": "Danger zone"
   },
   "dangerHint": {
-    "message": "Completely empties the stock and unbuilds every deck marked as physically built."
+    "message": "Unbuilds every built deck and clears the extension's stock. Your Moxfield collection is not touched: it is fetched again right away. “My decks” and the history are kept."
   },
   "resetButton": {
-    "message": "Reset the whole stock"
+    "message": "Unbuild all decks and clear the stock"
   },
   "errorPrefix": {
     "message": "Error: $1"
@@ -348,10 +348,10 @@
     "message": "Stop syncing on this computer? The data stays on this computer and on Drive."
   },
   "resetSyncWarning": {
-    "message": "Sync is on: your other computers will be emptied too."
+    "message": "Sync is on: your other computers will be reset too."
   },
   "resetConfirm": {
-    "message": "Reset the whole stock and all built decks?"
+    "message": "Unbuild all built decks and clear the stock? Your collection will be fetched again from Moxfield."
   },
   "errorReportsNotConfigured": {
     "message": "No report service is set up in this version: nothing is sent."
@@ -369,16 +369,16 @@
     "message": "CSV import: $1 cards changed"
   },
   "historyDeckBuilt_one": {
-    "message": "Deck “$2” built: $1 card taken out of the free stock"
+    "message": "Deck “$2” built: $1 copy taken from free stock"
   },
   "historyDeckBuilt_other": {
-    "message": "Deck “$2” built: $1 cards taken out of the free stock"
+    "message": "Deck “$2” built: $1 copies taken from free stock"
   },
   "historyDeckUnbuilt_one": {
-    "message": "Deck “$2” unbuilt: $1 card returned to the stock"
+    "message": "Deck “$2” unbuilt: $1 copy returned to stock"
   },
   "historyDeckUnbuilt_other": {
-    "message": "Deck “$2” unbuilt: $1 cards returned to the stock"
+    "message": "Deck “$2” unbuilt: $1 copies returned to stock"
   },
   "historyDeckUpdated_one": {
     "message": "Build of “$2” updated: $1 card changed"
@@ -387,19 +387,19 @@
     "message": "Build of “$2” updated: $1 cards changed"
   },
   "historyReset_one": {
-    "message": "Stock reset ($1 deck unbuilt)"
+    "message": "Everything reset ($1 deck unbuilt)"
   },
   "historyReset_other": {
-    "message": "Stock reset ($1 decks unbuilt)"
+    "message": "Everything reset ($1 decks unbuilt)"
   },
   "historyDriveRestore": {
     "message": "Google Drive history version restored"
   },
   "blockingSummary_one": {
-    "message": "$1 card blocks the build: $2"
+    "message": "$1 copy blocks the build: $2"
   },
   "blockingSummary_other": {
-    "message": "$1 cards block the build: $2"
+    "message": "$1 copies block the build: $2"
   },
   "blockingMissing_one": {
     "message": "$1 missing from stock"
@@ -441,7 +441,7 @@
     "message": "printing changed"
   },
   "availabilityCount": {
-    "message": "$1/$2 cards available in the free stock, excluding basic lands"
+    "message": "$1/$2 copies available in free stock, basic lands excluded"
   },
   "availabilityOk": {
     "message": "buildable: $1"
@@ -612,10 +612,10 @@
     "message": "$1 in total ($2)"
   },
   "cardCount_one": {
-    "message": "$1 card"
+    "message": "$1 copy"
   },
   "cardCount_other": {
-    "message": "$1 cards"
+    "message": "$1 copies"
   },
   "distinctNames_one": {
     "message": "$1 distinct name"
@@ -630,10 +630,10 @@
     "message": "no cards detected on the page."
   },
   "pageCardsDetected_one": {
-    "message": "$1 card detected on the page"
+    "message": "$1 copy detected on the page"
   },
   "pageCardsDetected_other": {
-    "message": "$1 cards detected on the page"
+    "message": "$1 copies detected on the page"
   },
   "pageTotalNotFound": {
     "message": "$1, but the total shown by Moxfield (“N main deck”) was not found."
@@ -672,7 +672,7 @@
     "message": "Mark this deck as physically built"
   },
   "overlayBuiltIntro": {
-    "message": "This deck is currently marked as built. Unbuilding it returns the cards it uses to the stock."
+    "message": "This deck is marked as built. Unbuilding it gives its cards back to your free stock and forgets its proxies."
   },
   "overlayIntro": {
     "message": "List detected automatically from the page — check/fix it before confirming (one card per line, \"QTY Name\"). If it is empty or incomplete, click Moxfield's “Copy” button, then “$1”."
@@ -717,10 +717,10 @@
     "message": "Can't build — not enough stock: $1"
   },
   "unbuildDone": {
-    "message": "Deck unbuilt, cards returned to the stock."
+    "message": "Deck unbuilt: its cards are back in your free stock."
   },
   "buildDone": {
-    "message": "Deck marked as built, cards taken out of the stock."
+    "message": "Deck built: its cards left your free stock."
   },
   "proxiesHint": {
     "message": "The missing copies are played as proxies: they are not taken from your stock, and you can print them."
@@ -847,6 +847,21 @@
   },
   "ownedEditionsHint": {
     "message": "Switches these cards, in your Moxfield deck, to a printing from your collection (preferably one no other built deck uses), then reloads the page. The deck is not built. Cards with no other owned printing stay as they are."
+  },
+  "ownedEditionsNotOwner": {
+    "message": "This deck isn't yours: Moxfield doesn't let you change its printings."
+  },
+  "ownedEditionsLeft_one": {
+    "message": "$1 card can't be switched to one of your printings:"
+  },
+  "ownedEditionsLeft_other": {
+    "message": "$1 cards can't be switched to one of your printings:"
+  },
+  "ownedEditionsLeftMore_one": {
+    "message": "and $1 more"
+  },
+  "ownedEditionsLeftMore_other": {
+    "message": "and $1 more"
   },
   "ownedEditionsLoading": {
     "message": "Looking up your printings (Moxfield collection and deck)…"
@@ -999,7 +1014,7 @@
     "message": "My decks"
   },
   "decksHint": {
-    "message": "The decks you keep with the heart ♥ (bottom left of a Moxfield deck page), along with built decks: see at a glance what you can build with your free stock. You can also paste a deck's address."
+    "message": "The decks you keep with the heart ♥ (in the button bar at the bottom of a Moxfield deck page), plus your built decks: see at a glance what you can build with your free stock. You can also paste a deck's address."
   },
   "decksAddPlaceholder": {
     "message": "Moxfield deck address"
@@ -1023,13 +1038,13 @@
     "message": "Buildable"
   },
   "decksStatusBlocked_one": {
-    "message": "$1 card blocks"
+    "message": "$1 copy blocks"
   },
   "decksStatusBlocked_other": {
-    "message": "$1 cards block"
+    "message": "$1 copies block"
   },
   "decksStatusUnknown": {
-    "message": "To check"
+    "message": "Not read yet"
   },
   "decksStatusUnavailable": {
     "message": "Not found or private"
@@ -1183,5 +1198,26 @@
   },
   "deckHelpBuiltOutdated": {
     "message": "This deck is physically built, but its list changed on Moxfield since (orange dot). Click the check circle to update the build."
+  },
+  "close": {
+    "message": "Close"
+  },
+  "buildBlockedHint": {
+    "message": "Can't build yet: fix what is reported above first."
+  },
+  "unbuildDoneNamed": {
+    "message": "“$1” unbuilt: its cards are back in your free stock."
+  },
+  "stockShowDecks": {
+    "message": "$1: $2 in built decks, see which ones"
+  },
+  "shoppingSelectDeck": {
+    "message": "Add “$1” to the shopping list"
+  },
+  "resetDone": {
+    "message": "Decks unbuilt and stock cleared. Fetch your collection (Moxfield collection section) to get your stock back."
+  },
+  "resetDoneRefetched": {
+    "message": "Decks unbuilt, stock cleared, then collection fetched again."
   }
 }

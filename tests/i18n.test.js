@@ -137,13 +137,13 @@ test("toute clé existante sert quelque part", () => {
 test("pluriels selon la langue : 0 au singulier en français, au pluriel en anglais", () => {
   const fr = loadI18n("fr");
   const en = loadI18n("en");
-  assert.equal(fr.tn("cardCount", 0), "0 carte");
-  assert.equal(fr.tn("cardCount", 1), "1 carte");
-  assert.equal(fr.tn("cardCount", 2), "2 cartes");
-  assert.equal(en.tn("cardCount", 0), "0 cards");
-  assert.equal(en.tn("cardCount", 1), "1 card");
-  assert.equal(en.tn("cardCount", 2), "2 cards");
-  assert.equal(en.tn("historyDeckBuilt", 99, "Zethi"), "Deck “Zethi” built: 99 cards taken out of the free stock");
+  assert.equal(fr.tn("cardCount", 0), "0 exemplaire");
+  assert.equal(fr.tn("cardCount", 1), "1 exemplaire");
+  assert.equal(fr.tn("cardCount", 2), "2 exemplaires");
+  assert.equal(en.tn("cardCount", 0), "0 copies");
+  assert.equal(en.tn("cardCount", 1), "1 copy");
+  assert.equal(en.tn("cardCount", 2), "2 copies");
+  assert.equal(en.tn("historyDeckBuilt", 99, "Zethi"), "Deck “Zethi” built: 99 copies taken from free stock");
 });
 
 test("valeurs insérées, clé manquante affichée telle quelle", () => {

@@ -38,6 +38,13 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
   puissent pas diverger.
 - `innerHTML` uniquement avec des valeurs passées par `escapeHtml`.
 
+## Ergonomie
+
+- Tout écran nouveau ou modifié suit `docs/charte-ergonomique.md`
+  (vocabulaire, un seul bouton principal jamais destructif, action
+  impossible désactivée avec sa raison, retour annoncé, clavier, contraste
+  AA, rien seulement au survol) et passe sa liste « Avant de livrer ».
+
 ## Lecture de la page Moxfield (scraping)
 
 - Pas d'API publique : on s'appuie sur des repères stables (`data-icon` des
@@ -90,7 +97,8 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
   dans une autre édition sur l'édition de la collection
   (`PLAN_OWNED_EDITIONS` puis `APPLY_OWNED_EDITIONS`), en un seul clic sur
   un bouton explicite (« Utiliser mes éditions », dans la barre d'actions,
-  sans confirmation : choix de l'utilisateur), carte par carte (jamais
+  sans confirmation : choix de l'utilisateur), seulement sur un deck du
+  compte connecté (`deckOwnedBy` ; bouton désactivé sinon), carte par carte (jamais
   d'écritures en parallèle : chacune change la version du deck), deck lu
   une fois puis relu sur un refus avant une seule nouvelle tentative,
   réponse vérifiée ; la page est

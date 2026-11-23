@@ -129,10 +129,10 @@
     "message": "Zone de danger"
   },
   "dangerHint": {
-    "message": "Vide entièrement le stock et démonte tous les decks marqués comme montés physiquement."
+    "message": "Démonte tous les decks montés et efface le stock de l'extension. Ta collection Moxfield n'est pas touchée : elle est récupérée de nouveau aussitôt. « Mes decks » et l'historique sont gardés."
   },
   "resetButton": {
-    "message": "Réinitialiser tout le stock"
+    "message": "Démonter tous les decks et effacer le stock"
   },
   "errorPrefix": {
     "message": "Erreur : $1"
@@ -348,10 +348,10 @@
     "message": "Arrêter la synchronisation sur ce PC ? Les données restent sur ce PC et sur Drive."
   },
   "resetSyncWarning": {
-    "message": "La synchronisation est active : tes autres PC seront aussi vidés."
+    "message": "La synchronisation est active : tes autres PC seront aussi remis à zéro."
   },
   "resetConfirm": {
-    "message": "Réinitialiser tout le stock et tous les decks montés ?"
+    "message": "Démonter tous les decks montés et effacer le stock ? Ta collection sera récupérée de nouveau depuis Moxfield."
   },
   "errorReportsNotConfigured": {
     "message": "Aucun service de rapports configuré dans cette version : rien n'est envoyé."
@@ -369,16 +369,16 @@
     "message": "Import CSV : $1 cartes modifiées"
   },
   "historyDeckBuilt_one": {
-    "message": "Deck « $2 » monté : $1 carte retirée du stock libre"
+    "message": "Deck « $2 » monté : $1 exemplaire retiré du stock libre"
   },
   "historyDeckBuilt_other": {
-    "message": "Deck « $2 » monté : $1 cartes retirées du stock libre"
+    "message": "Deck « $2 » monté : $1 exemplaires retirés du stock libre"
   },
   "historyDeckUnbuilt_one": {
-    "message": "Deck « $2 » démonté : $1 carte rendue au stock"
+    "message": "Deck « $2 » démonté : $1 exemplaire rendu au stock"
   },
   "historyDeckUnbuilt_other": {
-    "message": "Deck « $2 » démonté : $1 cartes rendues au stock"
+    "message": "Deck « $2 » démonté : $1 exemplaires rendus au stock"
   },
   "historyDeckUpdated_one": {
     "message": "Montage de « $2 » mis à jour : $1 carte modifiée"
@@ -387,61 +387,61 @@
     "message": "Montage de « $2 » mis à jour : $1 cartes modifiées"
   },
   "historyReset_one": {
-    "message": "Stock réinitialisé ($1 deck démonté)"
+    "message": "Tout remis à zéro ($1 deck démonté)"
   },
   "historyReset_other": {
-    "message": "Stock réinitialisé ($1 decks démontés)"
+    "message": "Tout remis à zéro ($1 decks démontés)"
   },
   "historyDriveRestore": {
     "message": "Version de l'historique Google Drive restaurée"
   },
   "blockingSummary_one": {
-    "message": "$1 carte bloque le montage : $2"
+    "message": "$1 exemplaire bloque le montage : $2"
   },
   "blockingSummary_other": {
-    "message": "$1 cartes bloquent le montage : $2"
+    "message": "$1 exemplaires bloquent le montage : $2"
   },
   "blockingMissing_one": {
-    "message": "$1 manquante en stock"
+    "message": "$1 manquant en stock"
   },
   "blockingMissing_other": {
-    "message": "$1 manquantes en stock"
+    "message": "$1 manquants en stock"
   },
   "blockingWrongEdition_one": {
-    "message": "$1 dans une autre version"
+    "message": "$1 dans une autre édition"
   },
   "blockingWrongEdition_other": {
-    "message": "$1 dans une autre version"
+    "message": "$1 dans une autre édition"
   },
   "blockingVersionTaken_one": {
-    "message": "$1 dont la version est déjà dans un autre deck"
+    "message": "$1 dont l'édition est déjà dans un autre deck"
   },
   "blockingVersionTaken_other": {
-    "message": "$1 dont la version est déjà dans un autre deck"
+    "message": "$1 dont l'édition est déjà dans un autre deck"
   },
   "availabilityVersionTaken": {
-    "message": "version déjà utilisée par un autre deck monté : $1"
+    "message": "édition déjà prise par un autre deck monté : $1"
   },
   "versionWarningTitle_one": {
-    "message": "Version déjà utilisée par un autre deck monté ($1 carte)"
+    "message": "Édition déjà prise par un autre deck monté ($1 carte)"
   },
   "versionWarningTitle_other": {
-    "message": "Version déjà utilisée par un autre deck monté ($1 cartes)"
+    "message": "Édition déjà prise par un autre deck monté ($1 cartes)"
   },
   "versionWarningHint": {
-    "message": "montage bloqué, choisis sur Moxfield une version que tu possèdes encore, ou démonte l'autre deck :"
+    "message": "montage bloqué, choisis sur Moxfield une édition que tu possèdes encore, ou démonte l'autre deck :"
   },
   "versionOwned": {
     "message": "tu possèdes : $1"
   },
   "buildBlockedVersionTaken": {
-    "message": "Montage impossible — version déjà utilisée par un autre deck monté pour : $1"
+    "message": "Montage impossible — édition déjà prise par un autre deck monté pour : $1"
   },
   "diffVersionChanged": {
-    "message": "version changée"
+    "message": "édition changée"
   },
   "availabilityCount": {
-    "message": "$1/$2 cartes disponibles en stock libre, hors terrains de base"
+    "message": "$1/$2 exemplaires disponibles en stock libre, hors terrains de base"
   },
   "availabilityOk": {
     "message": "montable : $1"
@@ -450,7 +450,7 @@
     "message": "manque $1"
   },
   "availabilityWrongEdition": {
-    "message": "version différente : $1"
+    "message": "autre édition : $1"
   },
   "availabilityBasicMissing": {
     "message": "terrains de base manquants (non bloquant) : $1"
@@ -549,10 +549,10 @@
     "message": "Erreur inconnue"
   },
   "printingWarningTitle_one": {
-    "message": "Présente dans ta collection mais pas dans la bonne version pour ce deck ($1 carte)"
+    "message": "Présente dans ta collection mais pas dans la bonne édition pour ce deck ($1 carte)"
   },
   "printingWarningTitle_other": {
-    "message": "Présentes dans ta collection mais pas dans la bonne version pour ce deck ($1 cartes)"
+    "message": "Présentes dans ta collection mais pas dans la bonne édition pour ce deck ($1 cartes)"
   },
   "printingWarningHint": {
     "message": "montage bloqué, corrige ou retire ces lignes avant de valider :"
@@ -585,7 +585,7 @@
     "message": "Coût des cartes manquantes : au moins $2 ($1 cartes sans prix)"
   },
   "shortagePriceSource": {
-    "message": "Prix Cardmarket de la version du deck (la moins chère s'il en utilise plusieurs), donnés par Moxfield."
+    "message": "Prix Cardmarket de l'édition du deck (la moins chère s'il en utilise plusieurs), donnés par Moxfield."
   },
   "cardmarketCopyButton": {
     "message": "Copier les cartes manquantes pour Cardmarket"
@@ -600,7 +600,7 @@
     "message": "$1 cartes copiées — sur Cardmarket, ouvre une liste de wants puis « Ajouter une Deck List » et colle."
   },
   "basicLandWrongEdition": {
-    "message": "$1 — version différente de ta collection"
+    "message": "$1 — édition différente de ta collection"
   },
   "basicLandTitle": {
     "message": "Terrains de base à vérifier ($1)"
@@ -612,16 +612,16 @@
     "message": "$1 au total ($2)"
   },
   "cardCount_one": {
-    "message": "$1 carte"
+    "message": "$1 exemplaire"
   },
   "cardCount_other": {
-    "message": "$1 cartes"
+    "message": "$1 exemplaires"
   },
   "distinctNames_one": {
-    "message": "$1 intitulé différent"
+    "message": "$1 nom différent"
   },
   "distinctNames_other": {
-    "message": "$1 intitulés différents"
+    "message": "$1 noms différents"
   },
   "cardCountMismatch": {
     "message": "$1 — ⚠️ le site indique $2 : vérifie la liste avant de valider"
@@ -630,10 +630,10 @@
     "message": "aucune carte détectée sur la page."
   },
   "pageCardsDetected_one": {
-    "message": "$1 carte détectée sur la page"
+    "message": "$1 exemplaire détecté sur la page"
   },
   "pageCardsDetected_other": {
-    "message": "$1 cartes détectées sur la page"
+    "message": "$1 exemplaires détectés sur la page"
   },
   "pageTotalNotFound": {
     "message": "$1, mais total annoncé par Moxfield (« N main deck ») introuvable."
@@ -663,7 +663,7 @@
     "message": "« $1 » ajuste le stock pour ces seules cartes."
   },
   "deckUpdateBlocked": {
-    "message": "Stock insuffisant, version différente ou déjà utilisée : corrige d'abord (voir ci-dessus)."
+    "message": "Mise à jour impossible : stock insuffisant, autre édition ou édition déjà prise (voir ci-dessus)."
   },
   "overlayTitleUnbuild": {
     "message": "Démonter ce deck"
@@ -672,7 +672,7 @@
     "message": "Marquer ce deck comme monté physiquement"
   },
   "overlayBuiltIntro": {
-    "message": "Ce deck est actuellement marqué comme monté. Le démonter réincrémentera le stock des cartes qu'il utilise."
+    "message": "Ce deck est marqué comme monté. Le démonter rend ses cartes à ton stock libre et oublie ses proxies."
   },
   "overlayIntro": {
     "message": "Liste détectée automatiquement à partir de la page — vérifie/corrige avant de valider (une carte par ligne, \"QTE Nom\"). Si elle est vide ou incomplète, clique sur le bouton « Copier » de Moxfield puis « $1 »."
@@ -702,7 +702,7 @@
     "message": "Presse-papiers vide ou format non reconnu — colle manuellement avec Ctrl+V."
   },
   "updateBlocked": {
-    "message": "Mise à jour impossible — stock insuffisant, version différente ou déjà utilisée."
+    "message": "Mise à jour impossible — stock insuffisant, autre édition ou édition déjà prise."
   },
   "updateDone": {
     "message": "Montage mis à jour, stock ajusté pour les cartes modifiées."
@@ -711,16 +711,16 @@
     "message": "Aucune carte reconnue dans la liste — vérifie le format (QTE Nom)."
   },
   "buildBlockedWrongEdition": {
-    "message": "Montage impossible — version différente de ta collection pour : $1"
+    "message": "Montage impossible — édition différente de ta collection pour : $1"
   },
   "buildBlockedShortage": {
     "message": "Montage impossible — stock insuffisant : $1"
   },
   "unbuildDone": {
-    "message": "Deck démonté, stock réincrémenté."
+    "message": "Deck démonté : ses cartes sont revenues dans ton stock libre."
   },
   "buildDone": {
-    "message": "Deck marqué comme monté, stock décrémenté."
+    "message": "Deck monté : ses cartes sont sorties de ton stock libre."
   },
   "proxiesHint": {
     "message": "Les exemplaires manquants sont joués en proxy : ils ne sont pas pris à ton stock, et tu pourras les imprimer."
@@ -847,6 +847,21 @@
   },
   "ownedEditionsHint": {
     "message": "Change, dans ton deck Moxfield, l'édition de ces cartes pour une édition de ta collection (de préférence une qui n'est prise par aucun autre deck monté), puis recharge la page. Le deck n'est pas monté. Les cartes sans autre édition possédée restent telles quelles."
+  },
+  "ownedEditionsNotOwner": {
+    "message": "Ce deck n'est pas à toi : Moxfield ne te laisse pas changer ses éditions."
+  },
+  "ownedEditionsLeft_one": {
+    "message": "$1 carte ne peut pas passer sur une de tes éditions :"
+  },
+  "ownedEditionsLeft_other": {
+    "message": "$1 cartes ne peuvent pas passer sur une de tes éditions :"
+  },
+  "ownedEditionsLeftMore_one": {
+    "message": "et $1 autre"
+  },
+  "ownedEditionsLeftMore_other": {
+    "message": "et $1 autres"
   },
   "ownedEditionsLoading": {
     "message": "Recherche de tes éditions (collection et deck Moxfield)…"
@@ -999,7 +1014,7 @@
     "message": "Mes decks"
   },
   "decksHint": {
-    "message": "Les decks que tu gardes avec le cœur ♥ (en bas à gauche de la page d'un deck Moxfield), avec les decks montés : vois d'un coup d'œil ce que tu peux monter avec ton stock libre. Tu peux aussi coller l'adresse d'un deck."
+    "message": "Les decks que tu gardes avec le cœur ♥ (dans la barre de boutons en bas de la page d'un deck Moxfield), avec les decks montés : vois d'un coup d'œil ce que tu peux monter avec ton stock libre. Tu peux aussi coller l'adresse d'un deck."
   },
   "decksAddPlaceholder": {
     "message": "Adresse d'un deck Moxfield"
@@ -1023,13 +1038,13 @@
     "message": "Montable"
   },
   "decksStatusBlocked_one": {
-    "message": "$1 carte bloque"
+    "message": "$1 exemplaire bloque"
   },
   "decksStatusBlocked_other": {
-    "message": "$1 cartes bloquent"
+    "message": "$1 exemplaires bloquent"
   },
   "decksStatusUnknown": {
-    "message": "À vérifier"
+    "message": "Pas encore lu"
   },
   "decksStatusUnavailable": {
     "message": "Introuvable ou privé"
@@ -1183,5 +1198,26 @@
   },
   "deckHelpBuiltOutdated": {
     "message": "Ce deck est monté physiquement, mais sa liste a changé sur Moxfield depuis (point orange). Clique sur le rond coché pour mettre à jour le montage."
+  },
+  "close": {
+    "message": "Fermer"
+  },
+  "buildBlockedHint": {
+    "message": "Montage impossible pour l'instant : corrige d'abord ce qui est signalé ci-dessus."
+  },
+  "unbuildDoneNamed": {
+    "message": "« $1 » démonté : ses cartes sont revenues dans ton stock libre."
+  },
+  "stockShowDecks": {
+    "message": "$1 : $2 dans des decks montés, voir lesquels"
+  },
+  "shoppingSelectDeck": {
+    "message": "Ajouter « $1 » à la liste d'achats"
+  },
+  "resetDone": {
+    "message": "Decks démontés et stock effacé. Récupère ta collection (section Collection Moxfield) pour retrouver ton stock."
+  },
+  "resetDoneRefetched": {
+    "message": "Decks démontés, stock effacé, puis collection récupérée de nouveau."
   }
 }

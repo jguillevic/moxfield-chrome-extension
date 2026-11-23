@@ -294,6 +294,18 @@ function declaredProxies(deck) {
   return proxies;
 }
 
+// Le deck appartient-il au compte connecté ? true, false, ou null si on ne
+// peut pas le savoir. Réponse de l'API d'un deck (confirmée via inspection
+// réelle, novembre 2026) : ownerUserId (ex. "XN1JV"), comparé au suffixe du
+// cookie refresh_token_<userId> (cf. findUserId). Les co-auteurs
+// (authorsCanEdit) ne sont désignés que par leur pseudo, que l'extension ne
+// connaît pas : dans ce cas, null (on laisse faire, Moxfield tranchera).
+function deckOwnedBy(deck, userId) {
+  if (!deck || typeof deck.ownerUserId !== "string" || !deck.ownerUserId || typeof userId !== "string" || !userId) return null;
+  if (deck.ownerUserId === userId) return true;
+  return deck.authorsCanEdit === true ? null : false;
+}
+
 // Cartes d'un deck pour la vue « Mes decks » du popup (réponse de son
 // API) : [{ name, qty, proxyQty?, printings: [{ code, set, cn, qty, eur? }] }], une entrée
 // par carte (zones additionnées, Considering écartée comme sur la page).
@@ -421,5 +433,5 @@ function computeCollectionDiff(before, after) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, declaredProxies, readCardEditions, editionChangeBody, MoxfieldError };
+  module.exports = { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, declaredProxies, deckOwnedBy, readCardEditions, editionChangeBody, MoxfieldError };
 }

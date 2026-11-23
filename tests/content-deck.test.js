@@ -134,9 +134,9 @@ test("deck non monté : faisabilité affichée, terrains de base exclus", async 
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
   await waitFor(() => buttonText(page).includes("dispo"), 2000, "faisabilité affichée");
-  assert.match(buttonText(page), /^Marquer comme monté physiquement — .*\(3\/4 cartes disponibles en stock libre/);
-  assert.match(buttonTitle(page), /^1 carte bloque le montage : 1 dans une autre version/);
-  assert.match(buttonTitle(page), /version différente : Birds of Paradise/);
+  assert.match(buttonText(page), /^Marquer comme monté physiquement — .*\(3\/4 exemplaires disponibles en stock libre/);
+  assert.match(buttonTitle(page), /^1 exemplaire bloque le montage : 1 dans une autre édition/);
+  assert.match(buttonTitle(page), /autre édition : Birds of Paradise/);
 });
 
 // Moxfield a retiré la barre d'actions de la page d'un deck (novembre
@@ -189,12 +189,12 @@ test("deck monté : pas de faisabilité", async (t) => {
 test("version changée sur la page : recalcul sans attendre le contrôle périodique", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 exemplaires disponibles"), 2000, "état initial");
   // Moxfield remplace le marqueur « Partially in collection » par « Found
   // in collection » quand on choisit une version possédée.
   const marker = page.win.document.querySelector('[id^="collection_pt_"]');
   marker.id = marker.id.replace("collection_pt_", "collection_full_");
-  const elapsed = await waitFor(() => buttonText(page).includes("4/4 cartes disponibles"), 2500, "recalcul après changement de version");
+  const elapsed = await waitFor(() => buttonText(page).includes("4/4 exemplaires disponibles"), 2500, "recalcul après changement de version");
   assert.ok(elapsed < 1500, `recalcul en ${elapsed} ms : trop lent pour venir du changement de la page`);
   assert.match(buttonTitle(page), /^montable/);
 });
@@ -202,10 +202,10 @@ test("version changée sur la page : recalcul sans attendre le contrôle périod
 test("stock modifié ailleurs : recalcul immédiat", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 exemplaires disponibles"), 2000, "état initial");
   const { ["golgari thug"]: _removed, ...withoutThug } = FULL_STOCK;
   page.setStock(withoutThug);
-  const elapsed = await waitFor(() => buttonText(page).includes("2/4 cartes disponibles"), 2500, "recalcul après changement du stock");
+  const elapsed = await waitFor(() => buttonText(page).includes("2/4 exemplaires disponibles"), 2500, "recalcul après changement du stock");
   assert.ok(elapsed < 1000, `recalcul en ${elapsed} ms`);
   assert.match(buttonTitle(page), /manque Golgari Thug \(1\)/);
 });
@@ -213,7 +213,7 @@ test("stock modifié ailleurs : recalcul immédiat", async (t) => {
 test("liste brièvement incohérente : la faisabilité reste affichée", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 exemplaires disponibles"), 2000, "état initial");
   // Ligne en double le temps d'un rendu : le total ne correspond plus à
   // celui annoncé par Moxfield.
   const row = page.win.document.querySelector('a.table-deck-row-link[href^="/cards/"]').closest("li");
@@ -221,16 +221,16 @@ test("liste brièvement incohérente : la faisabilité reste affichée", async (
   copy.removeAttribute("data-hash");
   row.after(copy);
   await new Promise((resolve) => setTimeout(resolve, 1000));
-  assert.match(buttonText(page), /3\/4 cartes disponibles/, "pastille retirée trop tôt");
+  assert.match(buttonText(page), /3\/4 exemplaires disponibles/, "pastille retirée trop tôt");
   copy.remove();
   await new Promise((resolve) => setTimeout(resolve, 800));
-  assert.match(buttonText(page), /3\/4 cartes disponibles/);
+  assert.match(buttonText(page), /3\/4 exemplaires disponibles/);
 });
 
 test("la page ne demande que le stock des cartes du deck, jamais l'état complet", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 exemplaires disponibles"), 2000, "état initial");
   assert.ok(!page.sent.some((m) => m.type === "GET_STATE"), "état complet demandé");
   const request = page.sent.filter((m) => m.type === "GET_DECK_CONTEXT").pop();
   assert.deepEqual(
@@ -243,7 +243,20 @@ test("la page ne demande que le stock des cartes du deck, jamais l'état complet
 // --- Fenêtre de montage ---
 
 const builds = (page) => page.sent.filter((m) => m.type === "TOGGLE_DECK_BUILT");
-const toasts = (page) => [...page.win.document.querySelectorAll(".msm-toast")].map((el) => el.textContent);
+const toasts = (page) => [...page.win.document.querySelectorAll(".msm-toast-text")].map((el) => el.textContent);
+
+// Montage bloqué : « Confirmer » désactivé avant tout clic, la raison
+// affichée au-dessus des boutons (cf. setActionBlocked), rien d'envoyé.
+function assertBuildBlocked(page, doc) {
+  const confirm = doc.querySelector("#msm-confirm");
+  const hint = doc.querySelector("#msm-action-hint");
+  assert.equal(confirm.disabled, true, "bouton désactivé");
+  assert.equal(hint.hidden, false, "raison visible");
+  assert.match(hint.textContent, /^Montage impossible pour l'instant/);
+  assert.equal(confirm.getAttribute("aria-describedby"), "msm-action-hint", "raison lue avec le bouton");
+  confirm.click();
+  assert.deepEqual(builds(page), []);
+}
 
 // Ouvre la fenêtre de montage, Birds of Paradise passée dans une version
 // possédée pour que seul le stock puisse bloquer.
@@ -294,7 +307,7 @@ const reportsOf = (page) => page.sent.filter((m) => m.type === "REPORT_ERROR").m
 test("erreur pendant le contrôle de la page : rapportée, sauf extension rechargée ou service worker injoignable", async (t) => {
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
   t.after(page.close);
-  await waitFor(() => buttonText(page).includes("3/4 cartes disponibles"), 2000, "état initial");
+  await waitFor(() => buttonText(page).includes("3/4 exemplaires disponibles"), 2000, "état initial");
   page.handle = (msg) => {
     if (msg.type === "GET_DECK_CONTEXT") throw new Error("Extension context invalidated.");
   };
@@ -343,8 +356,8 @@ test("navigateur en anglais : bouton et fenêtre de montage en anglais", async (
   const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "en");
   t.after(page.close);
   await waitFor(() => buttonText(page).includes("available"), 2000, "faisabilité affichée");
-  assert.match(buttonText(page), /^Mark as physically built — .*\(3\/4 cards available in the free stock/);
-  assert.match(buttonTitle(page), /^1 card blocks the build: 1 in another printing/);
+  assert.match(buttonText(page), /^Mark as physically built — .*\(3\/4 copies available in free stock/);
+  assert.match(buttonTitle(page), /^1 copy blocks the build: 1 in another printing/);
   assert.match(buttonTitle(page), /different printing: Birds of Paradise/);
 
   page.button().click();
@@ -352,7 +365,7 @@ test("navigateur en anglais : bouton et fenêtre de montage en anglais", async (
   await waitFor(() => doc.querySelector("#msm-card-count") && doc.querySelector("#msm-card-count").textContent, 2000, "fenêtre ouverte");
   assert.equal(doc.querySelector("#msm-modal-title").textContent, "Mark this deck as physically built");
   assert.equal(doc.querySelector("#msm-confirm").textContent, "Confirm the build");
-  assert.equal(doc.querySelector("#msm-card-count").textContent, "7 cards in total (5 distinct names)");
+  assert.equal(doc.querySelector("#msm-card-count").textContent, "7 copies in total (5 distinct names)");
 });
 
 // --- Version déjà utilisée par un autre deck monté ---
@@ -376,18 +389,14 @@ test("montage : refusé si la même version est déjà dans un autre deck monté
   const page = openDeckPage(thugInAnotherDeck("ZOwRD"));
   t.after(page.close);
   const doc = await openBuildModal(page);
-  assert.match(buttonTitle(page), /1 dont la version est déjà dans un autre deck/, "pastille du bouton");
+  assert.match(buttonTitle(page), /1 dont l'édition est déjà dans un autre deck/, "pastille du bouton");
   const warning = doc.querySelector("#msm-version-warning");
   await waitFor(() => warning.textContent.includes("Golgari Thug"), 2000, "version déjà utilisée affichée");
   assert.match(warning.textContent, /dans : Autre deck \(1\)/);
   assert.match(warning.textContent, /tu possèdes : RAV 87 ×1, DDS 50 ×1/);
   assert.equal(doc.querySelector("#msm-shortage-warning").textContent, "", "ce n'est pas un manque de stock");
-  assert.match(doc.querySelector("#msm-blocking-summary").textContent, /1 carte bloque le montage/);
-
-  doc.querySelector("#msm-confirm").click();
-  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
-  assert.deepEqual(toasts(page), ["Montage impossible — version déjà utilisée par un autre deck monté pour : Golgari Thug"]);
-  assert.deepEqual(builds(page), []);
+  assert.match(doc.querySelector("#msm-blocking-summary").textContent, /1 exemplaire bloque le montage/);
+  assertBuildBlocked(page, doc);
 });
 
 test("montage : accepté si l'autre deck détient une autre version, les versions sont enregistrées", async (t) => {
@@ -463,7 +472,7 @@ test("deck monté : version changée sur Moxfield, signalé comme modifié sans 
   page.button().click();
   const doc = page.win.document;
   await waitFor(() => doc.querySelector("#msm-update") && !doc.querySelector("#msm-update").hidden, 3000, "mise à jour proposée");
-  assert.match(doc.querySelector("#msm-deck-changes").textContent, /↻ Golgari Thug \(version changée\)/);
+  assert.match(doc.querySelector("#msm-deck-changes").textContent, /↻ Golgari Thug \(édition changée\)/);
   doc.querySelector("#msm-update").click();
   await waitFor(() => sentOf(page, "UPDATE_BUILT_DECK").length > 0, 2000, "mise à jour envoyée");
   const updated = sentOf(page, "UPDATE_BUILT_DECK")[0].cards;
@@ -501,11 +510,8 @@ test("montage : refusé quand l'API du deck montre que l'édition demandée, pos
   const warning = doc.querySelector("#msm-version-warning");
   await waitFor(() => warning.textContent.includes("Golgari Thug"), 2000, "version déjà utilisée affichée");
   assert.match(warning.textContent, /dans : Autre deck \(1\)/);
-  assert.match(buttonTitle(page), /1 dont la version est déjà dans un autre deck/, "pastille du bouton");
-  doc.querySelector("#msm-confirm").click();
-  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
-  assert.deepEqual(toasts(page), ["Montage impossible — version déjà utilisée par un autre deck monté pour : Golgari Thug"]);
-  assert.deepEqual(builds(page), []);
+  assert.match(buttonTitle(page), /1 dont l'édition est déjà dans un autre deck/, "pastille du bouton");
+  assertBuildBlocked(page, doc);
 });
 
 test("montage : sans réponse de l'API du deck, repli sur le recoupement, sans erreur", async (t) => {
@@ -516,7 +522,7 @@ test("montage : sans réponse de l'API du deck, repli sur le recoupement, sans e
   await waitFor(() => builds(page).length > 0, 2000, "montage envoyé");
   const cards = builds(page)[0].payload.cards;
   assert.deepEqual(cards.find((c) => c.name === "Golgari Thug"), { name: "Golgari Thug", qty: 1, versions: [{ code: "ZOwRD", qty: 1 }] });
-  assert.deepEqual(toasts(page), ["Deck marqué comme monté, stock décrémenté."]);
+  assert.deepEqual(toasts(page), ["Deck monté : ses cartes sont sorties de ton stock libre."]);
   assert.deepEqual(reportsOf(page), []);
   // Contrôles suivants (le stock change ailleurs) : mêmes versions, pas de
   // nouvelle demande.
@@ -742,10 +748,7 @@ test("montage avec des proxies : une version différente bloque toujours", async
   await waitFor(() => doc.querySelector("#msm-shortage-warning") && /Golgari/.test(doc.querySelector("#msm-shortage-warning").textContent), 2000, "manques affichés");
   const confirm = doc.querySelector("#msm-confirm");
   assert.equal(confirm.textContent, "Confirmer le montage", "pas de proxies tant qu'une version différente bloque");
-  confirm.click();
-  await waitFor(() => toasts(page).length > 0, 2000, "refus expliqué");
-  assert.deepEqual(toasts(page), ["Montage impossible — version différente de ta collection pour : Birds of Paradise"]);
-  assert.deepEqual(builds(page), []);
+  assertBuildBlocked(page, doc);
 });
 
 test("montage avec des proxies : libellé normal dès que les cartes arrivent en stock", async (t) => {
@@ -1061,6 +1064,52 @@ test("éditions de la collection : aucune carte à changer, rien n'est écrit", 
   assert.deepEqual(page.reloads, []);
 });
 
+test("éditions de la collection : deck d'un autre compte, bouton désactivé avec sa raison", async (t) => {
+  const answers = { GET_DECK_PRINTINGS: { ok: true, printings: PAGE_PRINTINGS, ownedByMe: false } };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  const button = await waitEditionsButton(page);
+  await waitFor(() => button.getAttribute("aria-disabled") === "true", 2000, "bouton désactivé");
+  assert.ok(button.classList.contains("msm-disabled"));
+  assert.match(button.title, /\nCe deck n'est pas à toi : Moxfield ne te laisse pas changer ses éditions\.$/);
+  assert.match(button.getAttribute("aria-label"), /— Ce deck n'est pas à toi/);
+  assert.equal(button.querySelector(".msm-editions-badge").textContent, "1", "nombre de cartes gardé");
+  // Un clic n'écrit rien, mais la raison est dite (pas seulement au survol).
+  button.click();
+  await waitFor(() => toasts(page).length > 0, 2000, "raison affichée");
+  assert.deepEqual(toasts(page), ["Ce deck n'est pas à toi : Moxfield ne te laisse pas changer ses éditions."]);
+  assert.deepEqual(sentOf(page, "PLAN_OWNED_EDITIONS"), []);
+});
+
+test("éditions de la collection : deck d'un autre compte appris après l'affichage du bouton, bouton désactivé aussitôt", async (t) => {
+  let release;
+  const pending = new Promise((resolve) => (release = resolve));
+  const answer = { ok: true, printings: PAGE_PRINTINGS, ownedByMe: false };
+  const page = openBarPage((msg) => (msg.type === "GET_DECK_PRINTINGS" ? pending.then(() => answer) : undefined));
+  t.after(page.close);
+  const button = await waitEditionsButton(page);
+  assert.equal(button.getAttribute("aria-disabled"), null, "pas encore lu");
+  release();
+  await waitFor(() => button.getAttribute("aria-disabled") === "true", 2000, "bouton désactivé dès la réponse");
+});
+
+test("éditions de la collection : deck à toi (ou inconnu), bouton actif", async (t) => {
+  for (const ownedByMe of [true, undefined]) {
+    const answers = {
+      GET_DECK_PRINTINGS: { ok: true, printings: PAGE_PRINTINGS, ownedByMe },
+      PLAN_OWNED_EDITIONS: { ok: true, plan: [], skipped: [{ name: "Birds of Paradise", reason: "no-other-edition" }] },
+    };
+    const page = openBarPage((msg) => answers[msg.type]);
+    t.after(page.close);
+    const button = await waitEditionsButton(page);
+    await waitFor(() => sentOf(page, "GET_DECK_PRINTINGS").length > 0, 2000, "deck lu");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(button.getAttribute("aria-disabled"), null);
+    button.click();
+    await waitFor(() => sentOf(page, "PLAN_OWNED_EDITIONS").length === 1, 2000, "proposition demandée");
+  }
+});
+
 test("éditions de la collection : proposition impossible, raison affichée", async (t) => {
   const answers = { PLAN_OWNED_EDITIONS: { ok: false, code: "not-logged-in", error: "Pas connecté à Moxfield" } };
   const page = openBarPage((msg) => answers[msg.type]);
@@ -1107,7 +1156,12 @@ test("éditions de la collection : bilan d'un arrêt en cours de route après le
   assert.deepEqual(toasts(page), ["1 carte passée, puis arrêt : Moxfield injoignable"]);
 });
 
-test("éditions de la collection : cartes impossibles à changer plus comptées sur le bouton (terrains de base)", async (t) => {
+const LEFT_BIRDS =
+  "1 carte ne peut pas passer sur une de tes éditions : Birds of Paradise — pas assez d'exemplaires dans une même édition de ta collection pour toute la ligne du deck.";
+
+// Constaté en vrai (novembre 2026) : après un clic, le bouton disparaissait
+// alors que la page montrait encore des cartes d'une autre édition.
+test("éditions de la collection : cartes impossibles à changer, bouton gardé mais désactivé, avec la raison de chacune", async (t) => {
   const answers = {
     PLAN_OWNED_EDITIONS: {
       ok: true,
@@ -1120,14 +1174,30 @@ test("éditions de la collection : cartes impossibles à changer plus comptées 
   };
   const page = openBarPage((msg) => answers[msg.type]);
   t.after(page.close);
-  (await waitEditionsButton(page)).click();
+  const button = await waitEditionsButton(page);
+  button.click();
   await waitFor(() => toasts(page).length > 0, 2000, "raison affichée");
   assert.ok(toasts(page).some((m) => m.includes("Birds of Paradise — pas assez d'exemplaires dans une même édition")));
   assert.ok(toasts(page).some((m) => m.includes("Golgari Thug — tes exemplaires des éditions possédées sont déjà dans d'autres decks montés")));
-  await waitFor(() => !editionsShown(page), 2000, "bouton masqué");
-  // Toujours masqué au contrôle suivant de la page.
+  // Rien à changer n'est pas une erreur : pas de message rouge (retour
+  // utilisateur, novembre 2026 : « cette erreur qui fait peur »).
+  assert.equal(page.win.document.querySelector(".msm-toast-error"), null);
+  await waitFor(() => button.getAttribute("aria-disabled") === "true", 2000, "bouton désactivé");
+  // Toujours là au contrôle suivant de la page.
   await new Promise((r) => setTimeout(r, 700));
-  assert.ok(!editionsShown(page));
+  assert.ok(editionsShown(page), "bouton toujours affiché");
+  assert.ok(button.classList.contains("msm-disabled"));
+  // Pas de pastille : un nombre se lirait « à faire ».
+  assert.equal(button.querySelector(".msm-editions-badge"), null);
+  // Golgari Thug n'est pas d'une autre édition sur la page : pas annoncée.
+  assert.equal(button.title, "Utiliser mes éditions\n" + LEFT_BIRDS);
+  assert.equal(button.getAttribute("aria-label"), "Utiliser mes éditions — " + LEFT_BIRDS);
+  // Un nouveau clic ne relance rien : il redit pourquoi.
+  const before = toasts(page).length;
+  button.click();
+  await waitFor(() => toasts(page).length > before, 2000, "raison redite");
+  assert.equal(toasts(page).at(-1), LEFT_BIRDS);
+  assert.equal(sentOf(page, "PLAN_OWNED_EDITIONS").length, 1, "pas de nouvelle recherche");
 });
 
 test("éditions de la collection : cartes impossibles à changer, retenues par deck jusqu'à la fermeture de l'onglet", async (t) => {
@@ -1135,14 +1205,115 @@ test("éditions de la collection : cartes impossibles à changer, retenues par d
     openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", null, "Commander", (win) => {
       win.sessionStorage.setItem("msmOwnedEditionsUnfixable", JSON.stringify(unfixable));
     });
-  const same = remembered({ abc123: ["birds of paradise"] });
+  const same = remembered({ abc123: { "birds of paradise": "not-enough" } });
   t.after(same.close);
-  await waitFor(() => buttonTitle(same).includes("dispo"), 2000, "faisabilité affichée");
-  await new Promise((r) => setTimeout(r, 300));
-  assert.ok(!editionsShown(same), "même deck : plus comptée");
-  const other = remembered({ autre: ["birds of paradise"] });
+  const button = await waitEditionsButton(same);
+  await waitFor(() => button.getAttribute("aria-disabled") === "true", 2000, "même deck : désactivé");
+  assert.ok(button.title.endsWith(LEFT_BIRDS));
+  // Ancien format (liste de noms, sans raison) : onglet resté ouvert
+  // pendant une mise à jour de l'extension.
+  const old = remembered({ abc123: ["birds of paradise"] });
+  t.after(old.close);
+  const oldButton = await waitEditionsButton(old);
+  await waitFor(() => oldButton.getAttribute("aria-disabled") === "true", 2000, "ancien format : désactivé");
+  const other = remembered({ autre: { "birds of paradise": "not-enough" } });
   t.after(other.close);
-  await waitEditionsButton(other);
+  const otherButton = await waitEditionsButton(other);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(otherButton.getAttribute("aria-disabled"), null, "autre deck : actif");
+});
+
+test("éditions de la collection : des cartes à changer et d'autres impossibles, bouton actif qui annonce les deux", async (t) => {
+  const answers = { PLAN_OWNED_EDITIONS: { ok: true, plan: [], skipped: [] } };
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", (msg) => answers[msg.type], "Commander", (win) => {
+    win.sessionStorage.setItem("msmOwnedEditionsUnfixable", JSON.stringify({ abc123: { "birds of paradise": "not-enough" } }));
+    // Une deuxième carte du deck possédée dans une autre édition (la
+    // première marque de la page est dans Considering, hors du deck).
+    const marker = win.document.querySelector('[id^="collection_full_"][id*="_mainboard_"]');
+    marker.id = marker.id.replace("collection_full_", "collection_pt_");
+  });
+  t.after(page.close);
+  const button = await waitEditionsButton(page);
+  await waitFor(() => button.title.includes("ne peut pas passer"), 2000, "carte impossible annoncée");
+  assert.equal(button.getAttribute("aria-disabled"), null, "il reste une carte à changer");
+  assert.equal(button.querySelector(".msm-editions-badge").textContent, "1", "seulement la carte à changer");
+  assert.match(button.title, /^Utiliser mes éditions — 1 carte possédée dans une autre édition\nChange, dans ton deck Moxfield/);
+  assert.ok(button.title.endsWith("\n" + LEFT_BIRDS));
+  button.click();
+  await waitFor(() => sentOf(page, "PLAN_OWNED_EDITIONS").length === 1, 2000, "recherche lancée");
+  const [{ names }] = sentOf(page, "PLAN_OWNED_EDITIONS");
+  assert.equal(names.length, 1);
+  assert.ok(!names.includes("Birds of Paradise"), "carte impossible pas redemandée");
+});
+
+// Birds of Paradise : demandée en The List par le deck, possédée en M10.
+const BIRDS_PRINTINGS = { ...PAGE_PRINTINGS, EZA0w: { set: "plst", cn: "52★" } };
+const birdsOwnedInM10 = (qty) => ({ ...FULL_STOCK, "birds of paradise": { name: "Birds of Paradise", qty, printings: [{ set: "m10", cn: "168", qty: 1 }] } });
+const BIRDS_M10_ELSEWHERE = {
+  other: { name: "Autre deck", url: "", builtAt: 1, cards: [{ name: "Birds of Paradise", qty: 1, versions: [{ code: "BrM10", qty: 1, set: "m10", cn: "168" }] }] },
+};
+
+// Constaté en vrai (novembre 2026) : le bouton annonçait 8 cartes, puis un
+// clic n'en changeait aucune (exemplaires déjà dans d'autres decks montés).
+test("éditions de la collection : carte prévue impossible à changer avant tout clic, bouton désactivé sans pastille", async (t) => {
+  const page = openDeckPage(
+    { stock: birdsOwnedInM10(0), builtDecks: BIRDS_M10_ELSEWHERE },
+    "fr",
+    printingsAnswer({ ok: true, printings: BIRDS_PRINTINGS })
+  );
+  t.after(page.close);
+  await waitFor(() => editionsShown(page) && editionsButton(page).getAttribute("aria-disabled") === "true", 2000, "bouton désactivé");
+  const button = editionsButton(page);
+  const reason =
+    "1 carte ne peut pas passer sur une de tes éditions : Birds of Paradise — tes exemplaires des éditions possédées sont déjà dans d'autres decks montés.";
+  assert.equal(button.querySelector(".msm-editions-badge"), null, "pas de nombre sur un bouton qui ne changerait rien");
+  assert.equal(button.title, "Utiliser mes éditions\n" + reason);
+  button.click();
+  await waitFor(() => toasts(page).length > 0, 2000, "raison affichée");
+  assert.deepEqual(toasts(page), [reason]);
+  assert.equal(page.win.document.querySelector(".msm-toast-error"), null, "pas une erreur");
+  assert.deepEqual(sentOf(page, "PLAN_OWNED_EDITIONS"), [], "aucun appel à Moxfield");
+});
+
+test("éditions de la collection : dans le doute, la carte reste proposée", async (t) => {
+  const cases = [
+    // Édition possédée libre : changement possible.
+    [{ stock: birdsOwnedInM10(1), builtDecks: {} }, { ok: true, printings: BIRDS_PRINTINGS }],
+    // Édition demandée par le deck inconnue (API du deck pas lue).
+    [{ stock: birdsOwnedInM10(0), builtDecks: BIRDS_M10_ELSEWHERE }, { ok: false, code: "not-logged-in" }],
+    // Collection sans éditions (ancien import).
+    [{ stock: FULL_STOCK, builtDecks: BIRDS_M10_ELSEWHERE }, { ok: true, printings: BIRDS_PRINTINGS }],
+  ];
+  for (const [state, answer] of cases) {
+    const page = openDeckPage(state, "fr", printingsAnswer(answer));
+    t.after(page.close);
+    const button = await waitEditionsButton(page);
+    await waitFor(() => sentOf(page, "GET_DECK_PRINTINGS").length > 0, 2000, "deck demandé");
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(button.getAttribute("aria-disabled"), null);
+    assert.equal(button.querySelector(".msm-editions-badge").textContent, "1");
+  }
+});
+
+test("éditions de la collection : cartes laissées regroupées par raison dans le message", async (t) => {
+  const answers = {
+    PLAN_OWNED_EDITIONS: {
+      ok: true,
+      plan: [],
+      skipped: [
+        { name: "Birds of Paradise", reason: "taken" },
+        { name: "Swamp", reason: "not-enough" },
+        { name: "Golgari Thug", reason: "taken" },
+      ],
+    },
+  };
+  const page = openBarPage((msg) => answers[msg.type]);
+  t.after(page.close);
+  (await waitEditionsButton(page)).click();
+  await waitFor(() => toasts(page).length > 0, 2000, "bilan affiché");
+  assert.deepEqual(toasts(page), [
+    "Aucune carte n'a pu être passée sur une édition de ta collection. Birds of Paradise, Golgari Thug — tes exemplaires des éditions possédées sont déjà dans d'autres decks montés ; Swamp — pas assez d'exemplaires dans une même édition de ta collection pour toute la ligne du deck",
+  ]);
 });
 
 test("éditions de la collection : carte modifiée ailleurs entre-temps, toujours comptée", async (t) => {
@@ -1258,7 +1429,7 @@ test("cœur : ajoute le deck à « Mes decks », puis l'en retire", async (t) =>
   likeButton(page).click();
   await waitFor(() => likeButton(page).classList.contains("msm-liked"), 2000, "cœur plein");
   assert.equal(page.sent.find((m) => m.type === "FOLLOW_DECK").payload.deckId, "abc123");
-  assert.match(page.win.document.querySelector(".msm-toast").textContent, /ajouté à « Mes decks »/);
+  assert.match(page.win.document.querySelector(".msm-toast-text").textContent, /ajouté à « Mes decks »/);
   assert.match(likeButton(page).title, /^Retirer ce deck/);
 
   likeButton(page).click();
@@ -1314,7 +1485,7 @@ test("proxies déclarés sur Moxfield : pas bloquants sur la pastille, annoncés
   t.after(page.close);
   // Sans la marque proxy, Birds of Paradise (autre version) bloque.
   await waitFor(() => /proxy déclaré/.test(buttonTitle(page)), 3000, "proxy déclaré pris en compte");
-  assert.match(buttonText(page), /^Marquer comme monté physiquement — montable : 3\/3 cartes disponibles/);
+  assert.match(buttonText(page), /^Marquer comme monté physiquement — montable : 3\/3 exemplaires disponibles/);
   assert.match(buttonTitle(page), /1 proxy déclaré sur Moxfield/);
 });
 
@@ -1436,4 +1607,114 @@ test("fenêtre de montage : « ? » déplie la légende des boutons", async (t) 
   assert.equal(legend.querySelectorAll(".msm-legend-icon svg").length, 8);
   toggle.click();
   assert.equal(legend.hidden, true);
+});
+
+// --- Ergonomie (docs/charte-ergonomique.md) ---
+
+const modalButtons = (doc) =>
+  [...doc.querySelectorAll(".msm-modal-actions button")].filter((b) => !b.hidden).map((b) => [b.textContent, b.className]);
+
+test("deck monté inchangé : « Fermer » est l'action principale, « Démonter » secondaire en rouge", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(BUILT_CARDS) });
+  t.after(page.close);
+  await waitFor(() => page.button() && page.button().classList.contains("msm-btn-built"), 2000, "deck monté");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-deck-changes") && /n'a pas changé/.test(doc.querySelector("#msm-deck-changes").textContent), 3000, "liste vérifiée");
+  assert.deepEqual(modalButtons(doc), [
+    ["Démonter", "msm-danger"],
+    ["Fermer", "msm-primary"],
+  ]);
+  assert.match(doc.querySelector(".msm-modal").textContent, /rend ses cartes à ton stock libre et oublie ses proxies/);
+});
+
+test("deck monté modifié : « Mettre à jour le montage » seul bouton principal", async (t) => {
+  const cards = BUILT_CARDS.map((c) => (c.name === "Golgari Thug" ? { ...c, versions: [{ code: "ANCIEN", qty: 1 }] } : c));
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: builtDeck(cards) });
+  t.after(page.close);
+  await waitFor(() => buttonText(page).includes("la liste a changé"), 2000, "deck signalé comme modifié");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-update") && !doc.querySelector("#msm-update").hidden, 3000, "mise à jour proposée");
+  assert.deepEqual(modalButtons(doc), [
+    ["Démonter", "msm-danger"],
+    ["Fermer", ""],
+    ["Mettre à jour le montage", "msm-primary"],
+  ]);
+});
+
+test("fenêtre de montage : focus sur le titre, Tab retenu dedans, Échap ferme et rend le focus au bouton", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const win = page.win;
+  assert.equal(doc.activeElement, doc.querySelector("#msm-modal-title"), "focus dans la fenêtre dès l'ouverture");
+
+  const tab = (shiftKey) => doc.activeElement.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }));
+  const first = doc.querySelector("#msm-help-toggle");
+  const last = doc.querySelector("#msm-confirm");
+  tab(true);
+  assert.equal(doc.activeElement, last, "Maj+Tab depuis le titre : dernier bouton");
+  tab(false);
+  assert.equal(doc.activeElement, first, "Tab depuis le dernier bouton : retour au premier");
+  tab(true);
+  assert.equal(doc.activeElement, last, "Maj+Tab depuis le premier : dernier bouton");
+
+  doc.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape" }));
+  assert.equal(doc.querySelector(".msm-overlay"), null, "Échap = Annuler");
+  assert.equal(doc.activeElement, page.button(), "focus rendu au bouton qui l'a ouverte");
+  assert.deepEqual(builds(page), []);
+});
+
+test("fenêtre de montage : liste vide, « Confirmer » désactivé avec la raison, réactivé ensuite", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  const doc = await openBuildModal(page);
+  const confirm = doc.querySelector("#msm-confirm");
+  const hint = doc.querySelector("#msm-action-hint");
+  assert.equal(confirm.disabled, false);
+  assert.equal(hint.hidden, true);
+  const textarea = doc.querySelector("#msm-cards-textarea");
+  const list = textarea.value;
+  textarea.value = "";
+  textarea.dispatchEvent(new page.win.Event("input"));
+  await waitFor(() => confirm.disabled, 2000, "bouton désactivé");
+  assert.equal(hint.hidden, false);
+  assert.match(hint.textContent, /^Aucune carte reconnue/);
+  textarea.value = list;
+  textarea.dispatchEvent(new page.win.Event("input"));
+  await waitFor(() => !confirm.disabled, 2000, "bouton réactivé");
+  assert.equal(hint.hidden, true);
+  assert.equal(confirm.getAttribute("aria-describedby"), null);
+});
+
+test("boutons de la barre : focus clavier visible (pas de no-outline)", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  await waitFor(() => likeButton(page), 2000, "boutons affichés");
+  const buttons = [...page.win.document.querySelectorAll(".msm-bar-btn")];
+  assert.equal(buttons.length, 3);
+  for (const b of buttons) assert.ok(!b.classList.contains("no-outline"), b.className);
+  const css = fs.readFileSync(path.join(__dirname, "..", "content.css"), "utf8");
+  assert.match(css, /\.msm-bar-btn:focus-visible \{\s*outline: 2px solid/);
+});
+
+test("toasts : annoncés (status, alert pour une erreur) et refermables", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {}, followedDecks: {} });
+  t.after(page.close);
+  const doc = page.win.document;
+  await waitFor(() => likeButton(page), 2000, "cœur affiché");
+  likeButton(page).click();
+  await waitFor(() => doc.querySelector(".msm-toast"), 2000, "toast affiché");
+  const info = doc.querySelector(".msm-toast");
+  assert.equal(info.getAttribute("role"), "status");
+  const close = info.querySelector(".msm-toast-close");
+  assert.equal(close.getAttribute("aria-label"), "Fermer");
+  close.click();
+  assert.equal(doc.querySelector(".msm-toast"), null, "fermé au clic");
+
+  const modal = await openBuildModal(page);
+  modal.querySelector("#msm-paste-clipboard").click();
+  await waitFor(() => doc.querySelector(".msm-toast-error"), 2000, "erreur affichée");
+  assert.equal(doc.querySelector(".msm-toast-error").getAttribute("role"), "alert");
 });

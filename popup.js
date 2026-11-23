@@ -95,12 +95,15 @@ function renderBuiltDecks(state) {
         actions.appendChild(actionButton(tn("replaceProxies", count), title, () => replaceProxies(deckId)));
       }
     }
-    actions.appendChild(
-      actionButton(t("unbuild"), "", async () => {
-        await send("TOGGLE_DECK_BUILT", { deckId, deckName: deck.name, url: deck.url, cards: [], built: false });
-        refresh();
-      })
-    );
+    // Réponse toujours lue : un échec ne doit pas passer inaperçu.
+    const unbuild = actionButton(t("unbuild"), "", async () => {
+      const res = await send("TOGGLE_DECK_BUILT", { deckId, deckName: deck.name, url: deck.url, cards: [], built: false });
+      document.getElementById("built-status").textContent =
+        res && res.ok ? t("unbuildDoneNamed", deck.name) : t("errorPrefix", (res && res.error) || t("unknownError"));
+      refresh();
+    });
+    unbuild.className = "danger-secondary";
+    actions.appendChild(unbuild);
     row.appendChild(nameCell);
     row.appendChild(actions);
     list.appendChild(row);
@@ -170,6 +173,9 @@ function ownedQty(freeQty, inDecksQty) {
 
 // Lignes dépliées (détail des decks), conservées entre deux rafraîchissements.
 const expandedCards = new Set();
+// Ligne qui vient d'être dépliée ou repliée : son bouton reprend le focus
+// une fois le tableau reconstruit.
+let focusAfterRender = null;
 
 // Une collection complète compte des milliers de cartes : construire toutes
 // les lignes rendait l'ouverture du popup lente (plusieurs secondes). Le
@@ -222,18 +228,24 @@ function renderStock(state, filter, onlyInDecks) {
     const u = usage.get(card.key);
     const expanded = u && expandedCards.has(card.key);
     const tr = document.createElement("tr");
-    if (u) tr.className = "has-decks";
+    if (u) {
+      tr.className = "has-decks";
+      tr.dataset.key = card.key;
+    }
     tr.innerHTML = `
       <td>${escapeHtml(card.name)}</td>
       <td class="${card.qty < 0 ? "negative" : ""}">${card.qty}</td>
-      <td class="in-decks">${u ? `${u.total} ${expanded ? "▾" : "▸"}` : "—"}</td>
+      <td class="in-decks">${u ? `<button type="button" aria-expanded="${expanded}">${u.total} ${expanded ? "▾" : "▸"}</button>` : "—"}</td>
     `;
     if (u) {
+      // Toute la ligne réagit au clic ; le bouton la rend utilisable au clavier.
       tr.addEventListener("click", () => {
         if (expandedCards.has(card.key)) expandedCards.delete(card.key);
         else expandedCards.add(card.key);
-        refresh();
+        focusAfterRender = card.key;
+        rerender();
       });
+      tr.querySelector("button").setAttribute("aria-label", t("stockShowDecks", card.name, u.total));
     }
     table.appendChild(tr);
 
@@ -251,6 +263,12 @@ function renderStock(state, filter, onlyInDecks) {
   }
   container.innerHTML = "";
   container.appendChild(table);
+  // Ligne dépliée au clavier : le focus reste sur son bouton.
+  if (focusAfterRender) {
+    const row = [...table.querySelectorAll("tr.has-decks")].find((r) => r.dataset.key === focusAfterRender);
+    focusAfterRender = null;
+    if (row) row.querySelector("button").focus();
+  }
   if (entries.length > MAX_STOCK_ROWS) {
     const more = document.createElement("p");
     more.className = "hint";
@@ -259,18 +277,35 @@ function renderStock(state, filter, onlyInDecks) {
   }
 }
 
-// Dernier état lu, pour le guide de démarrage (cf. renderOnboarding).
+// Dernier état lu, pour le guide de démarrage (cf. renderOnboarding) et le
+// filtre du stock.
 let lastState = null;
 
 async function refresh() {
   const state = await loadState();
   lastState = state;
   renderOnboarding();
+  renderBuiltDecks(state);
+  renderStockFromInputs(state);
+}
+
+function renderStockFromInputs(state) {
   const filter = document.getElementById("stock-filter").value;
   const onlyInDecks = document.getElementById("stock-only-in-decks").checked;
-  renderBuiltDecks(state);
   renderStock(state, filter, onlyInDecks);
 }
+
+// Filtre, case « seulement dans des decks », ligne dépliée : seul le tableau
+// change, l'état déjà lu suffit (il pèse plusieurs Mo sur une grosse
+// collection : pas de GET_STATE à chaque frappe). Ses changements arrivent
+// par refresh (cf. storage.onChanged).
+function rerender() {
+  if (lastState) renderStockFromInputs(lastState);
+  else refresh();
+}
+
+const STOCK_FILTER_DELAY_MS = 200;
+let stockFilterTimer = null;
 
 async function importCSVText(csvText, status) {
   if (!csvText || !csvText.trim()) {
@@ -320,8 +355,11 @@ document.getElementById("import-paste-btn").addEventListener("click", async () =
   document.getElementById("csv-input").value = "";
 });
 
-document.getElementById("stock-filter").addEventListener("input", refresh);
-document.getElementById("stock-details").addEventListener("toggle", refresh);
+document.getElementById("stock-filter").addEventListener("input", () => {
+  clearTimeout(stockFilterTimer);
+  stockFilterTimer = setTimeout(rerender, STOCK_FILTER_DELAY_MS);
+});
+document.getElementById("stock-details").addEventListener("toggle", rerender);
 
 // --- Mes decks (cf. handleGetDecks dans background.js) ---
 // Construit seulement section dépliée. À l'ouverture, les decks jamais lus
@@ -452,6 +490,7 @@ async function renderDecks() {
         box.type = "checkbox";
         box.className = "deck-shop";
         box.title = t("shoppingSelect");
+        box.setAttribute("aria-label", t("shoppingSelectDeck", d.name));
         box.checked = shoppingSelection.has(d.deckId);
         box.addEventListener("change", () => {
           if (box.checked) shoppingSelection.add(d.deckId);
@@ -531,7 +570,7 @@ document.getElementById("deck-add-btn").addEventListener("click", async () => {
   }
   renderDecks();
 });
-document.getElementById("stock-only-in-decks").addEventListener("change", refresh);
+document.getElementById("stock-only-in-decks").addEventListener("change", rerender);
 
 // --- Historique ---
 // Libellés calculés par le service worker (cf. handleGetHistory). Construit
@@ -803,7 +842,10 @@ document.getElementById("sync-history").addEventListener("toggle", (e) => {
 document.getElementById("reset-btn").addEventListener("click", async () => {
   const warning = syncMeta?.enabled ? `\n\n${t("resetSyncWarning")}` : "";
   if (confirm(t("resetConfirm") + warning)) {
-    await send("RESET_STOCK");
+    const res = await send("RESET_STOCK");
+    document.getElementById("reset-status").textContent = !res || !res.ok
+      ? t("errorPrefix", (res && res.error) || t("unknownError"))
+      : t(res.refetched ? "resetDoneRefetched" : "resetDone");
     refresh();
   }
 });

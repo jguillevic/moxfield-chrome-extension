@@ -496,8 +496,27 @@ test("pas d'ajustement manuel du stock : Moxfield est la seule source de vérit�
 test("réinitialisation : stock et decks montés vidés", async () => {
   const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 1 } }, builtDecks: {} });
   await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
-  assert.deepEqual(await bg.send({ type: "RESET_STOCK" }), { ok: true });
+  bg.setCollectionMeta({ enabled: false });
+  assert.deepEqual(await bg.send({ type: "RESET_STOCK" }), { ok: true, refetched: false });
   assert.deepEqual(await bg.state(), { stock: {}, builtDecks: {} });
+});
+
+test("réinitialisation : la collection Moxfield est récupérée de nouveau aussitôt", async () => {
+  const bg = loadBackground(
+    { stock: { "sol ring": { name: "Sol Ring", qty: 2 } }, builtDecks: {} },
+    { moxfieldCSV: csv("3,0,Sol Ring,,,,,,,,,,") }
+  );
+  await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
+  assert.deepEqual(await bg.send({ type: "RESET_STOCK" }), { ok: true, refetched: true });
+  const state = await bg.state();
+  assert.deepEqual(state.builtDecks, {}, "decks démontés");
+  assert.deepEqual(quantities(state), { "sol ring": 3 }, "stock reconstruit depuis la collection");
+});
+
+test("réinitialisation : sans session Moxfield, stock vide et refetched à false", async () => {
+  const bg = loadBackground({ stock: { "sol ring": { name: "Sol Ring", qty: 2 } }, builtDecks: {} });
+  assert.deepEqual(await bg.send({ type: "RESET_STOCK" }), { ok: true, refetched: false });
+  assert.deepEqual((await bg.state()).stock, {});
 });
 
 test("chaque modification marque l'état à synchroniser", async () => {
@@ -725,9 +744,9 @@ test("historique : montage, mise à jour et démontage notés, le plus récent e
   await unbuild(bg, "a");
   const entries = await historyOf(bg);
   assert.deepEqual(entries.map((e) => e.title), [
-    "Deck « Deck a » démonté : 2 cartes rendues au stock",
+    "Deck « Deck a » démonté : 2 exemplaires rendus au stock",
     "Montage de « Deck a » mis à jour : 1 carte modifiée",
-    "Deck « Deck a » monté : 1 carte retirée du stock libre",
+    "Deck « Deck a » monté : 1 exemplaire retiré du stock libre",
   ]);
   assert.deepEqual(entries[1].changes, [{ name: "Counterspell", from: 0, to: 1 }]);
   assert.ok(entries.every((e) => e.otherDevice === false && typeof e.at === "number"));
@@ -757,7 +776,7 @@ test("historique : réinitialisation notée, l'historique est conservé", async 
   await bg.send({ type: "RESET_STOCK" });
   const entries = await historyOf(bg);
   assert.equal(entries.length, 2);
-  assert.equal(entries[0].title, "Stock réinitialisé (1 deck démonté)");
+  assert.equal(entries[0].title, "Tout remis à zéro (1 deck démonté)");
 });
 
 test("historique : action venant d'un autre PC signalée", async () => {
@@ -1301,7 +1320,7 @@ test("navigateur en anglais : erreurs et historique en anglais", async () => {
   const empty = await bg.send({ type: "IMPORT_CSV_TEXT", csvText: CSV_HEADER });
   assert.equal(empty.error, "Empty or invalid CSV");
   await build(bg, "a", [{ name: "Sol Ring", qty: 1 }]);
-  assert.deepEqual((await historyOf(bg)).map((e) => e.title), ["Deck “Deck a” built: 1 card taken out of the free stock"]);
+  assert.deepEqual((await historyOf(bg)).map((e) => e.title), ["Deck “Deck a” built: 1 copy taken from free stock"]);
 });
 
 // L'historique est synchronisé entre des PC qui n'ont pas forcément la même
@@ -1312,7 +1331,7 @@ test("historique noté en français, affiché en anglais", async () => {
   await build(fr, "a", [{ name: "Sol Ring", qty: 1 }]);
   assert.match((await historyOf(fr))[0].title, /^Deck « Deck a » monté/);
   const en = loadBackground(fr.raw(), { lang: "en" });
-  assert.equal((await historyOf(en))[0].title, "Deck “Deck a” built: 1 card taken out of the free stock");
+  assert.equal((await historyOf(en))[0].title, "Deck “Deck a” built: 1 copy taken from free stock");
 });
 
 // --- Détail par édition et versions des decks montés ---
@@ -1503,8 +1522,8 @@ test("proxies : jamais pris au stock au montage, ni rendus au démontage", async
   state = await bg.state();
   assert.deepEqual(quantities(state), { "sol ring": 1 });
   const [unbuilt, built] = await historyOf(bg);
-  assert.equal(built.title, "Deck « Deck a » monté : 1 carte retirée du stock libre (+ 3 proxies)");
-  assert.equal(unbuilt.title, "Deck « Deck a » démonté : 1 carte rendue au stock (+ 3 proxies)");
+  assert.equal(built.title, "Deck « Deck a » monté : 1 exemplaire retiré du stock libre (+ 3 proxies)");
+  assert.equal(unbuilt.title, "Deck « Deck a » démonté : 1 exemplaire rendu au stock (+ 3 proxies)");
 });
 
 test("proxies : valeurs reçues invalides retirées plutôt qu'enregistrées", async () => {
@@ -1954,6 +1973,39 @@ test("éditions de la collection : demandes invalides refusées sans appel", asy
   }
   assert.equal((await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123" } })).ok, false);
   assert.deepEqual(bg.moxfieldCalls, []);
+});
+
+// Deck d'un autre compte : ownerUserId (réponse de l'API du deck) différent
+// du compte connecté (cookie refresh_token_ABC12 des tests).
+function othersDeck(extra = {}) {
+  const { deck, options } = editableDeck();
+  options.moxfieldDeck = JSON.stringify({ ...deck, ownerUserId: "XN1JV", authorsCanEdit: false, ...extra });
+  return options;
+}
+
+test("deck d'un autre compte : signalé à la page avec ses éditions", async () => {
+  const ask = async (options) => (await loadBackground(undefined, options).send({ type: "GET_DECK_PRINTINGS", payload: { deckId: "abc123" } })).ownedByMe;
+  assert.equal(await ask(othersDeck()), false);
+  assert.equal(await ask(othersDeck({ ownerUserId: "ABC12" })), true);
+  assert.equal(await ask(othersDeck({ authorsCanEdit: true })), null, "co-auteur possible : on ne sait pas");
+  assert.equal(await ask(editableDeck().options), null, "propriétaire absent de la réponse");
+});
+
+test("deck d'un autre compte : « Utiliser mes éditions » refusé sans rien écrire, ni rapport", async () => {
+  const bg = loadBackground(undefined, othersDeck());
+  const planned = await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names: ["Golgari Thug"] } });
+  assert.deepEqual(planned, { ok: false, code: "not-owner", error: "Ce deck n'est pas à toi : Moxfield ne te laisse pas changer ses éditions." });
+  const applied = await bg.send({ type: "APPLY_OWNED_EDITIONS", payload: { deckId: "abc123", plan: [GOLGARI_TO_DDS] } });
+  assert.equal(applied.code, "not-owner");
+  assert.deepEqual(bg.moxfieldCalls.filter((c) => c.method !== "GET"), [], "aucune écriture");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(bg.sentry.length, 0, "refus expliqué : pas de rapport");
+});
+
+test("deck du compte connecté : « Utiliser mes éditions » fonctionne", async () => {
+  const bg = loadBackground(undefined, othersDeck({ ownerUserId: "ABC12" }));
+  const planned = await bg.send({ type: "PLAN_OWNED_EDITIONS", payload: { deckId: "abc123", names: ["Golgari Thug"] } });
+  assert.deepEqual(planned.plan, [GOLGARI_TO_DDS]);
 });
 
 // --- Sauvegarde Drive à télécharger ---

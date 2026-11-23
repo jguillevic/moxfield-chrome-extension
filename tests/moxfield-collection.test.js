@@ -7,7 +7,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, declaredProxies, readCardEditions, editionChangeBody } = require("../moxfield-collection.js");
+const { createMoxfieldCollection, computeCollectionDiff, extractDeckPrintings, deckEntries, deckCardList, declaredProxies, deckOwnedBy, readCardEditions, editionChangeBody } = require("../moxfield-collection.js");
 const { loadI18n, FIXTURES_DIR } = require("./helpers");
 
 // Réponse de l'API d'un deck : structure observée (novembre 2026), réduite
@@ -407,4 +407,17 @@ test("declaredProxies : marque proxy de l'entrée ou de chaque impression, Consi
   assert.deepEqual(declaredProxies(deck), { "Sol Ring": 2, Swamp: 1 });
   assert.deepEqual(deckCardList(deck).map((c) => [c.name, c.proxyQty]), [["Sol Ring", 2], ["Swamp", 1], ["Arcane Signet", undefined]]);
   assert.deepEqual(declaredProxies(DECK), {}, "aucune marque proxy dans la page de test");
+});
+
+test("deckOwnedBy : deck du compte connecté, d'un autre, ou impossible à dire", () => {
+  // ownerUserId : champ de la réponse de l'API d'un deck (confirmé via
+  // inspection réelle, novembre 2026), même identifiant que le suffixe du
+  // cookie refresh_token_<userId>.
+  assert.equal(deckOwnedBy({ ownerUserId: "XN1JV" }, "XN1JV"), true);
+  assert.equal(deckOwnedBy({ ownerUserId: "XN1JV", authorsCanEdit: false }, "ABC12"), false);
+  // Co-auteurs autorisés : désignés par leur seul pseudo, on ne peut pas savoir.
+  assert.equal(deckOwnedBy({ ownerUserId: "XN1JV", authorsCanEdit: true }, "ABC12"), null);
+  assert.equal(deckOwnedBy({ ownerUserId: "XN1JV" }, null), null, "pas connecté");
+  assert.equal(deckOwnedBy(DECK, "ABC12"), null, "champ absent");
+  assert.equal(deckOwnedBy(null, "ABC12"), null);
 });
