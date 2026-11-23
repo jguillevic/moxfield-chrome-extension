@@ -718,109 +718,178 @@ test("nouvelle version : numéro de la nouvelle version et de la version install
   assert.equal(p.$("update-summary").textContent, "Version 0.4.0 disponible (tu as la 0.3.0). 2 modifications sur GitHub depuis ta version :");
 });
 
-// --- Guide de démarrage ---
+// --- Aide : premiers pas et légende des boutons ---
 
 // Popup d'une nouvelle installation ; onboarding : réponse du service worker.
-function openGuide(onboarding = { ok: true, done: false, step: 0 }, extra = {}) {
+function openGuide(onboarding = { ok: true, done: false, deckHelpSeen: false }, extra = {}, lang = "fr") {
   let saved = onboarding;
-  return openPopup({
-    GET_COLLECTION_STATUS: collectionStatus({}),
-    GET_ONBOARDING: () => saved,
-    SET_ONBOARDING: (msg) => (saved = { ok: true, ...msg.payload }),
-    ...extra,
-  });
+  return openPopup(
+    {
+      GET_COLLECTION_STATUS: collectionStatus({}),
+      GET_ONBOARDING: () => saved,
+      SET_ONBOARDING: (msg) => (saved = { ...saved, ...msg.payload }),
+      ...extra,
+    },
+    lang
+  );
 }
-const guideTitle = (p) => p.$("onboarding-title").textContent;
 const savedGuide = (p) => p.sent.filter((m) => m.type === "SET_ONBOARDING").map((m) => m.payload);
+const tasks = (p) => [...p.$("onboarding-tasks").children];
+const taskTitles = (p) => tasks(p).map((li) => li.querySelector(".onboarding-task-title").textContent);
+const currentTask = (p) => p.$("onboarding-tasks").querySelector('[aria-current="step"]');
 
-test("guide de démarrage : affiché à la première installation, étape par étape jusqu'à la fin", async (t) => {
+test("aide : nouvelle installation, trois premiers pas visibles d'un coup, le premier à faire déplié", async (t) => {
   const p = openGuide();
   t.after(p.close);
   await settle();
   assert.equal(p.$("onboarding").hidden, false);
-  assert.equal(p.$("onboarding-progress").textContent, "Guide de démarrage — étape 1 sur 4");
-  assert.equal(guideTitle(p), "Récupère ta collection Moxfield");
-  assert.equal(p.$("onboarding-previous").hidden, true);
-  const titles = [];
-  for (let i = 0; i < 3; i++) {
-    p.$("onboarding-next").click();
-    await settle();
-    titles.push(guideTitle(p));
-  }
-  assert.deepEqual(titles, ["Repère les boutons sur la page d'un deck", "Monte ton premier deck", "Pour aller plus loin"]);
-  assert.equal(p.$("onboarding-next").textContent, "Terminer");
-  assert.equal(p.$("onboarding-skip").hidden, true);
-  p.$("onboarding-previous").click();
-  await settle();
-  assert.equal(guideTitle(p), "Monte ton premier deck");
-  p.$("onboarding-next").click();
-  p.$("onboarding-next").click(); // Terminer
-  await settle();
-  assert.equal(p.$("onboarding").hidden, true);
-  assert.deepEqual(savedGuide(p).at(-1), { done: true, step: 0 });
+  assert.equal(p.$("onboarding-title").textContent, "Bien démarrer");
+  assert.equal(p.$("onboarding-progress").textContent, "0/3 faits");
+  assert.deepEqual(taskTitles(p), ["1Récupère ta collection Moxfield", "2Ouvre un de tes decks sur Moxfield", "3Monte ton premier deck"]);
+  assert.equal(currentTask(p), tasks(p)[0]);
+  assert.match(currentTask(p).textContent, /la récupération|récupérée toute seule/, "la récupération se fait toute seule après la connexion");
+  assert.ok(currentTask(p).querySelector('a[href="https://moxfield.com/account/signin"]'), "lien de connexion à Moxfield");
+  assert.ok(p.$("onboarding-fetch"), "bouton de récupération (secours)");
+  assert.equal(tasks(p)[1].querySelector("a"), null, "tâches suivantes : titre seul");
+  assert.equal(p.$("onboarding-close").textContent, "Masquer l'aide");
+  assert.equal(p.$("help-btn").getAttribute("aria-expanded"), "true");
 });
 
-test("guide de démarrage : repris à l'étape où le popup a été fermé ; « Passer » le termine", async (t) => {
-  const p = openGuide({ ok: true, done: false, step: 2 });
+test("aide : chaque tâche cochée d'après l'état réel, la suivante dépliée avec le lien vers ses decks", async (t) => {
+  const p = openGuide(undefined, { GET_STATE: { ok: true, state: { stock: MOUNTED_STATE.stock, builtDecks: {} } } });
   t.after(p.close);
   await settle();
-  assert.equal(guideTitle(p), "Monte ton premier deck");
-  p.$("onboarding-skip").click();
-  await settle();
-  assert.equal(p.$("onboarding").hidden, true);
-  assert.deepEqual(savedGuide(p), [{ done: true, step: 0 }]);
+  assert.equal(p.$("onboarding-progress").textContent, "1/3 faits");
+  assert.ok(tasks(p)[0].classList.contains("done"));
+  assert.equal(tasks(p)[0].querySelector(".onboarding-status.done").textContent, "Collection récupérée : 2 cartes différentes.");
+  assert.equal(p.$("onboarding-fetch"), null, "collection déjà là : pas de bouton de récupération");
+  assert.equal(currentTask(p), tasks(p)[1]);
+  assert.equal(p.$("onboarding-decks-link").href, "https://moxfield.com/decks/personal");
+  assert.equal(p.$("onboarding-all-done").hidden, true);
 });
 
-test("guide de démarrage : pas affiché une fois terminé, rejouable depuis le bas du popup", async (t) => {
-  const p = openGuide({ ok: true, done: true, step: 0 });
+test("aide : tout fait (bulle vue sur la page d'un deck, deck monté) : « Terminer »", async (t) => {
+  const p = openGuide({ ok: true, done: false, deckHelpSeen: true }, { GET_STATE: { ok: true, state: MOUNTED_STATE } });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("onboarding-progress").textContent, "3/3 faits");
+  assert.equal(currentTask(p), null);
+  assert.equal(tasks(p)[1].querySelector(".onboarding-status.done").textContent, "Fait : tu as vu l'aide de la page d'un deck.");
+  assert.equal(tasks(p)[2].querySelector(".onboarding-status.done").textContent, "Tu as 2 decks montés.");
+  assert.equal(p.$("onboarding-all-done").hidden, false);
+  assert.equal(p.$("onboarding-close").textContent, "Terminer");
+  assert.equal(p.$("onboarding-close").className, "primary");
+  p.$("onboarding-close").click();
+  await settle();
+  assert.equal(p.$("onboarding").hidden, true);
+  assert.deepEqual(savedGuide(p), [{ done: true }]);
+  assert.equal(p.win.document.activeElement, p.$("help-btn"), "focus rendu au bouton « Aide »");
+});
+
+test("aide : bulle vue sur la page d'un deck pendant que le popup est ouvert : tâche cochée", async (t) => {
+  let onboarding = { ok: true, done: false, deckHelpSeen: false };
+  const p = openGuide(undefined, { GET_STATE: { ok: true, state: { stock: MOUNTED_STATE.stock, builtDecks: {} } }, GET_ONBOARDING: () => onboarding });
+  t.after(p.close);
+  await settle();
+  assert.equal(currentTask(p), tasks(p)[1]);
+  onboarding = { ok: true, done: false, deckHelpSeen: true };
+  p.storageChanged("moxfieldStockManagerOnboarding");
+  await settle();
+  assert.ok(tasks(p)[1].classList.contains("done"));
+  assert.equal(currentTask(p), tasks(p)[2]);
+});
+
+test("aide : liste pas reconstruite quand rien ne change (focus et message gardés)", async (t) => {
+  const p = openGuide();
+  t.after(p.close);
+  await settle();
+  const fetchBtn = p.$("onboarding-fetch");
+  fetchBtn.focus();
+  p.storageChanged("moxfieldStockManagerState");
+  await settle();
+  assert.equal(p.$("onboarding-fetch"), fetchBtn);
+  assert.equal(p.win.document.activeElement, fetchBtn);
+});
+
+test("aide : masquée, rouverte par « Aide » dans l'en-tête, focus sur son titre ; légende ouverte quand tout est fait", async (t) => {
+  const p = openGuide({ ok: true, done: true, deckHelpSeen: true }, { GET_STATE: { ok: true, state: MOUNTED_STATE } });
   t.after(p.close);
   await settle();
   assert.equal(p.$("onboarding").hidden, true);
-  p.$("onboarding-replay").click();
+  assert.equal(p.$("help-btn").getAttribute("aria-expanded"), "false");
+  assert.equal(p.$("help-btn").textContent.trim(), "? Aide");
+  assert.equal(p.$("onboarding-replay"), null, "plus de lien caché en bas du popup");
+  p.$("help-btn").click();
   await settle();
   assert.equal(p.$("onboarding").hidden, false);
-  assert.equal(guideTitle(p), "Récupère ta collection Moxfield");
-  assert.deepEqual(savedGuide(p), [{ done: false, step: 0 }]);
+  assert.equal(p.win.document.activeElement, p.$("onboarding-title"));
+  assert.equal(p.$("onboarding-legend").open, true, "premiers pas faits : c'est la légende qu'on vient chercher");
+  assert.deepEqual(savedGuide(p), [{ done: false }]);
+  p.$("help-btn").click();
+  await settle();
+  assert.equal(p.$("onboarding").hidden, true);
+  assert.deepEqual(savedGuide(p).at(-1), { done: true });
 });
 
-test("guide de démarrage : chaque étape montre où en est l'utilisateur", async (t) => {
-  const p = openGuide({ ok: true, done: false, step: 0 }, { GET_STATE: { ok: true, state: MOUNTED_STATE } });
+test("aide : légende avec les vraies icônes de la page d'un deck, tous les états, « montable ≠ monté » en tête", async (t) => {
+  const p = openGuide();
   t.after(p.close);
   await settle();
-  assert.equal(p.$("onboarding-body").querySelector(".onboarding-status.done").textContent, "✓ Collection récupérée : 2 cartes différentes.");
-  assert.equal(p.$("onboarding-fetch"), null, "collection déjà là : pas de bouton de récupération");
-  p.$("onboarding-next").click();
-  await settle();
-  assert.deepEqual([...p.$("onboarding-body").querySelectorAll(".legend-badge")].map((b) => b.textContent), ["OK", "3"]);
-  p.$("onboarding-next").click();
-  await settle();
-  assert.equal(p.$("onboarding-body").querySelector(".onboarding-status.done").textContent, "✓ Tu as 2 decks montés.");
+  const legend = p.$("onboarding-legend-body");
+  assert.match(legend.querySelector(".msm-legend-callout").textContent, /^Montable ≠ monté/);
+  const items = [...legend.querySelectorAll("li")];
+  assert.deepEqual(
+    items.map((li) => li.dataset.legend),
+    ["legendNotBuilt", "legendBuildable", "legendBlocked", "legendBuilt", "legendOutdated", "legendProxies", "legendEditions", "legendLike"]
+  );
+  assert.equal(legend.querySelectorAll(".msm-legend-icon svg path").length, 8, "une icône dessinée par état");
+  assert.deepEqual([...legend.querySelectorAll(".msm-avail-badge")].map((b) => b.textContent), ["OK", "3", "2", "4"]);
+  assert.ok(items[3].querySelector(".msm-legend-icon").classList.contains("msm-legend-built"), "deck monté : rond coché vert");
+  assert.ok(items[4].querySelector(".msm-legend-icon").classList.contains("msm-legend-outdated"), "liste modifiée : point orange");
+  assert.match(items[0].textContent, /monté physiquement/, "même mot que l'infobulle du bouton");
+  assert.match(items[2].textContent, /exemplaires/, "la pastille compte des exemplaires");
 });
 
-test("guide de démarrage : récupération de la collection depuis la première étape, erreur affichée", async (t) => {
+test("aide : récupération de la collection depuis la première tâche, erreur affichée", async (t) => {
   let state = EMPTY_STATE;
   let result = { ok: false, error: "Pas de session Moxfield : connecte-toi sur moxfield.com dans ce navigateur.", code: "not-logged-in" };
   const p = openGuide(undefined, { GET_STATE: () => ({ ok: true, state }), COLLECTION_FETCH_NOW: () => result });
   t.after(p.close);
   await settle();
-  assert.ok(p.$("onboarding-body").querySelector('a[href="https://moxfield.com/account/signin"]'), "lien de connexion à Moxfield");
   p.$("onboarding-fetch").click();
   await settle();
-  assert.match(p.$("onboarding-body").querySelector(".onboarding-status").textContent, /^Pas de session Moxfield/);
+  assert.match(currentTask(p).querySelector(".onboarding-status").textContent, /^Pas de session Moxfield/);
 
   state = MOUNTED_STATE;
   result = { ok: true, changes: [] };
   p.$("onboarding-fetch").click();
   await settle();
-  assert.match(p.$("onboarding-body").querySelector(".onboarding-status.done").textContent, /Collection récupérée/);
+  assert.match(tasks(p)[0].querySelector(".onboarding-status.done").textContent, /Collection récupérée/);
 });
 
-test("guide de démarrage : en anglais", async (t) => {
-  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_ONBOARDING: { ok: true, done: false, step: 0 } }, "en");
+test("aide : en anglais", async (t) => {
+  const p = openGuide(undefined, {}, "en");
   t.after(p.close);
   await settle();
-  assert.equal(p.$("onboarding-progress").textContent, "Getting started — step 1 of 4");
-  assert.equal(guideTitle(p), "Fetch your Moxfield collection");
+  assert.equal(p.$("onboarding-title").textContent, "Getting started");
+  assert.equal(p.$("onboarding-progress").textContent, "0/3 done");
+  assert.equal(taskTitles(p)[0], "1Fetch your Moxfield collection");
+  assert.match(p.$("onboarding-legend-body").textContent, /Buildable ≠ built/);
+});
+
+test("chiffres clés : un message plutôt que quatre zéros tant que rien n'est récupéré", async (t) => {
+  const p = openPopup({ GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(p.close);
+  await settle();
+  assert.equal(p.$("stats").hidden, true);
+  assert.equal(p.$("stats-empty").hidden, false);
+  assert.match(p.$("stats-empty").textContent, /une fois ta collection récupérée/);
+
+  const q = openPopup({ GET_STATE: { ok: true, state: MOUNTED_STATE }, GET_COLLECTION_STATUS: collectionStatus({}) });
+  t.after(q.close);
+  await settle();
+  assert.equal(q.$("stats").hidden, false);
+  assert.equal(q.$("stats-empty").hidden, true);
 });
 
 // --- Mes decks ---

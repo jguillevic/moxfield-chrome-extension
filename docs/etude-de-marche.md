@@ -67,7 +67,8 @@ racheter, est une demande ancienne et répétée sur tous les sites de decks :
   des cartes (classeur, boîte), pas de transfert d'un deck à l'autre.
 - **Présence hors de Moxfield** : rien sur EDHREC ou Scryfall, pas de
   mobile (une extension Chrome ne tourne que sur ordinateur).
-- **Prise en main** : aucun parcours de premier lancement.
+- **Prise en main** : aucun parcours de premier lancement (comblé depuis :
+  premiers pas du popup en 0.4.0, bulle sur la page d'un deck en 0.9.0).
 
 **Risques :**
 
@@ -87,7 +88,7 @@ issue de cette étude.
 
 | Rang | Fonctionnalité | Attrait | Simplicité | Score | Origine | Pourquoi ces notes |
 |---|---|---|---|---|---|---|
-| 1 | **Premier lancement guidé** (livré, version 0.4.0) : connexion à Moxfield, première récupération, premier deck monté, explication des pastilles | 4 | 4 | **16** | nouveau | Sans lui, un nouvel utilisateur ne comprend ni le bouton ni la pastille (confusion constatée entre « montable » et « monté ») ; surtout de l'affichage |
+| 1 | **Premier lancement guidé** (livré, version 0.4.0 ; revu en 0.9.0 : premiers pas cochés, légende, bulle sur la page d'un deck) : connexion à Moxfield, première récupération, premier deck monté, explication des pastilles | 4 | 4 | **16** | nouveau | Sans lui, un nouvel utilisateur ne comprend ni le bouton ni la pastille (confusion constatée entre « montable » et « monté ») ; surtout de l'affichage |
 | 2 | **Publication sur le Chrome Web Store** : installation en un clic, mises à jour automatiques | 5 | 3 | **15** | nouveau | Condition pour avoir des utilisateurs ; préparation déjà faite une fois (commit `fc46bc4`), à reprendre ; relecture de Google et compte Google Cloud à prévoir |
 | 3 | **Faisabilité de tous mes decks** (livré en 0.5.0, decks ouverts ou collés) dans le popup : monté, montable, nombre de cartes bloquantes | 5 | 3 | **15** | ROADMAP n°2 | La vue d'ensemble est l'atout principal de Collection Lens ; l'API des decks est déjà lue pour un deck |
 | 4 | **Liste de cartes à sortir / ranger** avec cases à cocher, triée, au montage et au démontage | 4 | 3 | **12** | ROADMAP n°4 | Le geste physique que ManaBox et Grimoria accompagnent ; sert à chaque montage |

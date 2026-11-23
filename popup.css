@@ -17,6 +17,15 @@
   --danger-soft: #fdecea;
   --danger-fill: #c0392b;
   --danger-fill-hover: #a53024;
+  --glow-2: #b9a9ff;
+  --glow-3: #2f6fd6;
+  --icon-bar: #1f2229;
+  --icon-built: #4cc27f;
+  --icon-outdated: #f5a623;
+  --badge-blocked: #c0392b;
+  --badge-ok: #1f8a4c;
+  --badge-proxy: #7b4fd6;
+  --badge-editions: #2f6fd6;
   --radius: 10px;
   color-scheme: light;
 }
@@ -41,6 +50,8 @@
     --danger-soft: #3b2220;
     --danger-fill: #b8392d;
     --danger-fill-hover: #c94a3e;
+    --glow-2: #6f65ec;
+    --icon-bar: #0d0f13;
     color-scheme: dark;
   }
 }
@@ -123,6 +134,27 @@ h1 {
 .pill.pending { color: var(--warn); background: var(--warn-soft); }
 .pill.error { color: var(--danger); background: var(--danger-soft); }
 .pill.off { color: var(--text-muted); background: var(--surface-muted); }
+
+.header-tools {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+/* « Aide » : premiers pas et légende des boutons. */
+.help-btn {
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.help-btn[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* --- Chiffres clés --- */
 
@@ -500,22 +532,108 @@ button:focus-visible,
   color: var(--text-muted);
 }
 
-/* Guide de démarrage. */
+/* Aide : premiers pas et légende des boutons. */
+
+/* Liseré animé : dégradé conique qui tourne dans la bordure (angle animé
+   grâce à @property). Le fond intérieur reste celui de la carte. */
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes glow-spin {
+  to { --glow-angle: 360deg; }
+}
+
 .onboarding-card {
-  border-color: var(--accent);
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    conic-gradient(from var(--glow-angle), var(--accent), var(--glow-2), var(--glow-3), var(--ok), var(--accent)) border-box;
+  animation: glow-spin 4s linear infinite;
 }
 
-.onboarding-card ul {
+.onboarding-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Focus donné par le script à l'ouverture (lecteur d'écran), pas au clavier. */
+#onboarding-title:focus {
+  outline: none;
+}
+
+.onboarding-progress {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.onboarding-tasks {
   margin: 6px 0;
-  padding-left: 18px;
-  font-size: 12px;
+  padding: 0;
+  list-style: none;
 }
 
-.onboarding-card li {
-  margin-bottom: 4px;
+.onboarding-task {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.onboarding-task:last-child {
+  border-bottom: none;
+}
+
+.onboarding-task-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.onboarding-task.current .onboarding-task-title,
+.onboarding-task.done .onboarding-task-title {
+  color: var(--text);
+}
+
+.onboarding-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 11px;
+}
+
+.onboarding-task.current .onboarding-mark {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.onboarding-task.done .onboarding-mark {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.onboarding-task > .hint,
+.onboarding-task > .actions,
+.onboarding-task > .onboarding-status {
+  margin-left: 28px;
 }
 
 .onboarding-status {
+  margin-top: 4px;
+  margin-bottom: 0;
   font-size: 12px;
   font-weight: 600;
 }
@@ -524,21 +642,100 @@ button:focus-visible,
   color: var(--ok);
 }
 
-/* Pastilles du bouton de la page d'un deck, reproduites dans la légende. */
-.legend-badge {
-  display: inline-block;
-  min-width: 15px;
-  padding: 0 5px;
+/* Rien à compter encore. */
+.stats-empty {
+  margin-top: 0;
+  font-size: 12px;
+}
+
+/* Légende : chaque icône telle qu'elle apparaît sur la page d'un deck
+   (blanche sur la barre sombre de Moxfield), avec sa pastille (mêmes
+   éléments, cf. deck-help.js). */
+.msm-legend-callout {
+  margin: 4px 0 8px;
+  padding: 6px 9px;
   border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.msm-legend-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.msm-legend-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.msm-legend-icon {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 26px;
+  padding-right: 8px;
+  border-radius: 6px;
+  background: var(--icon-bar);
+  color: #fff;
+  font-size: 15px;
+}
+
+.msm-legend-icon svg {
+  width: auto;
+  height: 1em;
+}
+
+.msm-legend-icon.msm-legend-built {
+  color: var(--icon-built);
+}
+
+.msm-legend-icon.msm-legend-outdated::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--icon-outdated);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.msm-avail-badge {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--badge-blocked);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
+  line-height: 15px;
   text-align: center;
-  background: #c0392b;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 
-.legend-badge.ok {
-  background: #1f8a4c;
+.msm-avail-badge.msm-avail-ok { background: var(--badge-ok); }
+.msm-avail-badge.msm-proxy-badge { background: var(--badge-proxy); }
+.msm-avail-badge.msm-editions-badge { background: var(--badge-editions); }
+
+/* Pas d'animation pour qui l'a désactivée dans son système : liseré fixe. */
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-card {
+    animation: none;
+  }
 }
 
 /* Version de l'extension, en bas du popup. */

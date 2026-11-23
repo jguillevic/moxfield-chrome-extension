@@ -11,7 +11,7 @@ const { JSDOM, VirtualConsole } = require("jsdom");
 const { FIXTURES_DIR, simulateLayout, fakeGetMessage } = require("./helpers");
 
 const ROOT = path.join(__dirname, "..");
-const SCRIPTS = ["i18n.js", "deck-scraper.js", "deck-checks.js", "content-deck.js"].map((f) =>
+const SCRIPTS = ["i18n.js", "deck-scraper.js", "deck-checks.js", "deck-help.js", "content-deck.js"].map((f) =>
   fs.readFileSync(path.join(ROOT, f), "utf8")
 );
 const STATE_KEY = "moxfieldStockManagerState";
@@ -1333,4 +1333,107 @@ test("proxies déclarés sur Moxfield : une carte d'une autre version déclarée
   await waitFor(() => builds(page).length > 0 || toasts(page).length > 0, 2000, "montage envoyé ou refusé");
   assert.deepEqual(builds(page).length, 1, toasts(page).join(" | "));
   assert.equal(builds(page)[0].payload.cards.find((c) => c.name === "Birds of Paradise").proxyQty, 1);
+});
+
+// --- Bulle d'aide de la première visite d'un deck ---
+
+// Réponse du service worker sur l'aide (cf. handleGetOnboarding).
+const helpAnswer = (deckHelpSeen) => (msg) => (msg.type === "GET_ONBOARDING" ? { ok: true, done: true, deckHelpSeen } : undefined);
+const bubble = (page) => page.win.document.querySelector(".msm-help-bubble");
+const bubbleText = (page) => bubble(page).querySelector(".msm-help-text").textContent;
+const helpSeenSent = (page) => page.sent.filter((m) => m.type === "SET_DECK_HELP_SEEN").length;
+
+test("bulle d'aide : à la première visite d'un deck, ce que dit le bouton pour ce deck ; « Compris » la ferme pour de bon", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", helpAnswer(false));
+  t.after(page.close);
+  await waitFor(() => bubble(page), 3000, "bulle affichée");
+  await waitFor(() => /exemplaire bloque/.test(bubbleText(page)), 2000, "état du deck expliqué");
+  assert.match(bubbleText(page), /^Ce deck n'est pas encore monté, et 1 exemplaire bloque son montage/);
+  assert.match(bubble(page).textContent, /Montable ≠ monté/);
+  assert.equal(bubble(page).getAttribute("role"), "dialog");
+  assert.ok(page.button().classList.contains("msm-help-target"), "bouton expliqué mis en évidence");
+
+  const more = bubble(page).querySelector(".msm-help-more");
+  more.click();
+  assert.equal(more.getAttribute("aria-expanded"), "true");
+  assert.equal(bubble(page).querySelectorAll(".msm-legend-list li").length, 8, "légende complète");
+  assert.equal(bubble(page).querySelectorAll(".msm-help-callout, .msm-legend-callout").length, 1, "« montable ≠ monté » une seule fois");
+  assert.equal(more.textContent, "Masquer la légende");
+
+  bubble(page).querySelector(".msm-help-close").click();
+  assert.equal(bubble(page), null);
+  assert.equal(page.button().classList.contains("msm-help-target"), false);
+  await waitFor(() => helpSeenSent(page) === 1, 1000, "bulle notée comme vue");
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(bubble(page), null, "pas réaffichée au tick suivant");
+});
+
+test("bulle d'aide : texte suivi en direct quand le deck devient montable, sans recréer la bulle", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", helpAnswer(false));
+  t.after(page.close);
+  await waitFor(() => bubble(page) && /exemplaire bloque/.test(bubbleText(page)), 3000, "bulle affichée");
+  const el = bubble(page);
+  const marker = page.win.document.querySelector('[id^="collection_pt_"]');
+  marker.id = marker.id.replace("collection_pt_", "collection_full_");
+  await waitFor(() => /montable/.test(bubbleText(page)), 3000, "deck devenu montable");
+  assert.match(bubbleText(page), /^Ce deck est montable \(« OK »\) .* Mais il n'est pas encore monté/);
+  assert.equal(bubble(page), el);
+});
+
+test("bulle d'aide : deck monté", async (t) => {
+  const deck = { name: "Deck", url: "", cards: [{ name: "Birds of Paradise", qty: 1 }], builtAt: 1 };
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: { abc123: deck } }, "fr", helpAnswer(false));
+  t.after(page.close);
+  await waitFor(() => bubble(page), 3000, "bulle affichée");
+  assert.match(bubbleText(page), /^Ce deck est monté physiquement/);
+});
+
+test("bulle d'aide : Échap la ferme pour de bon", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", helpAnswer(false));
+  t.after(page.close);
+  await waitFor(() => bubble(page), 3000, "bulle affichée");
+  page.win.document.dispatchEvent(new page.win.KeyboardEvent("keydown", { key: "Escape" }));
+  assert.equal(bubble(page), null);
+  await waitFor(() => helpSeenSent(page) === 1, 1000, "bulle notée comme vue");
+});
+
+test("bulle d'aide : bouton utilisé, bulle fermée pour de bon", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", helpAnswer(false));
+  t.after(page.close);
+  await waitFor(() => bubble(page), 3000, "bulle affichée");
+  page.button().click();
+  await waitFor(() => page.win.document.querySelector(".msm-overlay"), 2000, "fenêtre de montage ouverte");
+  assert.equal(bubble(page), null);
+  assert.equal(helpSeenSent(page), 1);
+});
+
+test("bulle d'aide : jamais affichée une fois vue, ni sans réponse exploitable du service worker", async (t) => {
+  const seen = openDeckPage({ stock: FULL_STOCK, builtDecks: {} }, "fr", helpAnswer(true));
+  t.after(seen.close);
+  const noAnswer = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(noAnswer.close);
+  await waitFor(() => buttonText(seen).includes("dispo") && buttonText(noAnswer).includes("dispo"), 3000, "faisabilité affichée");
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(bubble(seen), null);
+  assert.equal(bubble(noAnswer), null);
+});
+
+test("fenêtre de montage : « ? » déplie la légende des boutons", async (t) => {
+  const page = openDeckPage({ stock: FULL_STOCK, builtDecks: {} });
+  t.after(page.close);
+  await waitFor(() => page.button(), 2000, "bouton affiché");
+  page.button().click();
+  const doc = page.win.document;
+  await waitFor(() => doc.querySelector("#msm-help-toggle"), 2000, "fenêtre ouverte");
+  const toggle = doc.querySelector("#msm-help-toggle");
+  const legend = doc.querySelector("#msm-help-legend");
+  assert.equal(toggle.getAttribute("aria-label"), "Légende des boutons");
+  assert.equal(legend.hidden, true);
+  toggle.click();
+  assert.equal(legend.hidden, false);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.match(legend.textContent, /^Montable ≠ monté/);
+  assert.equal(legend.querySelectorAll(".msm-legend-icon svg").length, 8);
+  toggle.click();
+  assert.equal(legend.hidden, true);
 });

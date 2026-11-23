@@ -196,6 +196,9 @@ function renderStock(state, filter, onlyInDecks) {
   document.getElementById("stock-count").textContent = Object.keys(state.stock).length;
   document.getElementById("stock-total").textContent = freeTotal;
   document.getElementById("stock-in-decks").textContent = inDecksTotal;
+  const nothingYet = rows.size === 0 && Object.keys(state.builtDecks).length === 0;
+  document.getElementById("stats").hidden = nothingYet;
+  document.getElementById("stats-empty").hidden = !nothingYet;
 
   if (!document.getElementById("stock-details").open) {
     container.innerHTML = "";
@@ -836,6 +839,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   if (changes.moxfieldStockManagerSync) renderSync();
   if (changes.moxfieldStockManagerCollection) renderCollection();
+  if (changes.moxfieldStockManagerOnboarding) loadOnboarding(); // bulle vue sur la page d'un deck
 });
 
 // --- Nouvelle version de l'extension (cf. update-check.js) ---
@@ -862,11 +866,18 @@ async function renderUpdate() {
   document.getElementById("update-link").href = update.compareUrl;
 }
 
-// --- Guide de démarrage ---
-// Affiché à la première installation (cf. handleGetOnboarding dans
-// background.js) et rejouable depuis le bas du popup. Chaque étape montre où
-// en est vraiment l'utilisateur (collection récupérée, deck monté).
-let onboarding = { done: true, step: 0 };
+// --- Aide : premiers pas et légende des boutons ---
+// Trois tâches cochées d'après l'état réel, toutes visibles d'un coup (le
+// guide pas à pas faisait cliquer « Suivant » sur des étapes déjà faites).
+// Affichée à une nouvelle installation (cf. handleGetOnboarding dans
+// background.js) et rouverte par « Aide » dans l'en-tête. La légende est la
+// même que sur la page d'un deck (cf. deck-help.js) ; la bulle de cette page
+// coche la deuxième tâche (deckHelpSeen).
+const deckHelp = createDeckHelp(i18n);
+let onboarding = { done: true, deckHelpSeen: true };
+// Contenu affiché (tâches faites, chiffres) : la liste n'est reconstruite
+// que s'il change, pour ne pas perdre le focus ni un message en cours.
+let onboardingSignature = null;
 
 function onboardingParagraph(key, ...subs) {
   const p = document.createElement("p");
@@ -878,130 +889,149 @@ function onboardingParagraph(key, ...subs) {
 function onboardingStatus(done, text) {
   const p = document.createElement("p");
   p.className = "onboarding-status" + (done ? " done" : "");
-  p.textContent = (done ? "✓ " : "") + text;
+  p.textContent = text;
   return p;
 }
 
-// items : textes, ou [classe de pastille, contenu de la pastille, texte].
-function onboardingList(items) {
-  const ul = document.createElement("ul");
-  for (const item of items) {
-    const li = document.createElement("li");
-    if (Array.isArray(item)) {
-      const badge = document.createElement("span");
-      badge.className = `legend-badge ${item[0]}`;
-      badge.textContent = item[1];
-      li.append(badge, ` ${item[2]}`);
-    } else {
-      li.textContent = item;
-    }
-    ul.appendChild(li);
-  }
-  return ul;
+function linkButton(label, href) {
+  const a = document.createElement("a");
+  a.className = "button";
+  a.href = href;
+  a.target = "_blank";
+  a.textContent = label;
+  return a;
 }
 
-const ONBOARDING_STEPS = [
-  {
-    title: "onboardingCollectionTitle",
-    body() {
-      const cardCount = lastState ? Object.keys(lastState.stock).length : 0;
-      const nodes = [onboardingParagraph("onboardingCollectionText")];
-      if (cardCount > 0) {
-        nodes.push(onboardingStatus(true, t("onboardingCollectionDone", tn("distinctCards", cardCount))));
-        return nodes;
-      }
-      const status = onboardingStatus(false, t("collectionNeverFetched"));
-      const actions = document.createElement("div");
-      actions.className = "actions";
-      const signIn = document.createElement("a");
-      signIn.className = "button";
-      signIn.href = "https://moxfield.com/account/signin";
-      signIn.target = "_blank";
-      signIn.textContent = t("collectionSignIn");
-      const fetchBtn = actionButton(t("onboardingFetch"), "", async () => {
-        fetchBtn.disabled = true;
-        status.textContent = t("collectionFetching");
-        const res = await send("COLLECTION_FETCH_NOW");
-        fetchBtn.disabled = false;
-        if (res && res.ok) refresh();
-        else status.textContent = (res && res.error) || t("unknownError");
-        renderCollection();
-      });
-      fetchBtn.id = "onboarding-fetch";
-      actions.append(signIn, fetchBtn);
-      nodes.push(status, actions);
-      return nodes;
+// Connexion à Moxfield : la récupération se lance toute seule (cf.
+// handleMoxfieldCookie dans background.js) ; le bouton sert de secours.
+function collectionTaskBody() {
+  const status = onboardingStatus(false, t("collectionNeverFetched"));
+  status.setAttribute("role", "status");
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const fetchBtn = actionButton(t("onboardingFetch"), "", async () => {
+    fetchBtn.disabled = true;
+    status.textContent = t("collectionFetching");
+    const res = await send("COLLECTION_FETCH_NOW");
+    fetchBtn.disabled = false;
+    if (res && res.ok) refresh();
+    else status.textContent = (res && res.error) || t("unknownError");
+    renderCollection();
+  });
+  fetchBtn.id = "onboarding-fetch";
+  actions.append(linkButton(t("collectionSignIn"), "https://moxfield.com/account/signin"), fetchBtn);
+  return [onboardingParagraph("onboardingCollectionText"), status, actions];
+}
+
+function deckTaskBody() {
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  const link = linkButton(t("onboardingDeckLink"), "https://moxfield.com/decks/personal");
+  link.id = "onboarding-decks-link";
+  actions.appendChild(link);
+  return [onboardingParagraph("onboardingDeckText"), actions];
+}
+
+function onboardingTasks() {
+  const cardCount = lastState ? Object.keys(lastState.stock).length : 0;
+  const deckCount = lastState ? Object.keys(lastState.builtDecks).length : 0;
+  return [
+    {
+      title: "onboardingCollectionTitle",
+      done: cardCount > 0,
+      doneText: () => t("onboardingCollectionDone", tn("distinctCards", cardCount)),
+      body: collectionTaskBody,
     },
-  },
-  {
-    title: "onboardingButtonsTitle",
-    body: () => [
-      onboardingParagraph("onboardingButtonsText"),
-      onboardingList([
-        t("onboardingLegendBuild"),
-        ["ok", "OK", t("onboardingLegendOk")],
-        ["", "3", t("onboardingLegendBlocked")],
-        t("onboardingLegendBuilt"),
-        t("onboardingLegendEditions"),
-      ]),
-    ],
-  },
-  {
-    title: "onboardingBuildTitle",
-    body() {
-      const deckCount = lastState ? Object.keys(lastState.builtDecks).length : 0;
-      return [
-        onboardingParagraph("onboardingBuildText"),
-        deckCount > 0
-          ? onboardingStatus(true, t("onboardingBuildDone", tn("builtDecksCount", deckCount)))
-          : onboardingStatus(false, t("builtDecksNone")),
-      ];
+    { title: "onboardingDeckTitle", done: onboarding.deckHelpSeen, doneText: () => t("onboardingDeckDone"), body: deckTaskBody },
+    {
+      title: "onboardingBuildTitle",
+      done: deckCount > 0,
+      doneText: () => t("onboardingBuildDone", tn("builtDecksCount", deckCount)),
+      body: () => [onboardingParagraph("onboardingBuildText")],
     },
-  },
-  {
-    title: "onboardingMoreTitle",
-    body: () => [onboardingList([t("onboardingMoreSync"), t("onboardingMoreHistory"), t("onboardingMoreProxies"), t("onboardingMoreReplay")])],
-  },
-];
+  ];
+}
+
+// Tâche faite : cochée, avec ce qui a été constaté. Tâche en cours (la
+// première pas faite) : dépliée, avec de quoi la faire. Les suivantes : leur
+// titre seul.
+function renderTask(task, index, current) {
+  const li = document.createElement("li");
+  li.className = "onboarding-task" + (task.done ? " done" : "") + (task === current ? " current" : "");
+  if (task === current) li.setAttribute("aria-current", "step");
+  const head = document.createElement("p");
+  head.className = "onboarding-task-title";
+  const mark = document.createElement("span");
+  mark.className = "onboarding-mark";
+  mark.setAttribute("aria-hidden", "true");
+  mark.textContent = task.done ? "✓" : String(index + 1);
+  const title = document.createElement("span");
+  title.textContent = t(task.title);
+  head.append(mark, title);
+  li.appendChild(head);
+  if (task.done) li.appendChild(onboardingStatus(true, task.doneText()));
+  else if (task === current) li.append(...task.body());
+  return li;
+}
 
 function renderOnboarding() {
   const card = document.getElementById("onboarding");
   card.hidden = onboarding.done;
-  if (onboarding.done) return;
-  const index = Math.min(onboarding.step, ONBOARDING_STEPS.length - 1);
-  const step = ONBOARDING_STEPS[index];
-  const last = index === ONBOARDING_STEPS.length - 1;
-  document.getElementById("onboarding-progress").textContent = t("onboardingProgress", index + 1, ONBOARDING_STEPS.length);
-  document.getElementById("onboarding-title").textContent = t(step.title);
-  document.getElementById("onboarding-body").replaceChildren(...step.body());
-  document.getElementById("onboarding-previous").hidden = index === 0;
-  document.getElementById("onboarding-next").textContent = t(last ? "onboardingFinish" : "onboardingNext");
-  document.getElementById("onboarding-skip").hidden = last;
+  document.getElementById("help-btn").setAttribute("aria-expanded", String(!onboarding.done));
+  if (onboarding.done) {
+    onboardingSignature = null;
+    return;
+  }
+  const tasks = onboardingTasks();
+  const signature = JSON.stringify(tasks.map((task) => (task.done ? task.doneText() : false)));
+  if (signature === onboardingSignature) return;
+  onboardingSignature = signature;
+  const current = tasks.find((task) => !task.done) || null;
+  const doneCount = tasks.filter((task) => task.done).length;
+  document.getElementById("onboarding-progress").textContent = t("onboardingProgress", doneCount, tasks.length);
+  document.getElementById("onboarding-tasks").replaceChildren(...tasks.map((task, i) => renderTask(task, i, current)));
+  document.getElementById("onboarding-all-done").hidden = Boolean(current);
+  const close = document.getElementById("onboarding-close");
+  close.textContent = t(current ? "onboardingHide" : "onboardingFinish");
+  close.className = current ? "ghost" : "primary";
 }
 
-async function setOnboarding(done, step) {
-  onboarding = { done, step };
+async function setOnboardingDone(done) {
+  onboarding = { ...onboarding, done };
   renderOnboarding();
-  await send("SET_ONBOARDING", onboarding);
+  await send("SET_ONBOARDING", { done });
 }
 
 async function loadOnboarding() {
   const res = await send("GET_ONBOARDING");
-  // Pas de réponse exploitable : pas de guide plutôt qu'un guide à tort.
-  onboarding = res && res.done === false ? { done: false, step: Number(res.step) || 0 } : { done: true, step: 0 };
+  // Pas de réponse exploitable : pas d'aide plutôt qu'une aide à tort.
+  onboarding =
+    res && res.ok !== false && res.done === false
+      ? { done: false, deckHelpSeen: Boolean(res.deckHelpSeen) }
+      : { done: true, deckHelpSeen: Boolean(res && res.deckHelpSeen) };
+  onboardingSignature = null;
   renderOnboarding();
 }
 
-document.getElementById("onboarding-previous").addEventListener("click", () => setOnboarding(false, Math.max(0, onboarding.step - 1)));
-document.getElementById("onboarding-next").addEventListener("click", () => {
-  const last = onboarding.step >= ONBOARDING_STEPS.length - 1;
-  setOnboarding(last, last ? 0 : onboarding.step + 1);
-});
-document.getElementById("onboarding-skip").addEventListener("click", () => setOnboarding(true, 0));
-document.getElementById("onboarding-replay").addEventListener("click", (e) => {
-  e.preventDefault();
-  setOnboarding(false, 0);
+document.getElementById("onboarding-legend-body").appendChild(deckHelp.buildLegend(document));
+
+// Aide ouverte : focus sur son titre (annoncé par un lecteur d'écran) ;
+// fermée : focus rendu au bouton « Aide », pour ne pas le perdre.
+document.getElementById("help-btn").addEventListener("click", async () => {
+  if (!onboarding.done) {
+    await setOnboardingDone(true);
+    return;
+  }
+  await setOnboardingDone(false);
+  // Premiers pas déjà faits : c'est la légende qu'on vient chercher.
+  if (onboardingTasks().every((task) => task.done)) document.getElementById("onboarding-legend").open = true;
   window.scrollTo(0, 0);
+  document.getElementById("onboarding-title").focus();
+});
+
+document.getElementById("onboarding-close").addEventListener("click", async () => {
+  await setOnboardingDone(true);
+  document.getElementById("help-btn").focus();
 });
 
 async function renderVersion() {

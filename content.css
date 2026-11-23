@@ -4,7 +4,8 @@
 .msm-overlay,
 .msm-progress-overlay,
 .msm-toast,
-.msm-floating-bar {
+.msm-floating-bar,
+.msm-help-bubble {
   --msm-surface: #ffffff;
   --msm-surface-muted: #f7f8fa;
   --msm-border: #e3e5ea;
@@ -28,7 +29,8 @@
   .msm-overlay,
   .msm-progress-overlay,
   .msm-toast,
-  .msm-floating-bar {
+  .msm-floating-bar,
+  .msm-help-bubble {
     --msm-surface: #1f2229;
     --msm-surface-muted: #262a32;
     --msm-border: #333844;
@@ -47,7 +49,8 @@
   }
 }
 
-.msm-overlay [hidden] {
+.msm-overlay [hidden],
+.msm-help-bubble [hidden] {
   display: none !important;
 }
 
@@ -516,4 +519,218 @@
   margin: 10px 0 0;
   font-size: 12px;
   color: var(--msm-text-muted);
+}
+
+/* --- Aide : bulle de la première visite d'un deck, légende des boutons --- */
+
+/* Liseré animé : dégradé conique qui tourne dans la bordure (angle animé
+   grâce à @property, Chrome 85+). Le fond intérieur reste celui de la
+   surface (padding-box). */
+@property --msm-glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes msm-glow-spin {
+  to { --msm-glow-angle: 360deg; }
+}
+
+.msm-help-bubble {
+  position: fixed;
+  z-index: 999997;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(var(--msm-surface), var(--msm-surface)) padding-box,
+    conic-gradient(from var(--msm-glow-angle), var(--msm-accent), #b9a9ff, #2f6fd6, #4cc27f, var(--msm-accent)) border-box;
+  color: var(--msm-text);
+  font-size: 13px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  animation: msm-glow-spin 4s linear infinite;
+}
+
+.msm-help-bubble *,
+.msm-help-bubble *::before,
+.msm-help-bubble *::after {
+  box-sizing: border-box;
+}
+
+.msm-help-bubble p {
+  margin: 0 0 8px;
+}
+
+.msm-help-title {
+  color: var(--msm-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.msm-help-text {
+  color: var(--msm-text);
+}
+
+/* « Montable ≠ monté » : la confusion constatée, mise en avant. */
+.msm-help-callout,
+.msm-legend-callout {
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: var(--msm-accent-soft);
+  color: var(--msm-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.msm-help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.msm-help-bubble button {
+  padding: 6px 12px;
+  border: 1px solid var(--msm-border);
+  border-radius: 8px;
+  background: var(--msm-surface-muted);
+  color: var(--msm-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.msm-help-bubble button.msm-primary {
+  background: var(--msm-accent-fill);
+  border-color: var(--msm-accent-fill);
+  color: #fff;
+}
+
+.msm-help-bubble button:focus-visible,
+.msm-help-toggle:focus-visible {
+  outline: 2px solid var(--msm-accent);
+  outline-offset: 1px;
+}
+
+/* Bouton expliqué par la bulle : anneau qui pulse autour de lui. */
+.msm-bar-btn.msm-help-target {
+  border-radius: 6px;
+  animation: msm-help-pulse 1.6s ease-out infinite;
+}
+
+@keyframes msm-help-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(140, 130, 255, 0.85); }
+  100% { box-shadow: 0 0 0 10px rgba(140, 130, 255, 0); }
+}
+
+/* « ? » de la fenêtre de montage : légende des boutons. */
+.msm-modal .msm-help-toggle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.msm-modal .msm-help-toggle[aria-expanded="true"] {
+  border-color: var(--msm-accent);
+  color: var(--msm-accent);
+}
+
+.msm-modal .msm-help-legend {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--msm-surface-muted);
+}
+
+.msm-help-bubble .msm-help-legend {
+  margin-bottom: 8px;
+}
+
+/* Légende : chaque icône telle qu'elle apparaît dans la barre de Moxfield
+   (blanche sur fond sombre), avec sa pastille. */
+.msm-legend-callout {
+  margin: 0 0 8px;
+}
+
+.msm-legend-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.msm-legend-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--msm-text);
+  font-size: 12px;
+}
+
+.msm-legend-list li:last-child {
+  margin-bottom: 0;
+}
+
+.msm-legend-icon {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 26px;
+  padding-right: 8px;
+  border-radius: 6px;
+  background: #1f2229;
+  color: #fff;
+  font-size: 15px;
+}
+
+.msm-legend-icon svg {
+  width: auto;
+  height: 1em;
+}
+
+.msm-legend-icon .msm-avail-badge {
+  top: 0;
+  right: 2px;
+}
+
+.msm-legend-icon.msm-legend-built {
+  color: #4cc27f;
+}
+
+.msm-legend-icon.msm-legend-outdated::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5a623;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+/* Pas d'animation pour qui l'a désactivée dans son système : liseré fixe. */
+@media (prefers-reduced-motion: reduce) {
+  .msm-help-bubble,
+  .msm-bar-btn.msm-help-target {
+    animation: none;
+  }
+
+  .msm-bar-btn.msm-help-target {
+    box-shadow: 0 0 0 3px rgba(140, 130, 255, 0.85);
+  }
 }

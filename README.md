@@ -67,17 +67,39 @@ données restent sur ce PC).
 
 ## Utilisation
 
-**Guide de démarrage.** À la première installation, le popup affiche un
-guide en 4 étapes : récupérer ta collection Moxfield (avec le lien de
-connexion et le bouton de récupération), repérer les boutons sur la page
-d'un deck (avec la légende des pastilles : « OK » vert = montable, nombre
-rouge = cartes bloquantes, rond coché vert = monté), monter ton premier
-deck, et les fonctions pour aller plus loin. Chaque étape indique où tu en
-es (collection récupérée, decks montés). Le guide reprend à l'étape où tu
-t'étais arrêté quand tu rouvres le popup, se ferme avec **« Terminer »** ou
-**« Passer le guide »**, et se rejoue à tout moment avec **« Revoir le
-guide de démarrage »**, en bas du popup. Il n'est pas proposé à une
-installation qui a déjà un stock.
+**Aide.** Le bouton **« ? Aide »**, en haut du popup, ouvre (et referme)
+deux choses :
+
+- **Bien démarrer** : trois premiers pas, cochés tout seuls d'après ce que
+  tu as vraiment fait — récupérer ta collection Moxfield (lien de connexion,
+  la récupération se lance ensuite toute seule ; bouton « Récupérer
+  maintenant » en secours), ouvrir un de tes decks (lien vers tes decks
+  Moxfield), monter ton premier deck. Le premier pas à faire est déplié,
+  les suivants n'affichent que leur titre. Affiché d'office à une nouvelle
+  installation, jusqu'à **« Masquer l'aide »** (ou **« Terminer »** quand
+  tout est fait) ; pas à une installation qui avait déjà un stock.
+- **Légende des boutons** : chaque bouton de la page d'un deck dessiné tel
+  qu'il apparaît (boîte, pastille « OK » ou nombre rouge, rond coché vert,
+  point orange, proxies, « Utiliser mes éditions », cœur), avec en tête
+  **« Montable ≠ monté »** : « OK » veut dire que tu *peux* monter le deck,
+  pas qu'il l'est. Ouverte d'office quand les premiers pas sont faits.
+
+La carte d'aide est entourée d'un liseré animé (fixe si les animations
+sont désactivées dans ton système).
+
+**Bulle d'aide sur la page d'un deck.** La première fois que tu ouvres
+un deck, une bulle (au liseré animé) s'accroche au bouton de montage, qui
+pulse, et dit ce qu'il indique *pour ce deck* : « montable mais pas
+encore monté », « N exemplaires bloquent », « monté physiquement »,
+« liste changée depuis le montage ». « Voir la légende » y déplie la
+légende complète. Elle se ferme pour de bon avec **« Compris »**, Échap, ou
+dès que tu cliques sur le bouton, et coche le deuxième premier pas.
+Montrée une fois, y compris aux installations qui avaient déjà un stock.
+Ensuite, la légende reste derrière le **« ? »** en haut de la fenêtre de
+montage.
+
+**Chiffres clés.** Tant qu'aucune collection n'est récupérée (et aucun
+deck monté), un message les remplace plutôt que quatre zéros.
 
 ### 1. Récupérer ta collection (initialiser le stock)
 
@@ -573,6 +595,11 @@ en cas de conflit : rien ne s'y perd).
   différer de celui de la pastille du bouton. Une ancienne version de
   l'extension sur un autre PC ignore la liste et la perd en écrivant
   l'état : mets tous tes PC à jour.
+- **Aide** : la bulle de la page d'un deck n'est montrée qu'une fois
+  par PC (son constat n'est pas synchronisé), et seulement une fois l'état
+  du deck connu (liste de la page fiable) : sur un deck dont la liste n'est
+  jamais lue, elle attend le deck suivant. Le premier pas « Ouvre un de tes
+  decks » n'est coché qu'une fois la bulle fermée.
 - **Liste d'achats** : elle part des listes de decks déjà lues (rien
   n'est relu sur Moxfield en cochant) ; un deck lu avant la version 0.8.0
   n'a pas encore de prix, jusqu'à sa relecture (6 heures, ou
@@ -776,8 +803,12 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   compris), chiffres clés (exemplaires possédés, libres, dans des decks),
   affichage du stock (tableau limité, filtre, total possédé d'une carte),
   changement de version d'une carte (badge « Modifié », historique),
-  guide de démarrage (étapes, reprise, fin, rejeu, état de l'utilisateur,
-  récupération de la collection, anglais),
+  aide (premiers pas cochés d'après l'état réel, premier pas à faire
+  déplié, lien vers ses decks, bulle vue pendant que le popup est ouvert,
+  liste pas reconstruite sans changement, « Aide » dans l'en-tête, focus,
+  légende complète avec les vraies icônes, récupération de la collection,
+  anglais), message à la place des chiffres clés tant que rien n'est
+  récupéré,
   proxies des decks montés (nombre, impression, remplacement proposé ou
   refusé, jamais comptés dans les decks), sauvegarde Drive (lien vers les
   paramètres de Drive, téléchargement de la sauvegarde et d'une version),
@@ -821,6 +852,18 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   « monté » juste en passant d'un deck à l'autre et quand un deck est
   démonté ailleurs, bouton
   et fenêtre de montage en anglais.
+- `tests/deck-help.test.js` : aide sur les boutons de la page d'un deck
+  (`deck-help.js`) — texte de la bulle pour chaque état du deck (français et
+  anglais), légende (une ligne par état, mêmes icônes et pastilles que la
+  page, textes échappés). Son affichage est testé dans
+  `tests/content-deck.test.js` (bulle de la première visite : état du deck,
+  suivi en direct sans la recréer, deck monté, fermée pour de bon par
+  « Compris », Échap ou le bouton, jamais réaffichée, pas de bulle sans
+  réponse ; « ? » de la fenêtre de montage) et `tests/popup.test.js` ; son
+  enregistrement dans `tests/background.test.js` (nouvelle installation
+  dont la collection arrive avant la première ouverture du popup,
+  installation existante, ancien enregistrement du guide pas à pas, écrit
+  seulement quand il change).
 - `tests/check-version.test.js` : contrôle de version
   (`scripts/check-version.js`, sur un petit dépôt git temporaire) — format
   accepté par Chrome, comparaison, extension modifiée sans augmenter la
@@ -862,7 +905,8 @@ Non couverts : la synchro Google Drive, le reste du popup, la fenêtre de
 montage (hors refus pour stock insuffisant ou version déjà utilisée, prix
 des cartes manquantes, proxies, mise à jour après un changement de version
 et textes en anglais), l'intégration à la barre d'actions de
-Moxfield, le rendu réel de l'impression (taille des cartes sur papier),
+Moxfield, la position de la bulle d'aide et le rendu du liseré animé (pas
+de mise en page dans les tests), le rendu réel de l'impression (taille des cartes sur papier),
 et la qualité des traductions elles-mêmes (relecture humaine).
 
 ### Versions
@@ -878,7 +922,7 @@ sur `main`, GitHub Actions lance `node scripts/check-version.js` et
 ## Crédits
 
 Icônes du bouton de la barre d'actions : [Font Awesome Free](https://fontawesome.com)
-6.7.2 (`box-open`, `circle-check`, `arrows-rotate`), sous licence
+6.7.2 (`box-open`, `circle-check`, `arrows-rotate`, `heart`), sous licence
 [CC BY 4.0](https://fontawesome.com/license/free).
 
 Images des cartes de la page d'impression des proxies :

@@ -52,6 +52,12 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- Aide revue après une revue ergonomique : premiers pas cochés d'après
+  l'état réel (à la place du guide pas à pas), légende des boutons avec
+  leurs vraies icônes et « montable ≠ monté » en tête, bouton « Aide » dans
+  l'en-tête du popup, bulle d'aide à la première visite d'un deck (aussi
+  pour les installations existantes), « ? » dans la fenêtre de montage,
+  liseré animé, message à la place des chiffres à zéro — novembre 2026.
 - Liste d'achats cumulée : decks cochés dans « Mes decks », manques réunis
   en une liste sans doublons, avec le coût total et la copie pour
   Cardmarket — rang 7 de l'étude de marché — novembre 2026.

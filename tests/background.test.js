@@ -49,7 +49,7 @@ function loadBackground(initialState, options = {}) {
   const alarms = new Map(); // nom → options
   const webRequestListeners = [];
   const cookieListeners = [];
-  const counts = { stateWrites: 0, fetches: 0 };
+  const counts = { stateWrites: 0, fetches: 0, onboardingWrites: 0 };
   const badge = { text: "", title: "" };
   const github = { calls: [] };
   const sentry = [];
@@ -71,6 +71,7 @@ function loadBackground(initialState, options = {}) {
         async set(items) {
           for (const [k, v] of Object.entries(items)) {
             if (k === STORAGE_KEY) counts.stateWrites++;
+            if (k === "moxfieldStockManagerOnboarding") counts.onboardingWrites++;
             storage[k] = clone(v);
           }
         },
@@ -231,6 +232,8 @@ function loadBackground(initialState, options = {}) {
     setSyncMeta: (meta) => (storage[SYNC_KEY] = clone(meta)),
     alarms,
     setCollectionMeta: (meta) => (storage[COLLECTION_KEY] = clone(meta)),
+    // Enregistrement laissé par une version précédente de l'extension.
+    setOnboarding: (record) => (storage.moxfieldStockManagerOnboarding = clone(record)),
     setMoxfieldCSV: (csv) => (options.moxfieldCSV = csv),
     // Déclenche une alarme / le démarrage du navigateur et attend la fin des
     // traitements lancés.
@@ -248,9 +251,10 @@ function loadBackground(initialState, options = {}) {
       await Promise.all(cookieListeners.map((fn) => fn(clone(change))));
     },
     setCookies: (cookies) => (options.cookies = cookies),
-    // Extension installée ou rechargée (ex. après un git pull).
-    async installed() {
-      await Promise.all(installedListeners.map((fn) => fn({ reason: "update" })));
+    // Extension rechargée (ex. après un git pull), ou installée (reason
+    // "install").
+    async installed(reason = "update") {
+      await Promise.all(installedListeners.map((fn) => fn({ reason })));
       await new Promise((resolve) => setTimeout(resolve, 20));
     },
     async startup() {
@@ -2055,29 +2059,51 @@ test("version affichée : numéro du manifest et commit du clone (lien vers GitH
   assert.deepEqual(await copy.send({ type: "GET_VERSION_INFO" }), { ok: true, version: "0.2.0", commit: null, commitUrl: null });
 });
 
-// --- Guide de démarrage ---
+// --- Aide au démarrage ---
 
-test("guide de démarrage : proposé à une nouvelle installation, et encore après la récupération de la collection", async () => {
+test("aide : premiers pas proposés à une nouvelle installation, et encore après la récupération de la collection", async () => {
   const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
-  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, step: 0 });
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, deckHelpSeen: false });
   await bg.send({ type: "COLLECTION_FETCH_NOW" });
-  assert.equal((await bg.send({ type: "GET_ONBOARDING" })).done, false, "le stock n'est plus vide, mais le guide n'est pas fini");
+  assert.equal((await bg.send({ type: "GET_ONBOARDING" })).done, false, "le stock n'est plus vide, mais les premiers pas ne sont pas finis");
 });
 
-test("guide de démarrage : pas proposé à une installation qui a déjà un stock", async () => {
+// Cas réel : connexion à Moxfield juste après l'installation, collection
+// récupérée avant la première ouverture du popup.
+test("aide : nouvelle installation dont la collection arrive avant la première ouverture du popup", async () => {
+  const bg = loadBackground(undefined, { moxfieldCSV: COLLECTION_CSV });
+  await bg.installed("install");
+  await bg.send({ type: "COLLECTION_FETCH_NOW" });
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, deckHelpSeen: false });
+});
+
+test("aide : installation existante (déjà un stock) : pas de premiers pas, mais la bulle de la page d'un deck une fois", async () => {
   const bg = loadBackground(SOL_RING_STOCK());
-  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: true, step: 0 });
+  await bg.installed("update");
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: true, deckHelpSeen: false });
+  await bg.send({ type: "SET_DECK_HELP_SEEN" });
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: true, deckHelpSeen: true });
 });
 
-test("guide de démarrage : étape et fin retenues, rejouable, sans écrire l'état synchronisé", async () => {
+test("aide : ancien enregistrement du guide pas à pas (étape) repris sans son étape", async () => {
+  const bg = loadBackground(SOL_RING_STOCK());
+  bg.setOnboarding({ done: false, step: 2 });
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, deckHelpSeen: false });
+});
+
+test("aide : masquée, rouverte, bulle vue ; écrite seulement quand elle change, jamais dans l'état synchronisé", async () => {
   const bg = loadBackground();
   await bg.send({ type: "GET_ONBOARDING" });
-  await bg.send({ type: "SET_ONBOARDING", payload: { done: false, step: 2 } });
-  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, step: 2 });
-  await bg.send({ type: "SET_ONBOARDING", payload: { done: true, step: 0 } });
-  assert.equal((await bg.send({ type: "GET_ONBOARDING" })).done, true);
-  await bg.send({ type: "SET_ONBOARDING", payload: { done: false, step: 0 } }); // rejoué
-  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, step: 0 });
+  const writes = bg.counts.onboardingWrites;
+  assert.deepEqual(await bg.send({ type: "SET_ONBOARDING", payload: { done: true } }), { ok: true, done: true, deckHelpSeen: false });
+  await bg.send({ type: "SET_DECK_HELP_SEEN" });
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: true, deckHelpSeen: true });
+  await bg.send({ type: "SET_ONBOARDING", payload: { done: false } }); // rouverte par « Aide »
+  assert.deepEqual(await bg.send({ type: "GET_ONBOARDING" }), { ok: true, done: false, deckHelpSeen: true }, "la bulle reste vue");
+  assert.equal(bg.counts.onboardingWrites, writes + 3);
+  await bg.send({ type: "SET_DECK_HELP_SEEN" });
+  await bg.send({ type: "SET_ONBOARDING", payload: { done: false } });
+  assert.equal(bg.counts.onboardingWrites, writes + 3, "rien de changé : rien d'écrit");
   assert.equal(bg.counts.stateWrites, 0, "propre à ce PC : rien n'est envoyé sur Drive");
 });
 

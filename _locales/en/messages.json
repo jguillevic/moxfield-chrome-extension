@@ -969,79 +969,31 @@
     "message": "Version $1 available (you have $2)."
   },
   "onboardingProgress": {
-    "message": "Getting started — step $1 of $2"
-  },
-  "onboardingPrevious": {
-    "message": "Previous"
-  },
-  "onboardingNext": {
-    "message": "Next"
+    "message": "$1/$2 done"
   },
   "onboardingFinish": {
     "message": "Finish"
-  },
-  "onboardingSkip": {
-    "message": "Skip the guide"
-  },
-  "onboardingReplay": {
-    "message": "Replay the getting started guide"
   },
   "onboardingCollectionTitle": {
     "message": "Fetch your Moxfield collection"
   },
   "onboardingCollectionText": {
-    "message": "The stock starts from your Moxfield collection: it tells which cards you own. Sign in to Moxfield in this browser, then fetch it. After that, it updates by itself."
+    "message": "Sign in to Moxfield in this browser: your collection is fetched by itself, then kept up to date. It tells which cards you own."
   },
   "onboardingCollectionDone": {
     "message": "Collection fetched: $1."
   },
   "onboardingFetch": {
-    "message": "Fetch my collection"
-  },
-  "onboardingButtonsTitle": {
-    "message": "Find the buttons on a deck page"
-  },
-  "onboardingButtonsText": {
-    "message": "Open one of your decks on Moxfield: the extension adds its buttons there, at the bottom left of the page (or in Moxfield's action bar when it is shown)."
-  },
-  "onboardingLegendBuild": {
-    "message": "Open box: the deck is not built. Click it to build the deck."
-  },
-  "onboardingLegendOk": {
-    "message": "on the box: every card is in your free stock, the deck can be built."
-  },
-  "onboardingLegendBlocked": {
-    "message": "on the box: number of cards blocking the build (missing, or owned in another printing). Hover the button for details."
-  },
-  "onboardingLegendBuilt": {
-    "message": "Green check circle: the deck is built. Click it to unbuild or update it."
-  },
-  "onboardingLegendEditions": {
-    "message": "Arrows: switch the deck to the printings you own."
+    "message": "Fetch now"
   },
   "onboardingBuildTitle": {
     "message": "Build your first deck"
   },
   "onboardingBuildText": {
-    "message": "On the deck page, click the open box, check the detected list, then confirm. The deck's cards leave your free stock; unbuild the deck to put them back. If cards are missing, the window tells which built deck holds them and their price."
+    "message": "On the deck page, click the box to mark the deck as physically built, check the detected list, then confirm: its cards leave your free stock. Unbuild it to put them back."
   },
   "onboardingBuildDone": {
     "message": "You have $1."
-  },
-  "onboardingMoreTitle": {
-    "message": "Going further"
-  },
-  "onboardingMoreSync": {
-    "message": "Google Drive sync (further down): automatic backup, and the same stock on all your computers."
-  },
-  "onboardingMoreHistory": {
-    "message": "History: every build, unbuild and collection change."
-  },
-  "onboardingMoreProxies": {
-    "message": "Proxies: build a deck despite missing cards, and print them."
-  },
-  "onboardingMoreReplay": {
-    "message": "This guide stays available at the bottom of the popup."
   },
   "decksTitle": {
     "message": "My decks"
@@ -1141,5 +1093,95 @@
   },
   "shoppingSkipped": {
     "message": "Not read from Moxfield yet, not counted: $1"
+  },
+  "helpButton": {
+    "message": "Help"
+  },
+  "helpButtonTitle": {
+    "message": "Getting started and button legend"
+  },
+  "statsEmpty": {
+    "message": "Your numbers (copies owned, free, in decks) will show up here once your collection is fetched."
+  },
+  "onboardingTitle": {
+    "message": "Getting started"
+  },
+  "onboardingHide": {
+    "message": "Hide help"
+  },
+  "onboardingAllDone": {
+    "message": "All set! The button legend stays available under “Help”, at the top of the popup."
+  },
+  "onboardingDeckTitle": {
+    "message": "Open one of your decks on Moxfield"
+  },
+  "onboardingDeckText": {
+    "message": "The extension adds its buttons next to Moxfield's (or at the bottom left of the page), and a bubble explains what they say for that deck."
+  },
+  "onboardingDeckLink": {
+    "message": "Open my Moxfield decks"
+  },
+  "onboardingDeckDone": {
+    "message": "Done: you've seen the help on a deck page."
+  },
+  "legendTitle": {
+    "message": "Button legend"
+  },
+  "legendShow": {
+    "message": "Show the legend"
+  },
+  "legendHide": {
+    "message": "Hide the legend"
+  },
+  "legendBuildableVsBuilt": {
+    "message": "Buildable ≠ built: “OK” means you can build the deck, not that it is built. It is built only once marked “physically built”."
+  },
+  "legendNotBuilt": {
+    "message": "Not built yet: click to mark it as physically built."
+  },
+  "legendBuildable": {
+    "message": "Buildable: every copy is in your free stock."
+  },
+  "legendBlocked": {
+    "message": "Not buildable: number of copies blocking the build (missing, or owned in another printing). Hover the button for details."
+  },
+  "legendBuilt": {
+    "message": "Physically built: its cards left your free stock. Click to unbuild it."
+  },
+  "legendOutdated": {
+    "message": "Built, but the list changed on Moxfield since (orange dot): click to update the build."
+  },
+  "legendProxies": {
+    "message": "Built with proxies: how many."
+  },
+  "legendEditions": {
+    "message": "Use my printings: number of deck cards owned in another printing, switched to yours in one click."
+  },
+  "legendLike": {
+    "message": "Keep the deck in “My decks” (popup), to build it later."
+  },
+  "deckHelpTitle": {
+    "message": "Moxfield Stock Manager — what this button says"
+  },
+  "deckHelpClose": {
+    "message": "Got it"
+  },
+  "deckHelpNotBuilt": {
+    "message": "This deck is not built yet. Click the box to mark it as physically built: its cards will leave your free stock."
+  },
+  "deckHelpBuildable": {
+    "message": "This deck is buildable (“OK”): every copy is in your free stock. But it is not built yet: click the box to mark it as physically built."
+  },
+  "deckHelpBlocked_one": {
+    "message": "This deck is not built yet, and $1 copy blocks the build (red number): missing, or owned in another printing. Hover the box for details."
+  },
+  "deckHelpBlocked_other": {
+    "message": "This deck is not built yet, and $1 copies block the build (red number): missing, or owned in another printing. Hover the box for details."
+  },
+  "deckHelpBuilt": {
+    "message": "This deck is physically built (green check circle): its cards left your free stock. Click the circle to unbuild it."
+  },
+  "deckHelpBuiltOutdated": {
+    "message": "This deck is physically built, but its list changed on Moxfield since (orange dot). Click the check circle to update the build."
   }
 }

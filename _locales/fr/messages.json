@@ -969,79 +969,31 @@
     "message": "Version $1 disponible (tu as la $2)."
   },
   "onboardingProgress": {
-    "message": "Guide de démarrage — étape $1 sur $2"
-  },
-  "onboardingPrevious": {
-    "message": "Précédent"
-  },
-  "onboardingNext": {
-    "message": "Suivant"
+    "message": "$1/$2 faits"
   },
   "onboardingFinish": {
     "message": "Terminer"
-  },
-  "onboardingSkip": {
-    "message": "Passer le guide"
-  },
-  "onboardingReplay": {
-    "message": "Revoir le guide de démarrage"
   },
   "onboardingCollectionTitle": {
     "message": "Récupère ta collection Moxfield"
   },
   "onboardingCollectionText": {
-    "message": "Le stock part de ta collection Moxfield : c'est elle qui dit quelles cartes tu possèdes. Connecte-toi à Moxfield dans ce navigateur, puis récupère-la. Ensuite, elle se met à jour toute seule."
+    "message": "Connecte-toi à Moxfield dans ce navigateur : ta collection est récupérée toute seule, puis tenue à jour. C'est elle qui dit quelles cartes tu possèdes."
   },
   "onboardingCollectionDone": {
     "message": "Collection récupérée : $1."
   },
   "onboardingFetch": {
-    "message": "Récupérer ma collection"
-  },
-  "onboardingButtonsTitle": {
-    "message": "Repère les boutons sur la page d'un deck"
-  },
-  "onboardingButtonsText": {
-    "message": "Ouvre un de tes decks sur Moxfield : l'extension y ajoute ses boutons, en bas à gauche de la page (ou dans la barre d'actions de Moxfield quand elle est affichée)."
-  },
-  "onboardingLegendBuild": {
-    "message": "Boîte ouverte : le deck n'est pas monté. Clique dessus pour le monter."
-  },
-  "onboardingLegendOk": {
-    "message": "sur la boîte : toutes les cartes sont dans ton stock libre, le deck est montable."
-  },
-  "onboardingLegendBlocked": {
-    "message": "sur la boîte : nombre de cartes qui bloquent le montage (manquantes, ou possédées dans une autre édition). Survole le bouton pour le détail."
-  },
-  "onboardingLegendBuilt": {
-    "message": "Rond coché vert : le deck est monté. Clique dessus pour le démonter ou le mettre à jour."
-  },
-  "onboardingLegendEditions": {
-    "message": "Flèches : passe le deck sur les éditions que tu possèdes."
+    "message": "Récupérer maintenant"
   },
   "onboardingBuildTitle": {
     "message": "Monte ton premier deck"
   },
   "onboardingBuildText": {
-    "message": "Sur la page du deck, clique sur la boîte ouverte, vérifie la liste détectée, puis confirme. Les cartes du deck sortent de ton stock libre ; démonte le deck pour les y remettre. S'il manque des cartes, la fenêtre indique dans quel deck monté elles se trouvent et leur prix."
+    "message": "Sur la page du deck, clique sur la boîte pour le marquer comme monté physiquement, vérifie la liste détectée, puis confirme : ses cartes sortent de ton stock libre. Démonte-le pour les y remettre."
   },
   "onboardingBuildDone": {
     "message": "Tu as $1."
-  },
-  "onboardingMoreTitle": {
-    "message": "Pour aller plus loin"
-  },
-  "onboardingMoreSync": {
-    "message": "Synchronisation Google Drive (plus bas) : sauvegarde automatique, et même stock sur tous tes PC."
-  },
-  "onboardingMoreHistory": {
-    "message": "Historique : chaque montage, démontage et changement de la collection."
-  },
-  "onboardingMoreProxies": {
-    "message": "Proxies : monte un deck malgré des cartes manquantes, et imprime-les."
-  },
-  "onboardingMoreReplay": {
-    "message": "Ce guide reste disponible en bas du popup."
   },
   "decksTitle": {
     "message": "Mes decks"
@@ -1141,5 +1093,95 @@
   },
   "shoppingSkipped": {
     "message": "Pas encore lus sur Moxfield, non comptés : $1"
+  },
+  "helpButton": {
+    "message": "Aide"
+  },
+  "helpButtonTitle": {
+    "message": "Premiers pas et légende des boutons"
+  },
+  "statsEmpty": {
+    "message": "Tes chiffres (exemplaires possédés, libres, dans des decks) apparaîtront ici une fois ta collection récupérée."
+  },
+  "onboardingTitle": {
+    "message": "Bien démarrer"
+  },
+  "onboardingHide": {
+    "message": "Masquer l'aide"
+  },
+  "onboardingAllDone": {
+    "message": "Tout est prêt ! La légende des boutons reste disponible avec « Aide », en haut du popup."
+  },
+  "onboardingDeckTitle": {
+    "message": "Ouvre un de tes decks sur Moxfield"
+  },
+  "onboardingDeckText": {
+    "message": "L'extension ajoute ses boutons à côté de ceux de Moxfield (ou en bas à gauche de la page), et une bulle t'explique ce qu'ils indiquent pour ce deck."
+  },
+  "onboardingDeckLink": {
+    "message": "Ouvrir mes decks Moxfield"
+  },
+  "onboardingDeckDone": {
+    "message": "Fait : tu as vu l'aide de la page d'un deck."
+  },
+  "legendTitle": {
+    "message": "Légende des boutons"
+  },
+  "legendShow": {
+    "message": "Voir la légende"
+  },
+  "legendHide": {
+    "message": "Masquer la légende"
+  },
+  "legendBuildableVsBuilt": {
+    "message": "Montable ≠ monté : « OK » veut dire que tu peux monter le deck, pas qu'il l'est. Il n'est monté qu'une fois marqué « monté physiquement »."
+  },
+  "legendNotBuilt": {
+    "message": "Pas encore monté : clique pour le marquer comme monté physiquement."
+  },
+  "legendBuildable": {
+    "message": "Montable : tous les exemplaires sont dans ton stock libre."
+  },
+  "legendBlocked": {
+    "message": "Pas montable : nombre d'exemplaires qui bloquent (manquants, ou possédés dans une autre édition). Survole le bouton pour le détail."
+  },
+  "legendBuilt": {
+    "message": "Monté physiquement : ses cartes sont sorties de ton stock libre. Clique pour le démonter."
+  },
+  "legendOutdated": {
+    "message": "Monté, mais la liste a changé sur Moxfield depuis (point orange) : clique pour mettre à jour le montage."
+  },
+  "legendProxies": {
+    "message": "Monté avec des proxies : leur nombre."
+  },
+  "legendEditions": {
+    "message": "Utiliser mes éditions : nombre de cartes du deck possédées dans une autre édition, à passer sur la tienne en un clic."
+  },
+  "legendLike": {
+    "message": "Garder le deck dans « Mes decks » (popup), pour le monter plus tard."
+  },
+  "deckHelpTitle": {
+    "message": "Moxfield Stock Manager — ce que dit ce bouton"
+  },
+  "deckHelpClose": {
+    "message": "Compris"
+  },
+  "deckHelpNotBuilt": {
+    "message": "Ce deck n'est pas encore monté. Clique sur la boîte pour le marquer comme monté physiquement : ses cartes sortiront de ton stock libre."
+  },
+  "deckHelpBuildable": {
+    "message": "Ce deck est montable (« OK ») : tous ses exemplaires sont dans ton stock libre. Mais il n'est pas encore monté : clique sur la boîte pour le marquer comme monté physiquement."
+  },
+  "deckHelpBlocked_one": {
+    "message": "Ce deck n'est pas encore monté, et $1 exemplaire bloque son montage (nombre rouge) : manquant, ou possédé dans une autre édition. Survole la boîte pour le détail."
+  },
+  "deckHelpBlocked_other": {
+    "message": "Ce deck n'est pas encore monté, et $1 exemplaires bloquent son montage (nombre rouge) : manquants, ou possédés dans une autre édition. Survole la boîte pour le détail."
+  },
+  "deckHelpBuilt": {
+    "message": "Ce deck est monté physiquement (rond coché vert) : ses cartes sont sorties de ton stock libre. Clique sur le rond pour le démonter."
+  },
+  "deckHelpBuiltOutdated": {
+    "message": "Ce deck est monté physiquement, mais sa liste a changé sur Moxfield depuis (point orange). Clique sur le rond coché pour mettre à jour le montage."
   }
 }

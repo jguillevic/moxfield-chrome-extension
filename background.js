@@ -1791,31 +1791,62 @@ async function handleGetShoppingList({ deckIds } = {}) {
   return { ok: true, deckCount: decks.length, skipped, items, total: prices.total, unpriced: prices.unpriced };
 }
 
-// --- Guide de démarrage (popup) ---
-// { done, step } : guide terminé ou passé, et étape où l'utilisateur s'est
-// arrêté (le popup se ferme dès qu'on va sur Moxfield : le guide reprend là
-// à sa réouverture). Propre à ce PC, pas synchronisé.
+// --- Aide au démarrage ---
+// { done, deckHelpSeen } : liste des premiers pas du popup masquée, et bulle
+// d'aide de la page d'un deck déjà vue (cf. syncHelpBubble dans
+// content-deck.js). Propre à ce PC, pas synchronisé. Les anciens
+// enregistrements ont aussi un champ step (étape du guide pas à pas,
+// remplacé par la liste), ignoré.
 const ONBOARDING_KEY = "moxfieldStockManagerOnboarding";
 
-// Premier appel : une installation qui a déjà un stock ou des decks montés
-// (extension mise à jour, ou état venu de Drive) n'a pas besoin du guide ;
-// le constat est enregistré, pour qu'une nouvelle installation garde son
-// guide une fois la collection récupérée.
-async function handleGetOnboarding() {
+async function readOnboarding() {
   const data = await chrome.storage.local.get(ONBOARDING_KEY);
-  let record = data[ONBOARDING_KEY];
-  if (!record) {
-    const { stock, builtDecks } = await getState();
-    record = { done: Object.keys(stock).length > 0 || Object.keys(builtDecks).length > 0, step: 0 };
-    await chrome.storage.local.set({ [ONBOARDING_KEY]: record });
-  }
-  return { ok: true, done: Boolean(record.done), step: Number(record.step) || 0 };
+  return data[ONBOARDING_KEY] || null;
 }
 
-async function handleSetOnboarding({ done, step }) {
-  const record = { done: Boolean(done), step: Math.max(0, Number(step) || 0) };
-  await chrome.storage.local.set({ [ONBOARDING_KEY]: record });
-  return { ok: true, ...record };
+async function writeOnboarding(record) {
+  const value = { done: Boolean(record.done), deckHelpSeen: Boolean(record.deckHelpSeen) };
+  await chrome.storage.local.set({ [ONBOARDING_KEY]: value });
+  return value;
+}
+
+// Nouvelle installation : premiers pas à faire, enregistré dès
+// l'installation. Sans ça, la collection récupérée avant la première
+// ouverture du popup (connexion à Moxfield juste après l'installation)
+// faisait passer l'installation pour une ancienne, et les premiers pas
+// n'étaient jamais proposés.
+async function initOnboardingOnInstall(reason) {
+  if (reason === "install" && !(await readOnboarding())) await writeOnboarding({ done: false, deckHelpSeen: false });
+}
+
+// Premier appel sans enregistrement (extension mise à jour depuis une
+// version sans aide, ou état venu de Drive) : une installation qui a déjà
+// un stock ou des decks montés n'a pas besoin des premiers pas. La bulle de
+// la page d'un deck, elle, lui est montrée une fois : c'est là que la
+// confusion « montable / monté » a été constatée.
+async function handleGetOnboarding() {
+  let record = await readOnboarding();
+  if (!record) {
+    const { stock, builtDecks } = await getState();
+    record = await writeOnboarding({ done: Object.keys(stock).length > 0 || Object.keys(builtDecks).length > 0, deckHelpSeen: false });
+  }
+  return { ok: true, done: Boolean(record.done), deckHelpSeen: Boolean(record.deckHelpSeen) };
+}
+
+// N'écrit que si quelque chose change.
+async function updateOnboarding(changes) {
+  const current = await handleGetOnboarding();
+  const next = { done: current.done, deckHelpSeen: current.deckHelpSeen, ...changes };
+  if (next.done === current.done && next.deckHelpSeen === current.deckHelpSeen) return { ok: true, ...next };
+  return { ok: true, ...(await writeOnboarding(next)) };
+}
+
+async function handleSetOnboarding({ done }) {
+  return updateOnboarding({ done: Boolean(done) });
+}
+
+async function handleSetDeckHelpSeen() {
+  return updateOnboarding({ deckHelpSeen: true });
 }
 
 // Version affichée en bas du popup : numéro du manifest, et commit du clone
@@ -1853,7 +1884,8 @@ chrome.runtime.onStartup.addListener(async () => {
 
 // Aussi au rechargement de l'extension (après un git pull) : la pastille
 // « nouvelle version » disparaît.
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  await initOnboardingOnInstall(details && details.reason);
   startUpdateChecks();
   if ((await getSyncMeta()).enabled) startSyncAlarm();
   if ((await getCollectionMeta()).enabled) {
@@ -1896,6 +1928,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "SET_ONBOARDING":
           sendResponse(await handleSetOnboarding(msg.payload || {}));
+          break;
+        case "SET_DECK_HELP_SEEN":
+          sendResponse(await handleSetDeckHelpSeen());
           break;
         case "GET_VERSION_INFO":
           sendResponse(await handleGetVersionInfo());
