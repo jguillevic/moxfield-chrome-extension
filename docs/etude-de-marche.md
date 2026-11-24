@@ -97,7 +97,7 @@ issue de cette étude.
 | 7 | **Liste d'achats cumulée** de plusieurs decks, sans doublons, avec le coût total (livré en 0.8.0) | 3 | 4 | **12** | ROADMAP n°8 | Une seule commande ; plus utile une fois le rang 3 livré |
 | 8 | **Disponibilité pendant la construction du deck** sur Moxfield : « 1 sur 3 libre, 2 dans des decks montés » dans la recherche de cartes | 5 | 2 | **10** | nouveau | Exactement la demande 2554 de Moxfield ; lecture d'une nouvelle partie de la page, fragile |
 | 9 | **Export du stock libre** (CSV ou format d'import Moxfield) | 2 | 5 | **10** | ROADMAP n°14 | Usage occasionnel, mais très simple |
-| 10 | **Bouton « Proposer une idée »** (formulaire d'issue GitHub pré-rempli) | 2 | 5 | **10** | nouveau | Canal de retour dès les premiers utilisateurs ; un lien et un formulaire |
+| 10 | **Bouton « Proposer une idée »** (livré en 0.11.0, sans compte : retour d'utilisateur Sentry plutôt qu'un formulaire d'issue GitHub, qui en demandait un) | 2 | 5 | **10** | nouveau | Canal de retour dès les premiers utilisateurs ; un lien et un formulaire |
 | 11 | **Version Firefox** | 3 | 3 | **9** | nouveau | Collection Lens y est ; la connexion Google par fenêtre existe déjà |
 | 12 | **Decks montés modifiés détectés sans les ouvrir** | 3 | 3 | **9** | ROADMAP n°6 | Fiabilité du stock ; se combine avec le rang 3 |
 | 13 | **Boutons intégrés à la nouvelle page de Moxfield** (à la place du bandeau flottant) | 3 | 3 | **9** | nouveau | Intégration plus propre ; demande une copie de la nouvelle page |

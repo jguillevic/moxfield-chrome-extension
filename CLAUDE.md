@@ -4,6 +4,15 @@ Extension Chrome (MV3) qui gère un stock de cartes physiques par-dessus
 Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 (cf. `manifest.json`).
 
+## Skills du projet
+
+Modes opératoires dans `.claude/skills/` : `/livrer` (checklist de fin
+de fonctionnalité, à dérouler avant de proposer un commit),
+`/verifier-tests`, `/ajouter-texte`, `/capture-ecran`,
+`/revue-ergonomie`, `/verifier-confidentialite`, `/tri-sentry`,
+`/etude-de-marche`. Un piège nouveau rencontré en les suivant y est
+ajouté.
+
 ## Tests automatisés
 
 - Toute nouvelle fonctionnalité (ou correction de bug) est livrée avec des
@@ -126,7 +135,9 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
   (`reportError` dans le service worker, message `REPORT_ERROR` depuis une
   page). Jamais l'état, les decks ni l'adresse mail dans un rapport ; pas
   de rapport pour une situation normale (pas connecté à Moxfield, réseau
-  coupé) ni pour un refus expliqué à l'utilisateur.
+  coupé) ni pour un refus expliqué à l'utilisateur. Seule exception pour
+  l'adresse mail : celle que l'utilisateur tape lui-même dans « Proposer
+  une idée » (retour d'utilisateur Sentry, `SEND_FEEDBACK`).
 - Styles injectés : variables CSS posées sur nos seuls éléments racines
   (`.msm-*`), variantes sombres via `prefers-color-scheme`.
 - Toute icône tierce est créditée dans le README (section « Crédits »).
@@ -135,6 +146,9 @@ Moxfield. Pas de build : les fichiers sont chargés tels quels par Chrome
 
 - Idées de fonctionnalités et questions ouvertes : `ROADMAP.md`. Une
   fonctionnalité livrée passe dans sa section « Livré ».
+- Idées et erreurs reçues dans Sentry : triées selon
+  `docs/traitement-des-idees.md` (jamais d'adresse mail ni de texte
+  d'utilisateur recopié dans le dépôt, qui est public).
 - Chaque fonctionnalité visible est décrite dans le README (section
   « Utilisation »), et ses limites dans « Limites connues ».
 - Nouveau fichier de tests : mettre à jour la section « Développement » du

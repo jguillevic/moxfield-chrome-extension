@@ -15,13 +15,18 @@ const HTML = fs.readFileSync(path.join(ROOT, "popup.html"), "utf8");
 const SCRIPTS = [...HTML.matchAll(/<script src="([^"]+)"/g)].map(([, f]) => fs.readFileSync(path.join(ROOT, f), "utf8"));
 
 const EMPTY_STATE = { stock: {}, builtDecks: {} };
+let popupCount = 0;
 const SYNC_OFF = { enabled: false };
 
 // responses : réponse du faux service worker par type de message (objet ou
 // fonction recevant le message) ; lang : langue du navigateur (français par
 // défaut).
 function openPopup(responses, lang = "fr") {
-  const dom = new JSDOM(HTML.replace(/<script src="[^"]+"><\/script>/g, ""), { runScripts: "outside-only" });
+  const dom = new JSDOM(HTML.replace(/<script src="[^"]+"><\/script>/g, ""), {
+    runScripts: "outside-only",
+    // Origine propre à chaque popup : localStorage (brouillon d'idée) utilisable et vide.
+    url: `https://popup-${++popupCount}.test/`,
+  });
   const win = dom.window;
   const sent = [];
   const storageListeners = [];
@@ -1159,4 +1164,209 @@ test("tout effacer : nom explicite, résultat affiché (collection récupérée 
   p.$("reset-btn").click();
   await settle();
   assert.match(p.$("reset-status").textContent, /^Decks démontés et stock effacé\. Récupère ta collection/);
+});
+
+// --- Proposer une idée ---
+
+const FEEDBACK_ON = { ok: true, configured: true, left: 10, max: 10 };
+
+function feedbackPopup(responses = {}, lang = "fr") {
+  return openPopup({ GET_COLLECTION_STATUS: collectionStatus({}), GET_FEEDBACK_STATUS: FEEDBACK_ON, ...responses }, lang);
+}
+
+function typeIn(p, id, value) {
+  p.$(id).value = value;
+  p.$(id).dispatchEvent(new p.win.Event("input"));
+}
+
+function blur(p, id) {
+  p.$(id).dispatchEvent(new p.win.Event("blur"));
+}
+
+async function openFeedbackFromHeader(p) {
+  await settle();
+  p.$("feedback-btn").click();
+  await settle();
+}
+
+test("en-tête : titre seulement pour les lecteurs d'écran, bouton « Idée » avec un libellé visible", async (t) => {
+  const p = feedbackPopup();
+  t.after(p.close);
+  await settle();
+  const h1 = p.win.document.querySelector("header h1");
+  assert.ok(h1.classList.contains("visually-hidden"));
+  assert.equal(h1.textContent, "Moxfield Stock Manager");
+  const btn = p.$("feedback-btn");
+  assert.equal(btn.hidden, false);
+  assert.equal(btn.textContent.trim(), "Idée");
+  assert.equal(btn.getAttribute("aria-label"), "Proposer une idée");
+  assert.ok(btn.getAttribute("aria-label").toLowerCase().includes(btn.textContent.trim().toLowerCase()), "nom accessible qui contient le libellé");
+  assert.equal(btn.title, "", "pas d'info seulement au survol");
+  assert.equal(p.$("feedback-help-line").hidden, false);
+  assert.equal(p.$("feedback-footer").hidden, false);
+});
+
+test("idée : pas d'envoi configuré, aucun point d'entrée", async (t) => {
+  const p = feedbackPopup({ GET_FEEDBACK_STATUS: { ok: true, configured: false, left: 10, max: 10 } });
+  t.after(p.close);
+  await settle();
+  for (const id of ["feedback-btn", "feedback-help-line", "feedback-footer", "feedback-panel"]) assert.equal(p.$(id).hidden, true, id);
+});
+
+test("idée : panneau en tête du popup, ouvert depuis l'en-tête, focus sur le texte, Échap le ferme", async (t) => {
+  const p = feedbackPopup();
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  const panel = p.$("feedback-panel");
+  assert.equal(panel.hidden, false);
+  assert.ok(panel.compareDocumentPosition(p.$("stats")) & p.win.Node.DOCUMENT_POSITION_FOLLOWING, "avant les chiffres clés");
+  for (const el of p.win.document.querySelectorAll(".feedback-opener")) assert.equal(el.getAttribute("aria-expanded"), "true");
+  assert.equal(p.win.document.activeElement, p.$("feedback-message"));
+  // Rien d'écrit : consigne neutre, pas une erreur.
+  assert.equal(p.$("feedback-send-btn").disabled, true);
+  assert.equal(p.$("feedback-reason").textContent, "Écris ton idée pour pouvoir l'envoyer.");
+  assert.equal(p.$("feedback-reason").classList.contains("error"), false);
+  typeIn(p, "feedback-message", "Une liste à cocher");
+  assert.equal(p.$("feedback-send-btn").disabled, false);
+  assert.equal(p.$("feedback-reason").textContent, "");
+
+  panel.dispatchEvent(new p.win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  assert.equal(panel.hidden, true);
+  assert.equal(p.$("feedback-btn").getAttribute("aria-expanded"), "false");
+  assert.equal(p.win.document.activeElement, p.$("feedback-btn"), "focus rendu au bouton");
+});
+
+test("idée : ouverte aussi depuis l'aide et le pied du popup", async (t) => {
+  const p = feedbackPopup();
+  t.after(p.close);
+  await settle();
+  p.$("feedback-help-line").querySelector("button").click();
+  await settle();
+  assert.equal(p.$("feedback-panel").hidden, false);
+  p.$("feedback-close-btn").click();
+  assert.equal(p.$("feedback-panel").hidden, true);
+  p.$("feedback-open-btn").click();
+  await settle();
+  assert.equal(p.$("feedback-panel").hidden, false);
+});
+
+test("idée : adresse incomplète en cours de frappe = consigne ; refusée à la sortie du champ, rattachée au champ", async (t) => {
+  const p = feedbackPopup();
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  typeIn(p, "feedback-message", "Idée");
+  typeIn(p, "feedback-email", "moi@exemple");
+  assert.equal(p.$("feedback-send-btn").disabled, true);
+  assert.equal(p.$("feedback-reason").textContent, "Termine ton adresse mail, ou laisse le champ vide.");
+  assert.equal(p.$("feedback-email").getAttribute("aria-invalid"), "false");
+
+  blur(p, "feedback-email");
+  assert.match(p.$("feedback-reason").textContent, /adresse mail n'a pas l'air valide/);
+  assert.ok(p.$("feedback-reason").classList.contains("error"));
+  assert.equal(p.$("feedback-email").getAttribute("aria-invalid"), "true");
+  assert.match(p.$("feedback-email").getAttribute("aria-describedby"), /feedback-reason/);
+
+  typeIn(p, "feedback-email", "moi@exemple.fr");
+  assert.equal(p.$("feedback-send-btn").disabled, false);
+  assert.equal(p.$("feedback-email").getAttribute("aria-invalid"), "false");
+  assert.equal(p.$("feedback-email-kept").textContent, "Gardée dans ce navigateur pour tes prochaines idées.");
+});
+
+// Constaté en vrai : après l'envoi, « Écris ton idée pour pouvoir l'envoyer. »
+// s'affichait au-dessus de « Merci ! », sous un bouton grisé.
+test("idée envoyée : une confirmation à la place du formulaire, sans consigne contradictoire", async (t) => {
+  const p = feedbackPopup({ SEND_FEEDBACK: { ok: true } });
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  typeIn(p, "feedback-message", "Une liste à cocher");
+  typeIn(p, "feedback-email", "moi@exemple.fr");
+  p.$("feedback-send-btn").click();
+  await settle();
+  assert.deepEqual(p.sent.find((m) => m.type === "SEND_FEEDBACK").payload, { message: "Une liste à cocher", email: "moi@exemple.fr" });
+  assert.equal(p.$("feedback-form").hidden, true, "formulaire (et sa consigne) masqué");
+  assert.equal(p.$("feedback-done").hidden, false);
+  const done = p.$("feedback-done-text");
+  assert.equal(done.textContent, "Merci ! Ton idée est bien partie. On te répondra à moi@exemple.fr.");
+  assert.equal(done.getAttribute("role"), "status");
+  assert.equal(p.win.document.activeElement, done, "focus sur la confirmation");
+
+  // Une autre idée : formulaire vide, adresse gardée.
+  p.$("feedback-another-btn").click();
+  assert.equal(p.$("feedback-form").hidden, false);
+  assert.equal(p.$("feedback-message").value, "");
+  assert.equal(p.$("feedback-email").value, "moi@exemple.fr");
+  assert.equal(p.win.document.activeElement, p.$("feedback-message"));
+});
+
+test("idée envoyée sans adresse : merci seul ; « Fermer » replie le panneau", async (t) => {
+  const p = feedbackPopup({ SEND_FEEDBACK: { ok: true } });
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  typeIn(p, "feedback-message", "Idée");
+  p.$("feedback-send-btn").click();
+  await settle();
+  assert.equal(p.$("feedback-done-text").textContent, "Merci ! Ton idée est bien partie.");
+  p.$("feedback-done-close-btn").click();
+  assert.equal(p.$("feedback-panel").hidden, true);
+  assert.equal(p.win.document.activeElement, p.$("feedback-btn"));
+});
+
+test("idée pas partie : alerte, texte gardé, focus sur le texte ; brouillon retrouvé à la réouverture", async (t) => {
+  const p = feedbackPopup({ SEND_FEEDBACK: { ok: false, error: "Ton idée n'a pas pu partir." } });
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  typeIn(p, "feedback-message", "Une liste à cocher");
+  p.$("feedback-send-btn").click();
+  await settle();
+  const error = p.$("feedback-error");
+  assert.equal(error.hidden, false);
+  assert.equal(error.getAttribute("role"), "alert");
+  assert.equal(error.textContent, "Ton idée n'a pas pu partir.");
+  assert.equal(p.$("feedback-message").value, "Une liste à cocher");
+  assert.equal(p.$("feedback-send-btn").disabled, false, "on peut réessayer");
+  assert.equal(p.win.document.activeElement, p.$("feedback-message"));
+
+  const draft = p.win.localStorage.getItem("moxfieldStockManagerFeedbackDraft");
+  const again = feedbackPopup();
+  t.after(again.close);
+  again.win.localStorage.setItem("moxfieldStockManagerFeedbackDraft", draft);
+  await openFeedbackFromHeader(again);
+  assert.equal(again.$("feedback-message").value, "Une liste à cocher");
+});
+
+test("idée : quota du jour atteint, bouton désactivé avec sa raison avant le clic", async (t) => {
+  const p = feedbackPopup({ GET_FEEDBACK_STATUS: { ...FEEDBACK_ON, left: 0 } });
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  typeIn(p, "feedback-message", "Idée");
+  assert.equal(p.$("feedback-send-btn").disabled, true);
+  assert.equal(p.$("feedback-reason").textContent, "Tu as déjà envoyé 10 idées aujourd'hui : réessaie demain.");
+});
+
+test("idée : compteur près de la limite, texte trop long refusé mais pas coupé", async (t) => {
+  const p = feedbackPopup();
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  assert.equal(p.$("feedback-message").hasAttribute("maxlength"), false, "un texte collé n'est pas coupé en silence");
+  typeIn(p, "feedback-message", "x".repeat(100));
+  assert.equal(p.$("feedback-count").hidden, true);
+  typeIn(p, "feedback-message", "x".repeat(3600));
+  assert.equal(p.$("feedback-count").hidden, false);
+  assert.match(p.$("feedback-count").textContent, /^3\s600 \/ 4\s000 caractères$/);
+  typeIn(p, "feedback-message", "x".repeat(4100));
+  assert.equal(p.$("feedback-message").value.length, 4100);
+  assert.ok(p.$("feedback-count").classList.contains("error"));
+  assert.equal(p.$("feedback-send-btn").disabled, true);
+  assert.equal(p.$("feedback-reason").textContent, "Ton message est trop long : 4 000 caractères au plus.");
+});
+
+test("idée : textes en anglais", async (t) => {
+  const p = feedbackPopup({}, "en");
+  t.after(p.close);
+  await openFeedbackFromHeader(p);
+  assert.equal(p.$("feedback-btn").textContent.trim(), "Idea");
+  assert.equal(p.$("feedback-btn").getAttribute("aria-label"), "Suggest an idea");
+  assert.equal(p.$("feedback-open-btn").textContent, "Suggest an idea");
+  assert.equal(p.$("feedback-send-btn").textContent, "Send");
+  assert.equal(p.$("feedback-reason").textContent, "Write your idea to be able to send it.");
 });

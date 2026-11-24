@@ -1219,5 +1219,77 @@
   },
   "resetDoneRefetched": {
     "message": "Decks démontés, stock effacé, puis collection récupérée de nouveau."
+  },
+  "feedbackTitle": {
+    "message": "Proposer une idée"
+  },
+  "feedbackOpen": {
+    "message": "Proposer une idée"
+  },
+  "feedbackHint": {
+    "message": "Une idée, une remarque, quelque chose qui te gêne ? Ça part directement au développeur, sans compte."
+  },
+  "feedbackMessageLabel": {
+    "message": "Ton idée ou ta remarque"
+  },
+  "feedbackEmailLabel": {
+    "message": "Ton adresse mail (facultatif, seulement pour qu'on puisse te répondre)"
+  },
+  "feedbackSend": {
+    "message": "Envoyer"
+  },
+  "feedbackSending": {
+    "message": "Envoi…"
+  },
+  "feedbackSent": {
+    "message": "Merci ! Ton idée est bien partie."
+  },
+  "feedbackEmpty": {
+    "message": "Écris ton idée pour pouvoir l'envoyer."
+  },
+  "feedbackTooLong": {
+    "message": "Ton message est trop long : 4 000 caractères au plus."
+  },
+  "feedbackBadEmail": {
+    "message": "Cette adresse mail n'a pas l'air valide : corrige-la, ou laisse le champ vide."
+  },
+  "feedbackNotConfigured": {
+    "message": "L'envoi d'idées n'est pas configuré dans cette version."
+  },
+  "feedbackTooMany": {
+    "message": "Tu as déjà envoyé $1 idées aujourd'hui : réessaie demain."
+  },
+  "feedbackSendFailed": {
+    "message": "Ton idée n'a pas pu partir. Vérifie ta connexion à Internet puis réessaie : ton texte est gardé."
+  },
+  "feedbackPrivacy": {
+    "message": "Envoyé avec : la version de l'extension, ton navigateur, ton système, ta langue et un identifiant anonyme de ce PC. Jamais ton stock ni tes decks."
+  },
+  "feedbackPlaceholder": {
+    "message": "Par exemple : pouvoir trier « Mes decks » par couleur"
+  },
+  "feedbackEmailKept": {
+    "message": "Gardée dans ce navigateur pour tes prochaines idées."
+  },
+  "feedbackReplyTo": {
+    "message": "On te répondra à $1."
+  },
+  "feedbackAnother": {
+    "message": "Proposer une autre idée"
+  },
+  "feedbackEmailUnfinished": {
+    "message": "Termine ton adresse mail, ou laisse le champ vide."
+  },
+  "feedbackCount": {
+    "message": "$1 / $2 caractères"
+  },
+  "feedbackHelpPrompt": {
+    "message": "Une question, une idée ?"
+  },
+  "feedbackHelpLink": {
+    "message": "Propose-la"
+  },
+  "feedbackButton": {
+    "message": "Idée"
   }
 }

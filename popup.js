@@ -870,6 +870,199 @@ document.getElementById("error-reports-enabled").addEventListener("change", asyn
   renderErrorReports();
 });
 
+// --- Proposer une idée (cf. handleSendFeedback dans background.js) ---
+// Panneau en tête du popup, ouvert depuis l'en-tête, l'aide ou le pied :
+// une section repliée parmi les réglages, en bas, n'était pas trouvée
+// (constaté en vrai). Mêmes règles que le service worker (checkFeedback) :
+// le bouton est désactivé, avec sa raison, pour tout ce qu'il refuserait.
+const { checkFeedback, MAX_FEEDBACK_TEXT } = createErrorReports({});
+// Compteur seulement près de la limite : inutile pour une idée de deux lignes.
+const FEEDBACK_COUNT_FROM = 3500;
+// Brouillon gardé dans ce navigateur : le popup se ferme au moindre clic
+// ailleurs, et un long texte perdu ne serait pas retapé. Stockage du
+// navigateur peut-être indisponible : simple confort, d'où les try/catch.
+const FEEDBACK_DRAFT_KEY = "moxfieldStockManagerFeedbackDraft";
+// status : réponse de GET_FEEDBACK_STATUS ; emailTouched : le champ adresse
+// a été quitté (avant, une adresse incomplète est en cours de frappe, pas
+// une erreur) ; opener : bouton qui a ouvert le panneau (focus rendu).
+const feedback = { status: null, sending: false, emailTouched: false, opener: null };
+const byId = (id) => document.getElementById(id);
+
+function readFeedbackDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(FEEDBACK_DRAFT_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveFeedbackDraft(draft) {
+  try {
+    localStorage.setItem(FEEDBACK_DRAFT_KEY, JSON.stringify(draft));
+  } catch (e) {
+    // brouillon simplement pas gardé
+  }
+}
+
+function feedbackInput() {
+  return { message: byId("feedback-message").value, email: byId("feedback-email").value };
+}
+
+// Raison du bouton « Envoyer » désactivé : { text, error, email } ou null.
+// Une seule, la plus utile ; une vraie erreur (adresse refusée, texte trop
+// long) est en rouge, une simple consigne (rien d'écrit) en gris.
+function feedbackReason(input) {
+  const status = feedback.status;
+  if (status && status.left <= 0) return { text: t("feedbackTooMany", String(status.max)) };
+  const check = checkFeedback(input);
+  if (check.reason === "tooLong") return { text: t("feedbackTooLong"), error: true };
+  // Adresse vérifiée à part : avec un texte vide, checkFeedback s'arrête à « vide ».
+  if (checkFeedback({ message: "-", email: input.email }).reason === "badEmail") {
+    return feedback.emailTouched ? { text: t("feedbackBadEmail"), error: true, email: true } : { text: t("feedbackEmailUnfinished") };
+  }
+  if (!check.ok) return { text: t("feedbackEmpty") };
+  return null;
+}
+
+function renderFeedbackForm() {
+  const input = feedbackInput();
+  const length = input.message.trim().length;
+  const count = byId("feedback-count");
+  count.hidden = length < FEEDBACK_COUNT_FROM;
+  count.textContent = t("feedbackCount", length.toLocaleString(i18n.locale), MAX_FEEDBACK_TEXT.toLocaleString(i18n.locale));
+  count.classList.toggle("error", length > MAX_FEEDBACK_TEXT);
+
+  const reason = feedback.sending ? null : feedbackReason(input);
+  const reasonEl = byId("feedback-reason");
+  reasonEl.textContent = reason ? reason.text : "";
+  reasonEl.classList.toggle("error", Boolean(reason && reason.error));
+  // Adresse refusée : le champ est marqué et décrit par la raison.
+  const email = byId("feedback-email");
+  email.setAttribute("aria-invalid", String(Boolean(reason && reason.email)));
+  email.setAttribute("aria-describedby", reason && reason.email ? "feedback-reason feedback-email-kept" : "feedback-email-kept");
+
+  const btn = byId("feedback-send-btn");
+  btn.disabled = Boolean(reason);
+  // Pendant l'envoi, le bouton reste atteignable (le focus ne retombe pas
+  // en haut du popup) mais ne fait rien.
+  btn.setAttribute("aria-disabled", String(feedback.sending));
+  btn.textContent = t(feedback.sending ? "feedbackSending" : "feedbackSend");
+}
+
+function showFeedbackForm() {
+  byId("feedback-form").hidden = false;
+  byId("feedback-done").hidden = true;
+  byId("feedback-error").hidden = true;
+  renderFeedbackForm();
+}
+
+function setFeedbackExpanded(open) {
+  byId("feedback-panel").hidden = !open;
+  for (const el of document.querySelectorAll(".feedback-opener")) el.setAttribute("aria-expanded", String(open));
+}
+
+async function loadFeedbackStatus() {
+  const res = await send("GET_FEEDBACK_STATUS");
+  feedback.status = res && res.ok ? res : null;
+  // Pas d'envoi configuré : la fonction n'existe pas dans cette version.
+  const configured = Boolean(feedback.status && feedback.status.configured);
+  for (const id of ["feedback-btn", "feedback-help-line", "feedback-footer"]) byId(id).hidden = !configured;
+  if (!configured) setFeedbackExpanded(false);
+  return configured;
+}
+
+async function openFeedbackPanel(opener) {
+  feedback.opener = opener;
+  const draft = readFeedbackDraft();
+  if (!byId("feedback-message").value && draft.message) byId("feedback-message").value = draft.message;
+  if (!byId("feedback-email").value && draft.email) byId("feedback-email").value = draft.email;
+  showFeedbackForm();
+  setFeedbackExpanded(true);
+  window.scrollTo(0, 0);
+  byId("feedback-message").focus();
+  // Quota relu à chaque ouverture (une idée a pu partir d'un autre popup).
+  await loadFeedbackStatus();
+  renderFeedbackForm();
+}
+
+// Focus rendu au bouton qui a ouvert le panneau, ou à celui de l'en-tête
+// si l'autre n'est plus visible (aide refermée entre-temps).
+function closeFeedbackPanel() {
+  setFeedbackExpanded(false);
+  const opener = feedback.opener && !feedback.opener.closest("[hidden]") ? feedback.opener : byId("feedback-btn");
+  opener.focus();
+}
+
+for (const opener of document.querySelectorAll(".feedback-opener")) {
+  opener.addEventListener("click", () => (byId("feedback-panel").hidden ? openFeedbackPanel(opener) : closeFeedbackPanel()));
+}
+
+byId("feedback-panel").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeFeedbackPanel();
+  }
+});
+
+byId("feedback-message").addEventListener("input", () => {
+  byId("feedback-error").hidden = true;
+  saveFeedbackDraft(feedbackInput());
+  renderFeedbackForm();
+});
+
+byId("feedback-email").addEventListener("input", () => {
+  saveFeedbackDraft(feedbackInput());
+  renderFeedbackForm();
+});
+
+byId("feedback-email").addEventListener("blur", () => {
+  if (byId("feedback-email").value.trim()) feedback.emailTouched = true;
+  renderFeedbackForm();
+});
+
+byId("feedback-send-btn").addEventListener("click", async () => {
+  if (feedback.sending) return;
+  const input = feedbackInput();
+  feedback.sending = true;
+  byId("feedback-error").hidden = true;
+  renderFeedbackForm();
+  let res;
+  try {
+    res = await send("SEND_FEEDBACK", input);
+  } catch (e) {
+    res = { ok: false, error: t("feedbackSendFailed") };
+  }
+  feedback.sending = false;
+  if (res && res.ok) {
+    // Une confirmation à la place du formulaire : vider le formulaire sur
+    // place affichait « Écris ton idée… » sous le merci (constaté en vrai).
+    // L'adresse est gardée pour la prochaine idée ; le texte est parti.
+    const email = input.email.trim();
+    byId("feedback-message").value = "";
+    saveFeedbackDraft({ email });
+    if (feedback.status) feedback.status.left -= 1;
+    byId("feedback-done-text").textContent = email ? `${t("feedbackSent")} ${t("feedbackReplyTo", email)}` : t("feedbackSent");
+    byId("feedback-form").hidden = true;
+    byId("feedback-done").hidden = false;
+    renderFeedbackForm();
+    byId("feedback-done-text").focus();
+  } else {
+    // Messages du service worker : des phrases complètes, sans « Erreur : ».
+    const error = byId("feedback-error");
+    error.textContent = (res && res.error) || t("unknownError");
+    error.hidden = false;
+    renderFeedbackForm();
+    byId("feedback-message").focus();
+  }
+});
+
+byId("feedback-done-close-btn").addEventListener("click", closeFeedbackPanel);
+byId("feedback-close-btn").addEventListener("click", closeFeedbackPanel);
+byId("feedback-another-btn").addEventListener("click", () => {
+  showFeedbackForm();
+  byId("feedback-message").focus();
+});
+
 // Un changement venant de Drive (ou d'un onglet Moxfield) met le popup à jour.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
@@ -1087,6 +1280,7 @@ async function renderVersion() {
 refresh();
 renderUpdate();
 renderVersion();
+loadFeedbackStatus();
 loadOnboarding();
 renderCollection();
 renderSync().then(() => {

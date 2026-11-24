@@ -135,9 +135,14 @@ h1 {
 .pill.error { color: var(--danger); background: var(--danger-soft); }
 .pill.off { color: var(--text-muted); background: var(--surface-muted); }
 
+/* À l'étroit (zoom, traduction plus longue) : les outils passent à la
+   ligne plutôt que de déborder. */
 .header-tools {
   display: flex;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 1;
+  min-width: 0;
   align-items: center;
   gap: 6px;
 }
@@ -308,6 +313,12 @@ button,
   transition: background 0.12s, border-color 0.12s;
 }
 
+/* Action impossible : visiblement éteinte (sa raison est écrite à côté). */
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 a.button {
   text-decoration: none;
 }
@@ -383,6 +394,7 @@ button.ghost:hover {
 
 input[type="search"],
 input[type="text"],
+input[type="email"],
 textarea {
   width: 100%;
   padding: 6px 9px;
@@ -788,6 +800,51 @@ button:focus-visible,
 
 .app-footer a:hover {
   text-decoration: underline;
+}
+
+/* « Proposer une idée » : bouton qui a l'air d'un lien (pied du popup,
+   aide). Souligné en permanence : gris et souligné seulement au survol, il
+   se lisait comme du texte (rien seulement au survol). */
+button.link-button {
+  display: inline;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+}
+
+.feedback-help-line {
+  margin-top: 8px;
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  margin: 6px 0 3px;
+}
+
+/* Note sous un champ (adresse gardée, compteur). */
+.field-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: -2px 0 4px;
+}
+
+#feedback-reason.error,
+.field-note.error {
+  color: var(--danger);
+}
+
+.feedback-done-text {
+  font-size: 13px;
+  margin: 4px 0 8px;
+}
+
+textarea.feedback-message {
+  font-family: inherit;
+  font-size: 12px;
 }
 
 /* Nouvelle version de l'extension disponible. */

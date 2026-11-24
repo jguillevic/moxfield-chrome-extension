@@ -111,7 +111,8 @@ Règles :
 
 ## 6. Popup
 
-- Ordre visé : en-tête (synchro, aide), alertes, chiffres clés, decks,
+- Ordre visé : en-tête (icône, synchro, aide, idée ; nom de l'extension
+  seulement pour les lecteurs d'écran, faute de place), alertes, chiffres clés, decks,
   stock, historique ; les réglages ensuite, repliés.
 - Chiffres clés : un message plutôt que des zéros tant que rien n'est
   récupéré.

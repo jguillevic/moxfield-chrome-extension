@@ -1219,5 +1219,77 @@
   },
   "resetDoneRefetched": {
     "message": "Decks unbuilt, stock cleared, then collection fetched again."
+  },
+  "feedbackTitle": {
+    "message": "Suggest an idea"
+  },
+  "feedbackOpen": {
+    "message": "Suggest an idea"
+  },
+  "feedbackHint": {
+    "message": "An idea, a remark, something that bothers you? It goes straight to the developer, no account needed."
+  },
+  "feedbackMessageLabel": {
+    "message": "Your idea or remark"
+  },
+  "feedbackEmailLabel": {
+    "message": "Your email address (optional, only so we can reply)"
+  },
+  "feedbackSend": {
+    "message": "Send"
+  },
+  "feedbackSending": {
+    "message": "Sending…"
+  },
+  "feedbackSent": {
+    "message": "Thank you! Your idea has been sent."
+  },
+  "feedbackEmpty": {
+    "message": "Write your idea to be able to send it."
+  },
+  "feedbackTooLong": {
+    "message": "Your message is too long: 4,000 characters at most."
+  },
+  "feedbackBadEmail": {
+    "message": "This email address does not look valid: fix it, or leave the field empty."
+  },
+  "feedbackNotConfigured": {
+    "message": "Sending ideas is not set up in this version."
+  },
+  "feedbackTooMany": {
+    "message": "You have already sent $1 ideas today: try again tomorrow."
+  },
+  "feedbackSendFailed": {
+    "message": "Your idea could not be sent. Check your Internet connection and try again: your text is kept."
+  },
+  "feedbackPrivacy": {
+    "message": "Sent along: the extension version, your browser, your system, your language and an anonymous ID for this computer. Never your stock or your decks."
+  },
+  "feedbackPlaceholder": {
+    "message": "For example: sort “My decks” by colour"
+  },
+  "feedbackEmailKept": {
+    "message": "Kept in this browser for your next ideas."
+  },
+  "feedbackReplyTo": {
+    "message": "We will reply to $1."
+  },
+  "feedbackAnother": {
+    "message": "Suggest another idea"
+  },
+  "feedbackEmailUnfinished": {
+    "message": "Finish your email address, or leave the field empty."
+  },
+  "feedbackCount": {
+    "message": "$1 / $2 characters"
+  },
+  "feedbackHelpPrompt": {
+    "message": "A question, an idea?"
+  },
+  "feedbackHelpLink": {
+    "message": "Suggest it"
+  },
+  "feedbackButton": {
+    "message": "Idea"
   }
 }

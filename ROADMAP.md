@@ -58,6 +58,14 @@ Rang susceptible de bouger : le n°7 passe en tête si distinguer foil et
 
 ## Livré
 
+- « Proposer une idée » dans le popup (bouton « Idée » dans l'en-tête,
+  aussi dans l'aide et en bas ; panneau en tête du popup, confirmation
+  après l'envoi, revu après deux revues d'ergonomie) :
+  texte envoyé au développeur sans aucun compte (retour d'utilisateur
+  Sentry, même projet que les rapports d'erreurs), adresse mail
+  facultative pour pouvoir répondre, brouillon gardé, 10 idées par jour —
+  rang 10 de l'étude de marché, sans le compte GitHub qu'elle prévoyait —
+  novembre 2026.
 - « Utiliser mes éditions » ne compte plus que les cartes qu'un clic
   changerait (exemplaires déjà dans d'autres decks montés et quantité
   insuffisante prévus avant le clic) ; s'il ne reste que des cartes

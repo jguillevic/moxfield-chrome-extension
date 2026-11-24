@@ -171,6 +171,46 @@ function causeOf(e) {
   return e && e.cause ? { cause: `${e.cause.name || "Error"}: ${e.cause.message || e.cause}` } : undefined;
 }
 
+// --- Proposer une idée (popup) : retour d'utilisateur Sentry, sans compte ---
+// Pas soumis à la case « Envoyer les rapports d'erreurs » : c'est une action
+// explicite de l'utilisateur. Un échec n'est pas rapporté (réseau coupé :
+// situation normale, expliquée à l'écran).
+const FEEDBACK_KEY = "moxfieldStockManagerFeedback";
+
+async function handleSendFeedback(payload) {
+  if (!errorReports.configured) return { ok: false, error: i18n.t("feedbackNotConfigured") };
+  const feedback = errorReports.checkFeedback(payload);
+  if (!feedback.ok) return { ok: false, error: i18n.t(FEEDBACK_REFUSALS[feedback.reason]) };
+  const data = await chrome.storage.local.get(FEEDBACK_KEY);
+  const { allowed, log } = errorReports.allowFeedback(data[FEEDBACK_KEY]);
+  if (!allowed) return { ok: false, error: i18n.t("feedbackTooMany", String(errorReports.MAX_FEEDBACK_PER_DAY)) };
+  const event = errorReports.buildFeedback(feedback, {
+    release: chrome.runtime.getManifest().version,
+    installId: await getDeviceId(),
+    nav: typeof navigator !== "undefined" ? navigator : null,
+    lang: i18n.locale,
+  });
+  if (!(await errorReports.send(event, "feedback"))) return { ok: false, error: i18n.t("feedbackSendFailed") };
+  // Compté seulement une fois parti : un échec réseau ne consomme pas le quota.
+  await chrome.storage.local.set({ [FEEDBACK_KEY]: log });
+  return { ok: true };
+}
+
+// État affiché à l'ouverture du panneau : la fonction n'existe pas sans DSN
+// (points d'entrée masqués), et le quota du jour est annoncé avant le clic.
+async function handleGetFeedbackStatus() {
+  const data = await chrome.storage.local.get(FEEDBACK_KEY);
+  return {
+    ok: true,
+    configured: errorReports.configured,
+    left: errorReports.feedbackLeft(data[FEEDBACK_KEY]),
+    max: errorReports.MAX_FEEDBACK_PER_DAY,
+  };
+}
+
+// Raison d'un refus de checkFeedback → message (mêmes clés dans le popup).
+const FEEDBACK_REFUSALS = { empty: "feedbackEmpty", tooLong: "feedbackTooLong", badEmail: "feedbackBadEmail" };
+
 async function handleSetErrorReports({ enabled }) {
   const meta = await updateErrorReportsMeta({ enabled: Boolean(enabled) });
   return { ok: true, enabled: meta.enabled, configured: errorReports.configured };
@@ -2037,6 +2077,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "SET_ERROR_REPORTS":
           sendResponse(await handleSetErrorReports(msg.payload || {}));
+          break;
+        case "GET_FEEDBACK_STATUS":
+          sendResponse(await handleGetFeedbackStatus());
+          break;
+        case "SEND_FEEDBACK":
+          sendResponse(await handleSendFeedback(msg.payload || {}));
           break;
         default:
           sendResponse({ ok: false, error: i18n.t("unknownMessageType", msg.type) });

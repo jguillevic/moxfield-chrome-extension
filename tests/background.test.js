@@ -53,6 +53,8 @@ function loadBackground(initialState, options = {}) {
   const badge = { text: "", title: "" };
   const github = { calls: [] };
   const sentry = [];
+  // Type de chaque élément d'enveloppe envoyé ("event" : erreur, "feedback" : idée).
+  const sentryTypes = [];
   const tabsCreated = [];
   const tabMessages = [];
   const moxfieldCalls = [];
@@ -154,6 +156,8 @@ function loadBackground(initialState, options = {}) {
     }
     if (url.includes("googleapis.com")) return (options.drive || defaultDrive)(url, init);
     if (url.includes("sentry.io")) {
+      if (options.sentryDown) throw new TypeError("Failed to fetch"); // réseau coupé
+      sentryTypes.push(JSON.parse(init.body.split("\n")[1]).type);
       sentry.push(JSON.parse(init.body.split("\n")[2]));
       return { ok: true };
     }
@@ -223,6 +227,8 @@ function loadBackground(initialState, options = {}) {
     context,
     counts,
     sentry,
+    sentryTypes,
+    setSentryDown: (down) => (options.sentryDown = down),
     tabsCreated,
     tabMessages,
     moxfieldCalls,
@@ -1031,6 +1037,68 @@ test("erreur d'une page (deck, popup) : rapportée par le service worker", async
   assert.equal(event.tags.where, "deck-page:check");
   assert.equal(event.exception.values[0].value, "x is null");
   assert.equal(event.exception.values[0].stacktrace.frames[0].filename, "content-deck.js");
+});
+
+// --- Proposer une idée (popup) ---
+
+test("idée : envoyée à Sentry comme retour d'utilisateur, même rapports d'erreurs coupés", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  await bg.send({ type: "SET_ERROR_REPORTS", payload: { enabled: false } });
+  const res = await bg.send({ type: "SEND_FEEDBACK", payload: { message: " Une liste à cocher au montage ", email: "moi@exemple.fr" } });
+  assert.deepEqual(res, { ok: true });
+  assert.deepEqual(bg.sentryTypes, ["feedback"]);
+  const [event] = bg.sentry;
+  assert.deepEqual(event.contexts.feedback, { message: "Une liste à cocher au montage", source: "popup", contact_email: "moi@exemple.fr" });
+  assert.equal(event.release, "moxfield-stock-manager@0.2.0");
+  assert.equal(event.tags.where, "feedback");
+  assert.equal(event.tags.lang, "fr");
+  // Jamais le compte Google du profil (seule l'adresse tapée part).
+  assert.ok(!JSON.stringify(event).includes(bg.google.email));
+});
+
+test("idée refusée : texte vide, adresse invalide, pas de DSN — rien ne part", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  assert.deepEqual(await bg.send({ type: "SEND_FEEDBACK", payload: { message: "  " } }), {
+    ok: false,
+    error: "Écris ton idée pour pouvoir l'envoyer.",
+  });
+  assert.deepEqual(await bg.send({ type: "SEND_FEEDBACK", payload: { message: "Idée", email: "moi@" } }), {
+    ok: false,
+    error: "Cette adresse mail n'a pas l'air valide : corrige-la, ou laisse le champ vide.",
+  });
+  const noDsn = loadBackground();
+  assert.deepEqual(await noDsn.send({ type: "SEND_FEEDBACK", payload: { message: "Idée" } }), {
+    ok: false,
+    error: "L'envoi d'idées n'est pas configuré dans cette version.",
+  });
+  await waitReports();
+  assert.equal(bg.sentry.length + noDsn.sentry.length, 0, "ni idée, ni rapport d'erreur");
+});
+
+test("idée : 10 par jour ; un envoi raté (réseau coupé) ne compte pas et n'est pas rapporté", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  bg.setSentryDown(true);
+  const failed = await bg.send({ type: "SEND_FEEDBACK", payload: { message: "Idée" } });
+  assert.equal(failed.ok, false);
+  assert.match(failed.error, /n'a pas pu partir/);
+  bg.setSentryDown(false);
+  for (let i = 0; i < 10; i++) {
+    assert.deepEqual(await bg.send({ type: "SEND_FEEDBACK", payload: { message: `Idée ${i}` } }), { ok: true }, `idée n°${i + 1}`);
+  }
+  assert.deepEqual(await bg.send({ type: "SEND_FEEDBACK", payload: { message: "Une de trop" } }), {
+    ok: false,
+    error: "Tu as déjà envoyé 10 idées aujourd'hui : réessaie demain.",
+  });
+  await waitReports();
+  assert.deepEqual(bg.sentryTypes, Array(10).fill("feedback"), "aucun rapport d'erreur pour l'échec réseau");
+});
+
+test("idée : état annoncé avant le clic (envoi configuré, idées restantes du jour)", async () => {
+  const bg = loadBackground(undefined, { sentryDsn: SENTRY_DSN });
+  assert.deepEqual(await bg.send({ type: "GET_FEEDBACK_STATUS" }), { ok: true, configured: true, left: 10, max: 10 });
+  await bg.send({ type: "SEND_FEEDBACK", payload: { message: "Idée" } });
+  assert.equal((await bg.send({ type: "GET_FEEDBACK_STATUS" })).left, 9);
+  assert.equal((await loadBackground().send({ type: "GET_FEEDBACK_STATUS" })).configured, false);
 });
 
 test("connexion Google impossible (ex. Brave) : rapportée avec l'erreur d'origine", async () => {

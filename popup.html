@@ -10,12 +10,24 @@
   <header class="app-header">
     <div class="brand">
       <img src="icons/icon32.png" alt="" width="22" height="22" />
-      <h1>Moxfield Stock Manager</h1>
+      <!-- Nom seulement pour les lecteurs d'écran : l'icône suffit à l'œil
+           (c'est celle sur laquelle on vient de cliquer dans Chrome), et le
+           titre affiché faisait déborder l'en-tête en français. -->
+      <h1 class="visually-hidden">Moxfield Stock Manager</h1>
     </div>
     <div class="header-tools">
       <span id="sync-pill" class="pill off" data-i18n="syncPillOff"></span>
       <!-- Aide toujours à portée (avant : lien gris en bas du popup, introuvable). -->
       <button id="help-btn" class="help-btn" aria-controls="onboarding" aria-expanded="false" data-i18n-title="helpButtonTitle"><span aria-hidden="true">?</span> <span data-i18n="helpButton"></span></button>
+      <!-- Proposer une idée : toujours visible (une section repliée parmi les
+           réglages, en bas du popup, n'était pas trouvée). Libellé visible
+           (une ampoule seule se lit « astuce » autant qu'« idée ») ; le nom
+           accessible le contient (WCAG 2.5.3). Masqué si l'envoi n'est pas
+           configuré. -->
+      <button id="feedback-btn" class="help-btn feedback-opener" aria-controls="feedback-panel" aria-expanded="false" data-i18n-aria-label="feedbackTitle" hidden>
+        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>
+        <span data-i18n="feedbackButton"></span>
+      </button>
     </div>
   </header>
   <!-- Nouvelle version sur GitHub (cf. update-check.js), affichée seulement s'il y en a une. -->
@@ -39,8 +51,48 @@
       <summary data-i18n="legendTitle"></summary>
       <div id="onboarding-legend-body"></div>
     </details>
+    <!-- C'est dans l'aide qu'on cherche quand on est bloqué. -->
+    <p class="hint feedback-help-line" id="feedback-help-line" hidden>
+      <span data-i18n="feedbackHelpPrompt"></span>
+      <button class="link-button feedback-opener" aria-controls="feedback-panel" aria-expanded="false" data-i18n="feedbackHelpLink"></button>
+    </p>
     <div class="actions">
       <button id="onboarding-close"></button>
+    </div>
+  </section>
+  <!-- Proposer une idée : panneau affiché à la demande, en tête du popup
+       (cf. handleSendFeedback dans background.js). Ne prend aucune place
+       au quotidien ; pas un réglage, donc pas parmi les réglages. -->
+  <section class="card feedback-card" id="feedback-panel" aria-labelledby="feedback-title" hidden>
+    <h2 id="feedback-title" data-i18n="feedbackTitle"></h2>
+    <div id="feedback-form">
+      <p class="hint" data-i18n="feedbackHint"></p>
+      <label class="field-label" for="feedback-message" data-i18n="feedbackMessageLabel"></label>
+      <!-- Pas de maxlength : un texte collé trop long serait coupé sans rien
+           dire ; la limite est annoncée (compteur) et vérifiée. -->
+      <textarea id="feedback-message" class="feedback-message" rows="5" data-i18n-placeholder="feedbackPlaceholder" aria-describedby="feedback-count"></textarea>
+      <p id="feedback-count" class="field-note" hidden></p>
+      <label class="field-label" for="feedback-email" data-i18n="feedbackEmailLabel"></label>
+      <input id="feedback-email" type="email" autocomplete="email" aria-describedby="feedback-email-error feedback-email-kept" />
+      <p id="feedback-email-error" class="field-note error" hidden></p>
+      <p id="feedback-email-kept" class="field-note" data-i18n="feedbackEmailKept"></p>
+      <div class="actions">
+        <button id="feedback-send-btn" class="primary" data-i18n="feedbackSend"></button>
+        <button id="feedback-close-btn" data-i18n="close"></button>
+      </div>
+      <!-- Raison du bouton désactivé, visible (charte : pas seulement un title). -->
+      <p id="feedback-reason" class="hint"></p>
+      <p id="feedback-error" class="notice error" role="alert" hidden></p>
+      <p class="hint" data-i18n="feedbackPrivacy"></p>
+    </div>
+    <!-- Après l'envoi : une confirmation à la place du formulaire (vider le
+         formulaire sur place affichait « Écris ton idée… » sous le merci). -->
+    <div id="feedback-done" hidden>
+      <p id="feedback-done-text" class="feedback-done-text" role="status" tabindex="-1"></p>
+      <div class="actions">
+        <button id="feedback-done-close-btn" class="primary" data-i18n="close"></button>
+        <button id="feedback-another-btn" data-i18n="feedbackAnother"></button>
+      </div>
     </div>
   </section>
   <!-- Rien à compter encore : un message plutôt que quatre zéros. -->
@@ -239,12 +291,17 @@
 
   <!-- Version de l'extension (manifest) et commit du clone. -->
   <footer class="app-footer">
+    <span id="feedback-footer" hidden>
+      <button id="feedback-open-btn" class="link-button feedback-opener" aria-controls="feedback-panel" aria-expanded="false" data-i18n="feedbackOpen"></button>
+      <span aria-hidden="true">·</span>
+    </span>
     <a id="version-link" href="https://github.com/jguillevic/moxfield-chrome-extension" target="_blank"></a>
   </footer>
 
   <script src="i18n.js"></script>
   <script src="deck-checks.js"></script>
   <script src="deck-help.js"></script>
+  <script src="error-reports.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

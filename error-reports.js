@@ -15,6 +15,11 @@
 // l'extension, navigateur et système, identifiant au hasard du PC. Jamais
 // le stock, les decks, ni l'adresse mail ; les jetons et adresses mail qui
 // traîneraient dans un message sont masqués (scrub).
+//
+// Même canal pour « Proposer une idée » (popup) : un retour d'utilisateur
+// Sentry (« User Feedback »), pour que proposer une idée ne demande aucun
+// compte (un formulaire d'issue GitHub en demandait un). Seule adresse mail
+// qui part : celle que l'utilisateur tape lui-même pour qu'on lui réponde.
 
 function createErrorReports({ dsn, fetch, now = () => Date.now() }) {
   // Une même erreur (endroit + message) part au plus une fois par heure, et
@@ -24,6 +29,12 @@ function createErrorReports({ dsn, fetch, now = () => Date.now() }) {
   const SAME_ERROR_INTERVAL_MS = 60 * 60 * 1000;
   const MAX_PER_DAY = 20;
   const MAX_TEXT = 2000;
+  // Sentry refuse un retour de plus de 4096 caractères. 10 idées par jour
+  // et par PC : de quoi tout dire, sans laisser un clic répété en boucle
+  // remplir le projet.
+  const MAX_FEEDBACK_TEXT = 4000;
+  const MAX_FEEDBACK_PER_DAY = 10;
+  const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // https://<clé>@o123.ingest.de.sentry.io/<projet> → URL d'envoi.
   function parseDsn(value) {
@@ -104,6 +115,17 @@ function createErrorReports({ dsn, fetch, now = () => Date.now() }) {
   }
 
   // report : { where, message, stack?, type?, extra? } ; context : { release,
+  // Utilisateur d'un envoi : l'identifiant au hasard du PC, et ip_address
+  // à null. Sans lui, Sentry ajoute l'adresse IP de la connexion et en
+  // déduit une ville (constaté en vrai : ville gardée même avec « Prevent
+  // Storing of IP Addresses » coché) ; null lui demande de ne pas la
+  // déduire (documentation Sentry, « Users' IP Address and Location »). Pas
+  // de champ sdk.settings.infer_ip : essayé avant, non documenté, l'envoi
+  // n'est jamais arrivé (constaté en vrai).
+  function sentryUser(installId) {
+    return { id: installId, ip_address: null };
+  }
+
   // installId, nav }.
   function buildEvent(report, context) {
     const { browser, os } = describeBrowser(context.nav);
@@ -118,27 +140,76 @@ function createErrorReports({ dsn, fetch, now = () => Date.now() }) {
       platform: "javascript",
       level: "error",
       release: `moxfield-stock-manager@${context.release}`,
-      user: { id: context.installId },
+      user: sentryUser(context.installId),
       tags: { where: report.where, browser, os },
       exception: { values: [exception] },
       extra,
     };
   }
 
-  function buildEnvelope(event) {
+  // Idée tapée dans le popup : { ok: true, message, email } nettoyés, ou
+  // { ok: false, reason } ("empty", "tooLong", "badEmail"). Partagée par le
+  // popup (bouton désactivé avec sa raison) et le service worker (refus).
+  function checkFeedback({ message, email } = {}) {
+    const text = String(message == null ? "" : message).trim();
+    const mail = String(email == null ? "" : email).trim();
+    if (!text) return { ok: false, reason: "empty" };
+    if (text.length > MAX_FEEDBACK_TEXT) return { ok: false, reason: "tooLong" };
+    if (mail && !EMAIL.test(mail)) return { ok: false, reason: "badEmail" };
+    return { ok: true, message: text, email: mail };
+  }
+
+  // Idées encore possibles aujourd'hui : annoncé avant le clic (bouton
+  // désactivé avec sa raison), pas appris après un refus.
+  function feedbackLeft(log) {
+    const day = new Date(now()).toISOString().slice(0, 10);
+    return MAX_FEEDBACK_PER_DAY - (log && log.day === day ? log.count : 0);
+  }
+
+  // log : { day: "AAAA-MM-JJ", count }. Renvoie { allowed, log }.
+  function allowFeedback(log) {
+    const day = new Date(now()).toISOString().slice(0, 10);
+    const count = log && log.day === day ? log.count : 0;
+    if (count >= MAX_FEEDBACK_PER_DAY) return { allowed: false, log: { day, count } };
+    return { allowed: true, log: { day, count: count + 1 } };
+  }
+
+  // feedback : sortie de checkFeedback ; context : { release, installId,
+  // nav, lang }. Le texte n'est pas masqué (scrub) : l'utilisateur l'a écrit
+  // pour qu'on le lise, adresse comprise.
+  function buildFeedback(feedback, context) {
+    const { browser, os } = describeBrowser(context.nav);
+    const contextFeedback = { message: feedback.message, source: "popup" };
+    if (feedback.email) contextFeedback.contact_email = feedback.email;
+    const tags = { where: "feedback", browser, os };
+    if (context.lang) tags.lang = context.lang;
+    return {
+      event_id: newEventId(),
+      timestamp: now() / 1000,
+      platform: "javascript",
+      level: "info",
+      release: `moxfield-stock-manager@${context.release}`,
+      user: sentryUser(context.installId),
+      tags,
+      contexts: { feedback: contextFeedback },
+    };
+  }
+
+  // type : "event" (erreur) ou "feedback" (idée).
+  function buildEnvelope(event, type = "event") {
     const header = { event_id: event.event_id, sent_at: new Date(now()).toISOString() };
-    return `${JSON.stringify(header)}\n${JSON.stringify({ type: "event" })}\n${JSON.stringify(event)}`;
+    return `${JSON.stringify(header)}\n${JSON.stringify({ type })}\n${JSON.stringify(event)}`;
   }
 
   // Ne lève jamais : un rapport qui ne part pas ne doit pas créer une
   // nouvelle erreur.
-  async function send(event) {
+  async function send(event, type = "event") {
     if (!target) return false;
     try {
       const res = await fetch(target.endpoint, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: buildEnvelope(event),
+        body: buildEnvelope(event, type),
       });
       return res.ok;
     } catch (e) {
@@ -150,6 +221,8 @@ function createErrorReports({ dsn, fetch, now = () => Date.now() }) {
     configured: Boolean(target),
     SAME_ERROR_INTERVAL_MS,
     MAX_PER_DAY,
+    MAX_FEEDBACK_TEXT,
+    MAX_FEEDBACK_PER_DAY,
     parseDsn,
     scrub,
     allow,
@@ -157,6 +230,10 @@ function createErrorReports({ dsn, fetch, now = () => Date.now() }) {
     parseStack,
     buildEvent,
     buildEnvelope,
+    checkFeedback,
+    allowFeedback,
+    feedbackLeft,
+    buildFeedback,
     send,
   };
 }

@@ -16,7 +16,7 @@ your browser's language. This README is in French.*
 3. Active le **Mode développeur** (en haut à droite).
 4. Clique **Charger l'extension non empaquetée** et sélectionne ce dossier.
 5. **Mises à jour** : l'extension te prévient quand une nouvelle version est
-   sur GitHub (cf. « 8. Nouvelle version disponible ») ; installe-la avec
+   sur GitHub (cf. « 9. Nouvelle version disponible ») ; installe-la avec
    `git pull` dans ce dossier, puis recharge l'extension.
 
 ### Installer l'extension pour son propre compte
@@ -66,6 +66,11 @@ données restent sur ce PC).
    URI de redirection (erreur `redirect_uri_mismatch` en attendant).
 
 ## Utilisation
+
+**En-tête.** L'icône de l'extension (le nom n'est lu que par les
+lecteurs d'écran, pour laisser la place aux boutons), la pastille de
+synchronisation, **« ? Aide »** et **« Idée »** (cf. « 7. Proposer une
+idée »).
 
 **Aide.** Le bouton **« ? Aide »**, en haut du popup, ouvre (et referme)
 deux choses :
@@ -566,7 +571,9 @@ en cas de conflit : rien ne s'y perd).
   navigateur (Brave reconnu) et le système, et un identifiant tiré au
   hasard propre au PC. **Jamais** ton stock, tes decks ni ton adresse mail ;
   les jetons de connexion et adresses mail qui apparaîtraient dans un
-  message sont masqués.
+  message sont masqués. Ni ton adresse IP ni ta localisation (pays, ville)
+  ne sont conservées, idées comprises (réglages du projet Sentry, cf.
+  `docs/traitement-des-idees.md`).
 - Ne sont pas envoyées les situations normales (pas connecté à Moxfield,
   réseau coupé, Google Drive momentanément indisponible, service worker de
   l'extension qui redémarre pendant le contrôle d'une page de deck) ni les
@@ -581,7 +588,39 @@ en cas de conflit : rien ne s'y perd).
   n'est envoyé (la case est grisée). La DSN n'est pas un secret : elle ne
   permet que d'envoyer des rapports, pas de les lire.
 
-### 7. Langue
+### 7. Proposer une idée
+
+- Une idée, une remarque, quelque chose qui gêne ? Bouton **« Idée »** en
+  haut du popup, à côté de « Aide » (aussi : ligne « Une question, une
+  idée ? Propose-la » dans l'aide, et lien en bas du popup). Il ouvre un
+  panneau en tête du popup : le texte part directement au développeur,
+  **sans compte à créer** (ni GitHub, ni autre). « Fermer » ou Échap le
+  referment.
+- Champ **adresse mail facultatif**, seulement pour pouvoir te répondre :
+  c'est la seule adresse qui part, et seulement si tu la tapes. Avec le
+  texte partent la version de l'extension, le navigateur, le système, la
+  langue et l'identifiant au hasard du PC (écrit sous le bouton) ; jamais
+  ton stock ni tes decks.
+- Le bouton **« Envoyer »** reste désactivé, avec la raison écrite
+  dessous, tant que le texte est vide, que l'adresse n'a pas l'air
+  valide (signalé à la sortie du champ, pas pendant la frappe), que le
+  texte dépasse 4 000 caractères (compteur affiché à partir de 3 500 ;
+  un texte collé n'est jamais coupé) ou que les 10 idées du jour sont
+  envoyées.
+- Une fois l'idée partie, une confirmation remplace le formulaire
+  (« On te répondra à … » si tu as donné ton adresse), avec « Fermer » et
+  « Proposer une autre idée ». Ton texte est gardé si le popup se ferme ou
+  si l'envoi échoue (réseau coupé) ; ton adresse est gardée pour la fois
+  suivante.
+- Indépendant de la case « Envoyer les rapports d'erreurs » : une idée ne
+  part que quand tu cliques.
+- Pour le mainteneur : les idées arrivent dans le même projet Sentry que
+  les rapports d'erreurs, rubrique **User Feedback** (retours
+  d'utilisateurs), avec l'étiquette `where: feedback`. Leur tri (et celui
+  des erreurs), les réponses et les réglages Sentry à garder (adresses IP
+  non stockées) : [`docs/traitement-des-idees.md`](docs/traitement-des-idees.md).
+
+### 8. Langue
 
 - L'extension s'affiche en **français** ou en **anglais**, selon la langue
   du navigateur (réglages du navigateur → Langues) : popup, bouton et
@@ -594,7 +633,7 @@ en cas de conflit : rien ne s'y perd).
 - L'historique est traduit à l'affichage : une action notée sur un PC en
   français s'affiche en anglais sur un PC en anglais, et inversement.
 
-### 8. Nouvelle version disponible
+### 9. Nouvelle version disponible
 
 - Au démarrage du navigateur, au rechargement de l'extension et toutes les
   6 heures, l'extension compare ton clone (le commit lu dans son dossier
@@ -615,6 +654,9 @@ en cas de conflit : rien ne s'y perd).
 
 ## Limites connues
 
+- **Proposer une idée** : pas de réponse dans l'extension ; sans adresse
+  mail, impossible de te répondre. Le brouillon est gardé dans ce
+  navigateur seulement (pas synchronisé entre PC).
 - **Mes decks** : Moxfield n'a pas d'appel connu qui liste les decks d'un
   compte : un deck n'y entre que par le cœur ou une adresse collée. Il faut
   être connecté à Moxfield pour lire les decks. La « version différente »
@@ -761,6 +803,15 @@ en cas de conflit : rien ne s'y perd).
 
 ## Développement
 
+Modes opératoires pour Claude Code (et pour qui veut les suivre à la main) :
+`.claude/skills/` — checklist de livraison (`/livrer`), vérification que
+les tests détectent la casse (`/verifier-tests`, script `mutate.js`),
+textes fr/en (`/ajouter-texte`), capture du popup dans Chrome sans
+interface (`/capture-ecran`, script `render-popup.js`), revue d'ergonomie
+par un agent (`/revue-ergonomie`), confidentialité (`/verifier-confidentialite`),
+tri des idées et erreurs Sentry (`/tri-sentry`), étude de marché
+(`/etude-de-marche`).
+
 ### Tests de la lecture des decks
 
 La lecture de la liste d'un deck sur la page (`deck-scraper.js`) est la
@@ -862,13 +913,24 @@ sur toutes les branches (onglet **Actions**, workflow `.github/workflows/tests.y
   destructif ; détail des decks d'une carte au clavier ; filtre temporisé
   sans relire l'état ; champ CSV atteignable ; zones de statut annoncées ;
   cases de la liste d'achats nommées ; « Monté » et « Montable » de
-  couleurs différentes ; « tout effacer » et son résultat).
+  couleurs différentes ; « tout effacer » et son résultat), « Proposer une
+  idée » (en-tête : titre pour lecteurs d'écran et bouton « Idée » à
+  libellé visible ; points d'entrée masqués sans envoi configuré ; panneau
+  en tête ouvert depuis l'en-tête, l'aide ou le pied, Échap et focus
+  rendu ; adresse signalée à la sortie du champ et rattachée au champ ;
+  confirmation à la place du formulaire après l'envoi ; échec en alerte
+  et brouillon gardé ; quota annoncé avant le clic ; compteur et texte
+  trop long jamais coupé ; anglais).
 - `tests/error-reports.test.js` : rapports d'erreurs (`error-reports.js`)
   — DSN, masquage des jetons et adresses mail, limitation des envois,
-  navigateur (Brave), pile d'appels, contenu de l'événement envoyé. Leur
+  navigateur (Brave), pile d'appels, contenu de l'événement envoyé ; idées
+  proposées (texte et adresse vérifiés, 10 par jour et nombre restant, retour Sentry
+  « feedback » sans rien d'autre). Leur
   déclenchement est testé dans `tests/background.test.js` (erreurs
   d'action, de connexion Google, de la collection, Drive indisponible ou
-  injoignable non rapporté, case décochée),
+  injoignable non rapporté, case décochée ; idée envoyée même case
+  décochée, refusée, quota annoncé et atteint, échec réseau non compté ni
+  rapporté),
   `tests/content-deck.test.js` et `tests/popup.test.js`.
 - `tests/google-auth.test.js` : connexion Google hors Google Chrome
   (`google-auth.js`, fenêtre de connexion simulée) — choix de la méthode
